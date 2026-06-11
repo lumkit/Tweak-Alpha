@@ -151,7 +151,7 @@ private fun CpuInfoContent() {
                     style = MiuixTheme.textStyles.footnote1,
                 )
                 Text(
-                    text = "Core ${cpuState?.coreCluster}",
+                    text = "Cores ${cpuState?.coreCluster}",
                     color = MiuixTheme.colorScheme.onSurface.copy(.5f),
                     style = MiuixTheme.textStyles.body2,
                 )

@@ -11,5 +11,5 @@
     <string name="nav_category">功能</string>
 
     <string name="text_cpu_state">CPU状态</string>
-    <string name="text_cpu_state_description">负载：%s\t\t温度：%s</string>
+    <string name="text_cpu_state_description">负载：%s     温度：%s</string>
 </resources>

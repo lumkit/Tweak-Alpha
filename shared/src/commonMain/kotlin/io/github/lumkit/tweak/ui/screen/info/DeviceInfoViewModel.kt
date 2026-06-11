@@ -5,6 +5,7 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.CpuCodenameUtils
 import io.github.lumkit.tweak.common.utils.CpuFrequencyUtil
 import io.github.lumkit.tweak.common.utils.CpuLoadUtils
+import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
 import kotlinx.coroutines.delay
@@ -102,14 +103,15 @@ object DeviceInfoViewModel : BaseViewModel() {
 
         val coreLoad = cpuLoad[-1]?.toFloat() ?: 0f
         val soc = CpuCodenameUtils.getSocByCpuMode()
+        val socTemperature = DeviceTemperatureUtils.getAverageCpuTemperature() ?: 25f
         val cpuInfoModel = CpuInfoModel(
             coreCluster = clusterInfo.joinToString(separator = "+") {
                 it.size.toString()
             },
             coreLoad = coreLoad.div(100f),
             coreLoadText = "%d%%".format(coreLoad.toInt()),
-            coreTemperature = 25f,
-            coreTemperatureText = "%.1f°C".format(25f),
+            coreTemperature = socTemperature,
+            coreTemperatureText = "%.1f°C".format(socTemperature),
             cpuStates = cpuStates,
             soc = soc,
             socName = soc?.name ?: CpuCodenameUtils.getCpuCodename()

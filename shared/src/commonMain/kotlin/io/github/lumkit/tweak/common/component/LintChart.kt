@@ -207,7 +207,7 @@ class LintChartState internal constructor(initialHistory: List<Float> = emptyLis
 
 @Composable
 fun rememberChartState(
-    initialStates: List<ChartState> = emptyList(),
+    initialStates: List<ChartState> = List(100) { ChartState(0f) },
 ): LintChartState {
     val state = rememberSaveable(saver = lintChartStateSaver) {
         LintChartState(initialStates.map { (it.progress * 100f).bounds(0f, 100f) })
