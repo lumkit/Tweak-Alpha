@@ -2,8 +2,10 @@ package io.github.lumkit.tweak.ui.screen.info
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.utils.CpuCodenameUtils
 import io.github.lumkit.tweak.common.utils.CpuFrequencyUtil
 import io.github.lumkit.tweak.common.utils.CpuLoadUtils
+import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,8 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlin.Float
-import kotlin.Int
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.milliseconds
 
 object DeviceInfoViewModel : BaseViewModel() {
@@ -25,7 +26,8 @@ object DeviceInfoViewModel : BaseViewModel() {
         val coreTemperature: Float,
         val coreTemperatureText: String,
         val cpuStates: List<CoreInfoModel>,
-        val cpuName: String = "",
+        val soc: AndroidSoc?,
+        val socName: String,
     )
 
     @Serializable
@@ -39,7 +41,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         val enabled: Boolean,
     )
 
-    private val cpuFrequencyUtil = CpuFrequencyUtil()
+    val cpuFrequencyUtil = CpuFrequencyUtil()
     private val cpuLoadUtils = CpuLoadUtils()
 
     private val _loadingState = MutableStateFlow(false)
@@ -61,6 +63,16 @@ object DeviceInfoViewModel : BaseViewModel() {
         }
     }
 
+    private val cpuInfoListenerList = CopyOnWriteArrayList<(CpuInfoModel) -> Unit>()
+
+    fun addCpuInfoUpdateListener(listener: (CpuInfoModel) -> Unit) {
+        cpuInfoListenerList.add(listener)
+    }
+
+    fun removeCpuInfoUpdateListener(listener: (CpuInfoModel) -> Unit) {
+        cpuInfoListenerList.remove(listener)
+    }
+
     private suspend fun updateCpuInfo() {
         val coreCount = cpuFrequencyUtil.getCoreCount()
         val cpuStates = mutableListOf<CoreInfoModel>()
@@ -71,14 +83,14 @@ object DeviceInfoViewModel : BaseViewModel() {
             val coreName = "cpu$i"
             val currentFreq = formatFreq(cpuFrequencyUtil.getCurrentFrequency(coreName))
             val maxFreq = formatFreq(cpuFrequencyUtil.getCurrentMaxFrequency(coreName))
-            val minFreq = formatFreq(cpuFrequencyUtil.getCurrentMinFrequency(coreName))
+            val minFreq = formatFreq(cpuFrequencyUtil.getCurrentMinFrequency(coreName), "")
             val online = cpuFrequencyUtil.getCoreOnlineState(i)
 
             val load = cpuLoad[i]?.toFloat() ?: 0f
             cpuStates.add(
                 CoreInfoModel(
                     number = i,
-                    load = load,
+                    load = load.div(100f),
                     loadText = "%d%%".format(load.toInt()),
                     currentFreq = currentFreq,
                     minFreq = minFreq,
@@ -89,17 +101,24 @@ object DeviceInfoViewModel : BaseViewModel() {
         }
 
         val coreLoad = cpuLoad[-1]?.toFloat() ?: 0f
-        _cpuInfoState.value = CpuInfoModel(
+        val soc = CpuCodenameUtils.getSocByCpuMode()
+        val cpuInfoModel = CpuInfoModel(
             coreCluster = clusterInfo.joinToString(separator = "+") {
                 it.size.toString()
             },
-            coreLoad = coreLoad,
+            coreLoad = coreLoad.div(100f),
             coreLoadText = "%d%%".format(coreLoad.toInt()),
             coreTemperature = 25f,
             coreTemperatureText = "%.1f°C".format(25f),
-            cpuStates = cpuStates
+            cpuStates = cpuStates,
+            soc = soc,
+            socName = soc?.name ?: CpuCodenameUtils.getCpuCodename()
         )
+        _cpuInfoState.value = cpuInfoModel
+        cpuInfoListenerList.forEach {
+            it(cpuInfoModel)
+        }
     }
 
-    private fun formatFreq(freq: String): String = "%dMHz".format((freq.toLongOrNull() ?: 0L) / 1000L)
+    private fun formatFreq(freq: String, unit: String = "MHz"): String = "%d%s".format((freq.toLongOrNull() ?: 0L) / 1000L, unit)
 }

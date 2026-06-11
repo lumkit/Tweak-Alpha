@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.common.utils
 
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.os.Build
 import android.os.Process
 import io.github.lumkit.tweak.application
 import kotlin.system.exitProcess
@@ -23,3 +24,9 @@ actual fun restartApp() {
     Process.killProcess(Process.myPid())
     exitProcess(0)
 }
+
+actual val SDK_INT: Int
+    get() = Build.VERSION.SDK_INT
+
+actual val BOARD: String
+    get() = Build.BOARD
