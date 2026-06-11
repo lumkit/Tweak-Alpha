@@ -105,7 +105,7 @@ object TweakDataStore {
         }
     }
 
-    const val DEFAULT_INFO_UPDATE_TIME_SP_MILLISECONDS = 2_000L
+    const val DEFAULT_INFO_UPDATE_TIME_SP_MILLISECONDS = 1000L
 
     fun infoUpdateTimeSpanFlow(): Flow<Long> = preferences.data.map {
         it[infoUpdateTimeSpan] ?: DEFAULT_INFO_UPDATE_TIME_SP_MILLISECONDS

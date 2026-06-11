@@ -8,6 +8,9 @@ import io.github.lumkit.tweak.common.utils.CpuLoadUtils
 import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +18,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 object DeviceInfoViewModel : BaseViewModel() {
 
@@ -31,6 +37,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         val socName: String,
     )
 
+    @OptIn(ExperimentalUuidApi::class)
     @Serializable
     data class CoreInfoModel(
         val number: Int,
@@ -40,6 +47,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         val minFreq: String,
         val maxFreq: String,
         val enabled: Boolean,
+        private val uuid: String = Uuid.random().toHexString()
     )
 
     val cpuFrequencyUtil = CpuFrequencyUtil()
@@ -56,8 +64,10 @@ object DeviceInfoViewModel : BaseViewModel() {
             _loadingState.value = false
             while (isActive) {
                 // 更新CPU信息
+                val tag = Clock.System.now().toEpochMilliseconds()
                 updateCpuInfo()
 
+                println("load time: ${Clock.System.now().toEpochMilliseconds() - tag}ms")
                 _loadingState.value = true
                 delay(GlobalViewModel.infoUpdateTimeSpanState.value.milliseconds)
             }
@@ -74,36 +84,42 @@ object DeviceInfoViewModel : BaseViewModel() {
         cpuInfoListenerList.remove(listener)
     }
 
-    private suspend fun updateCpuInfo() {
-        val coreCount = cpuFrequencyUtil.getCoreCount()
-        val cpuStates = mutableListOf<CoreInfoModel>()
-        val cpuLoad = cpuLoadUtils.getCpuLoad()
-        val clusterInfo = cpuFrequencyUtil.getClusterInfo()
+    private suspend fun updateCpuInfo() = coroutineScope {
+        val coreCountDeferred = async { cpuFrequencyUtil.getCoreCount() }
+        val cpuLoadDeferred = async { cpuLoadUtils.getCpuLoad() }
+        val clusterInfoDeferred = async { cpuFrequencyUtil.getClusterInfo() }
+        val socDeferred = async { CpuCodenameUtils.getSocByCpuMode() }
+        val cpuTemperatureDeferred = async { DeviceTemperatureUtils.getAverageCpuTemperature() ?: 25f }
 
-        for (i in 0 until coreCount) {
-            val coreName = "cpu$i"
-            val currentFreq = formatFreq(cpuFrequencyUtil.getCurrentFrequency(coreName))
-            val maxFreq = formatFreq(cpuFrequencyUtil.getCurrentMaxFrequency(coreName))
-            val minFreq = formatFreq(cpuFrequencyUtil.getCurrentMinFrequency(coreName), "")
-            val online = cpuFrequencyUtil.getCoreOnlineState(i)
+        val coreCount = coreCountDeferred.await()
+        val cpuLoad = cpuLoadDeferred.await()
+        val cpuStates = (0 until coreCount)
+            .map { coreIndex ->
+                async {
+                    val coreName = "cpu$coreIndex"
+                    val currentFreqDeferred = async { cpuFrequencyUtil.getCurrentFrequency(coreName) }
+                    val maxFreqDeferred = async { cpuFrequencyUtil.getCurrentMaxFrequency(coreName) }
+                    val minFreqDeferred = async { cpuFrequencyUtil.getCurrentMinFrequency(coreName) }
+                    val onlineDeferred = async { cpuFrequencyUtil.getCoreOnlineState(coreIndex) }
 
-            val load = cpuLoad[i]?.toFloat() ?: 0f
-            cpuStates.add(
-                CoreInfoModel(
-                    number = i,
-                    load = load.div(100f),
-                    loadText = "%d%%".format(load.toInt()),
-                    currentFreq = currentFreq,
-                    minFreq = minFreq,
-                    maxFreq = maxFreq,
-                    enabled = online,
-                )
-            )
-        }
+                    val load = cpuLoad[coreIndex]?.toFloat() ?: 0f
+                    CoreInfoModel(
+                        number = coreIndex,
+                        load = load.div(100f),
+                        loadText = "%d%%".format(load.toInt()),
+                        currentFreq = formatFreq(currentFreqDeferred.await()),
+                        minFreq = formatFreq(minFreqDeferred.await(), ""),
+                        maxFreq = formatFreq(maxFreqDeferred.await()),
+                        enabled = onlineDeferred.await(),
+                    )
+                }
+            }
+            .awaitAll()
 
+        val clusterInfo = clusterInfoDeferred.await()
         val coreLoad = cpuLoad[-1]?.toFloat() ?: 0f
-        val soc = CpuCodenameUtils.getSocByCpuMode()
-        val socTemperature = DeviceTemperatureUtils.getAverageCpuTemperature() ?: 25f
+        val soc = socDeferred.await()
+        val socTemperature = cpuTemperatureDeferred.await()
         val cpuInfoModel = CpuInfoModel(
             coreCluster = clusterInfo.joinToString(separator = "+") {
                 it.size.toString()

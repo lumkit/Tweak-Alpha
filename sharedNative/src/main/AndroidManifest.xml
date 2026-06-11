@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest>
     <application>
-        <service
-            android:name="io.github.lumkit.tweak.sharednative.RootFileService"
-            android:exported="false" />
+
     </application>
 </manifest>
