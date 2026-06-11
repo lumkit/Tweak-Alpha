@@ -12,4 +12,9 @@
 
     <string name="text_cpu_state">CPU状态</string>
     <string name="text_cpu_state_description">负载：%s     温度：%s</string>
+    <string name="text_memory_state">内存状态</string>
+    <string name="text_total_memory">总内存</string>
+    <string name="text_total_memory_used">总已用</string>
+    <string name="text_memory_physical">物理内存</string>
+    <string name="text_swap">交换分区</string>
 </resources>

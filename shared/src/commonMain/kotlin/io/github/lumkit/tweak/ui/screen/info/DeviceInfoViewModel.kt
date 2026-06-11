@@ -1,11 +1,14 @@
 package io.github.lumkit.tweak.ui.screen.info
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.CpuCodenameUtils
 import io.github.lumkit.tweak.common.utils.CpuFrequencyUtil
 import io.github.lumkit.tweak.common.utils.CpuLoadUtils
+import io.github.lumkit.tweak.common.utils.DeviceMemoryInfoUtils
 import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
+import io.github.lumkit.tweak.common.utils.formatMemorySize
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
 import kotlinx.coroutines.async
@@ -38,6 +41,7 @@ object DeviceInfoViewModel : BaseViewModel() {
     )
 
     @OptIn(ExperimentalUuidApi::class)
+    @Immutable
     @Serializable
     data class CoreInfoModel(
         val number: Int,
@@ -50,6 +54,23 @@ object DeviceInfoViewModel : BaseViewModel() {
         private val uuid: String = Uuid.random().toHexString()
     )
 
+    @Immutable
+    @Serializable
+    data class MemoryInfoModel(
+        val totalUsed: Float,
+        val totalUsedText: String,
+        val memoryUsed: Float,
+        val memoryUsedText: String,
+        val memorySize: Long,
+        val memorySizeUnitText: String,
+        val swapUsed: Float,
+        val swapUsedText: String,
+        val swapSize: Long,
+        val swapSizeUnitText: String,
+        val swapCache: Long,
+        val swapCacheUnitText: String,
+    )
+
     val cpuFrequencyUtil = CpuFrequencyUtil()
     private val cpuLoadUtils = CpuLoadUtils()
 
@@ -59,6 +80,9 @@ object DeviceInfoViewModel : BaseViewModel() {
     private val _cpuInfoState = MutableStateFlow<CpuInfoModel?>(null)
     val cpuInfoState = _cpuInfoState.asStateFlow()
 
+    private val _memoryInfoState = MutableStateFlow<MemoryInfoModel?>(null)
+    val memoryInfoState = _memoryInfoState.asStateFlow()
+
     init {
         viewModelScope.launch {
             _loadingState.value = false
@@ -66,6 +90,8 @@ object DeviceInfoViewModel : BaseViewModel() {
                 // 更新CPU信息
                 val tag = Clock.System.now().toEpochMilliseconds()
                 updateCpuInfo()
+                // 更新内存信息
+                updateMemoryInfo()
 
                 println("load time: ${Clock.System.now().toEpochMilliseconds() - tag}ms")
                 _loadingState.value = true
@@ -139,4 +165,40 @@ object DeviceInfoViewModel : BaseViewModel() {
     }
 
     private fun formatFreq(freq: String, unit: String = "MHz"): String = "%d%s".format((freq.toLongOrNull() ?: 0L) / 1000L, unit)
+
+    private suspend fun updateMemoryInfo() {
+        val memoryInfo = DeviceMemoryInfoUtils.getMemoryInfo()
+        val memorySize = memoryInfo.memTotal
+        val memoryUsedSize = (memoryInfo.memTotal - memoryInfo.memAvailable).coerceAtLeast(0L)
+        val swapSize = memoryInfo.swapTotal
+        val swapUsedSize = (memoryInfo.swapTotal - memoryInfo.swapFree).coerceAtLeast(0L)
+        val totalSize = memorySize + swapSize
+        val totalUsedSize = memoryUsedSize + swapUsedSize
+
+        _memoryInfoState.value = MemoryInfoModel(
+            totalUsed = ratioOf(totalUsedSize, totalSize),
+            totalUsedText = percentText(totalUsedSize, totalSize),
+            memoryUsed = ratioOf(memoryUsedSize, memorySize),
+            memoryUsedText = percentText(memoryUsedSize, memorySize),
+            memorySize = memorySize,
+            memorySizeUnitText = memorySize.formatMemorySize(),
+            swapUsed = ratioOf(swapUsedSize, swapSize),
+            swapUsedText = percentText(swapUsedSize, swapSize),
+            swapSize = swapSize,
+            swapSizeUnitText = swapSize.formatMemorySize(),
+            swapCache = memoryInfo.swapCached,
+            swapCacheUnitText = memoryInfo.swapCached.formatMemorySize(),
+        )
+    }
+
+    private fun ratioOf(value: Long, total: Long): Float {
+        if (total <= 0L) {
+            return 0f
+        }
+        return (value.toDouble() / total.toDouble()).toFloat().coerceIn(0f, 1f)
+    }
+
+    private fun percentText(value: Long, total: Long): String {
+        return "%d%%".format((ratioOf(value, total) * 100f).toInt())
+    }
 }

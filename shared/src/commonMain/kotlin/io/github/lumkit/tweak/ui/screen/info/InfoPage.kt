@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -34,6 +37,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lumkit.tweak.common.component.CategoryCard
@@ -42,13 +49,21 @@ import io.github.lumkit.tweak.common.component.rememberChartState
 import io.github.lumkit.tweak.ui.theme.ContentSafeHorizontalPadding
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import org.jetbrains.compose.resources.stringResource
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import tweak.shared.generated.resources.Res
 import tweak.shared.generated.resources.text_cpu_state
 import tweak.shared.generated.resources.text_cpu_state_description
+import tweak.shared.generated.resources.text_memory_physical
+import tweak.shared.generated.resources.text_memory_state
+import tweak.shared.generated.resources.text_swap
+import tweak.shared.generated.resources.text_total_memory
+import tweak.shared.generated.resources.text_total_memory_used
 
 @Composable
 fun InfoPage() {
@@ -79,6 +94,10 @@ fun InfoPage() {
         ) {
             item {
                 CpuInfoContent()
+            }
+
+            item {
+                MemoryInfoContent()
             }
         }
 
@@ -226,6 +245,149 @@ private fun FlowRowScope.CpuCoreItem(core: DeviceInfoViewModel.CoreInfoModel) {
             text = "${core.minFreq}~${core.maxFreq}",
             color = MiuixTheme.colorScheme.onSurface.copy(.31f),
             style = MiuixTheme.textStyles.footnote2,
+        )
+    }
+}
+
+@Composable
+private fun MemoryInfoContent() {
+    val memoryState by DeviceInfoViewModel.memoryInfoState.collectAsStateWithLifecycle()
+
+    CategoryCard(
+        title = stringResource(Res.string.text_memory_state)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    progress = memoryState?.totalUsed,
+                    size = 80.dp,
+                    strokeWidth = 16.dp,
+                )
+
+                Text(
+                    text = stringResource(Res.string.text_total_memory),
+                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                    style = MiuixTheme.textStyles.body2,
+                )
+            }
+
+            VerticalDivider(
+                modifier = Modifier.fillMaxHeight()
+                    .padding(horizontal = 8.dp)
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            progress = memoryState?.memoryUsed,
+                            height = 8.dp,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        MemoryTable(
+                            title = stringResource(Res.string.text_memory_physical),
+                            content = buildString {
+                                append(memoryState?.memoryUsedText ?: "N/A")
+                                append(" (")
+                                append(memoryState?.memorySizeUnitText ?: "N/A")
+                                append(")")
+                            },
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            progress = memoryState?.swapUsed,
+                            height = 8.dp,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        MemoryTable(
+                            title = stringResource(Res.string.text_swap),
+                            content = buildString {
+                                append(memoryState?.swapUsedText ?: "N/A")
+                                append(" (")
+                                append(memoryState?.swapSizeUnitText ?: "N/A")
+                                append(")")
+                            },
+                        )
+                    }
+                    // TODO 操作按钮
+                }
+
+                Row {
+                    Text(
+                        text = buildAnnotatedString {
+                            append(stringResource(Res.string.text_total_memory_used))
+                            append(" ")
+                            withStyle(
+                                SpanStyle(
+                                    color = MiuixTheme.colorScheme.onSurface.copy(.31f)
+                                )
+                            ) {
+                                append(memoryState?.totalUsedText ?: "N/A")
+                            }
+                        },
+                        color = MiuixTheme.colorScheme.onSurface.copy(.7f),
+                        style = MiuixTheme.textStyles.footnote2,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = buildAnnotatedString {
+                            append("SwapCached ")
+                            withStyle(
+                                SpanStyle(
+                                    color = MiuixTheme.colorScheme.onSurface.copy(.31f)
+                                )
+                            ) {
+                                append(memoryState?.swapCacheUnitText ?: "N/A")
+                            }
+                        },
+                        color = MiuixTheme.colorScheme.onSurface.copy(.7f),
+                        style = MiuixTheme.textStyles.footnote2,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemoryTable(
+    title: String,
+    content: String,
+) {
+    Row {
+        Text(
+            text = title,
+            color = MiuixTheme.colorScheme.onSurface.copy(.7f),
+            style = MiuixTheme.textStyles.footnote2,
+            textAlign = TextAlign.Center,
+        )
+
+        Spacer(modifier = Modifier.width(28.dp))
+
+        Text(
+            text = content,
+            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+            style = MiuixTheme.textStyles.footnote2,
+            textAlign = TextAlign.Center,
         )
     }
 }
