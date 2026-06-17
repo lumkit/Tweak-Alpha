@@ -8,6 +8,7 @@ import io.github.lumkit.tweak.common.utils.CpuFrequencyUtil
 import io.github.lumkit.tweak.common.utils.CpuLoadUtils
 import io.github.lumkit.tweak.common.utils.DeviceMemoryInfoUtils
 import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
+import io.github.lumkit.tweak.common.utils.GpuUtils
 import io.github.lumkit.tweak.common.utils.formatMemorySize
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
@@ -20,6 +21,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import org.jetbrains.compose.resources.getString
+import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.text_gpu_load_format
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
@@ -71,6 +75,19 @@ object DeviceInfoViewModel : BaseViewModel() {
         val swapCacheUnitText: String,
     )
 
+    @Immutable
+    @Serializable
+    data class GpuInfoModel(
+        val load: Float,
+        val loadText: String,
+        val maxFreq: String,
+        val minFreq: String,
+        val freqRangeText: String,
+        val currentFreq: String,
+        val displayInfo: String,
+        val memoryUsage: String?,
+    )
+
     val cpuFrequencyUtil = CpuFrequencyUtil()
     private val cpuLoadUtils = CpuLoadUtils()
 
@@ -83,15 +100,27 @@ object DeviceInfoViewModel : BaseViewModel() {
     private val _memoryInfoState = MutableStateFlow<MemoryInfoModel?>(null)
     val memoryInfoState = _memoryInfoState.asStateFlow()
 
+    private val _gpuSupported = MutableStateFlow(false)
+    val gpuSupported = _gpuSupported.asStateFlow()
+
+    private val _gpuInfoState = MutableStateFlow<GpuInfoModel?>(null)
+    val gpuInfoState = _gpuInfoState.asStateFlow()
+
     init {
         viewModelScope.launch {
             _loadingState.value = false
+            // 初始化GPU是否支持
+            _gpuSupported.value = GpuUtils.supported()
+
             while (isActive) {
                 // 更新CPU信息
                 val tag = Clock.System.now().toEpochMilliseconds()
                 updateCpuInfo()
                 // 更新内存信息
                 updateMemoryInfo()
+
+                // 更新GPU信息
+                updateGpuInfo()
 
                 println("load time: ${Clock.System.now().toEpochMilliseconds() - tag}ms")
                 _loadingState.value = true
@@ -115,7 +144,8 @@ object DeviceInfoViewModel : BaseViewModel() {
         val cpuLoadDeferred = async { cpuLoadUtils.getCpuLoad() }
         val clusterInfoDeferred = async { cpuFrequencyUtil.getClusterInfo() }
         val socDeferred = async { CpuCodenameUtils.getSocByCpuMode() }
-        val cpuTemperatureDeferred = async { DeviceTemperatureUtils.getAverageCpuTemperature() ?: 25f }
+        val cpuTemperatureDeferred =
+            async { DeviceTemperatureUtils.getAverageCpuTemperature() ?: 25f }
 
         val coreCount = coreCountDeferred.await()
         val cpuLoad = cpuLoadDeferred.await()
@@ -123,9 +153,12 @@ object DeviceInfoViewModel : BaseViewModel() {
             .map { coreIndex ->
                 async {
                     val coreName = "cpu$coreIndex"
-                    val currentFreqDeferred = async { cpuFrequencyUtil.getCurrentFrequency(coreName) }
-                    val maxFreqDeferred = async { cpuFrequencyUtil.getCurrentMaxFrequency(coreName) }
-                    val minFreqDeferred = async { cpuFrequencyUtil.getCurrentMinFrequency(coreName) }
+                    val currentFreqDeferred =
+                        async { cpuFrequencyUtil.getCurrentFrequency(coreName) }
+                    val maxFreqDeferred =
+                        async { cpuFrequencyUtil.getCurrentMaxFrequency(coreName) }
+                    val minFreqDeferred =
+                        async { cpuFrequencyUtil.getCurrentMinFrequency(coreName) }
                     val onlineDeferred = async { cpuFrequencyUtil.getCoreOnlineState(coreIndex) }
 
                     val load = cpuLoad[coreIndex]?.toFloat() ?: 0f
@@ -164,7 +197,8 @@ object DeviceInfoViewModel : BaseViewModel() {
         }
     }
 
-    private fun formatFreq(freq: String, unit: String = "MHz"): String = "%d%s".format((freq.toLongOrNull() ?: 0L) / 1000L, unit)
+    private fun formatFreq(freq: String, unit: String = "MHz"): String =
+        "%d%s".format((freq.toLongOrNull() ?: 0L) / 1000L, unit)
 
     private suspend fun updateMemoryInfo() {
         val memoryInfo = DeviceMemoryInfoUtils.getMemoryInfo()
@@ -200,5 +234,34 @@ object DeviceInfoViewModel : BaseViewModel() {
 
     private fun percentText(value: Long, total: Long): String {
         return "%d%%".format((ratioOf(value, total) * 100f).toInt())
+    }
+
+    private suspend fun updateGpuInfo() {
+        if (!_gpuSupported.value) {
+            return
+        }
+        val currentFreq = GpuUtils.getGpuFreq()
+        val maxFreq = GpuUtils.getMaxFreq()
+        val minFreq = GpuUtils.getMinFreq()
+        val gpuLoad = GpuUtils.getGpuLoad()
+        val memoryUsage = GpuUtils.getMemoryUsage()
+        val gpuLoadText = getString(Res.string.text_gpu_load_format).format(
+            "%d%%".format(gpuLoad),
+            memoryUsage,
+        )
+        val display = GpuUtils.gles()
+
+        val maxFreqFormat = GpuUtils.normalizeFrequencyToMhz(maxFreq.toLongOrNull() ?: 0)
+        val minFreqFormat = GpuUtils.normalizeFrequencyToMhz(minFreq.toLongOrNull() ?: 0)
+        _gpuInfoState.value = GpuInfoModel(
+            load = gpuLoad.toFloat() / 100f,
+            loadText = gpuLoadText,
+            maxFreq = "${maxFreqFormat}MHz",
+            minFreq = "${minFreqFormat}MHz",
+            currentFreq = "${currentFreq}MHz",
+            displayInfo = display,
+            memoryUsage = memoryUsage,
+            freqRangeText = "(${minFreqFormat}~${maxFreqFormat}MHz)"
+        )
     }
 }

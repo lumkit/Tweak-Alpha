@@ -11,5 +11,7 @@ add_library(
 target_link_libraries(
         ${CMAKE_PROJECT_NAME}
         android
+        EGL
+        GLESv2
         log
 )

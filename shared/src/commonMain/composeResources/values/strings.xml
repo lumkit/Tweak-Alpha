@@ -17,4 +17,7 @@
     <string name="text_total_memory_used">总已用</string>
     <string name="text_memory_physical">物理内存</string>
     <string name="text_swap">交换分区</string>
+    <string name="text_gpu_state">GPU状态</string>
+    <string name="text_gpu_load_format">负载：%s     内存使用：%s</string>
+    <string name="text_used_load">负载</string>
 </resources>

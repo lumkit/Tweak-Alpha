@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.ui.screen.info
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,12 +36,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lumkit.tweak.common.component.CategoryCard
 import io.github.lumkit.tweak.common.component.LintStackChart
@@ -59,11 +62,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.text_cpu_state
 import tweak_alpha.shared.generated.resources.text_cpu_state_description
+import tweak_alpha.shared.generated.resources.text_gpu_state
 import tweak_alpha.shared.generated.resources.text_memory_physical
 import tweak_alpha.shared.generated.resources.text_memory_state
 import tweak_alpha.shared.generated.resources.text_swap
 import tweak_alpha.shared.generated.resources.text_total_memory
 import tweak_alpha.shared.generated.resources.text_total_memory_used
+import tweak_alpha.shared.generated.resources.text_used_load
 
 @Composable
 fun InfoPage() {
@@ -73,6 +78,7 @@ fun InfoPage() {
         targetValue = if (loadState) 0.dp else 15.dp,
         animationSpec = tween(durationMillis = 400)
     )
+    val gpuSupportedState by DeviceInfoViewModel.gpuSupported.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -98,6 +104,12 @@ fun InfoPage() {
 
             item {
                 MemoryInfoContent()
+            }
+
+            if (gpuSupportedState) {
+                item {
+                    GpuInfoContent()
+                }
             }
         }
 
@@ -253,6 +265,10 @@ private fun FlowRowScope.CpuCoreItem(core: DeviceInfoViewModel.CoreInfoModel) {
 private fun MemoryInfoContent() {
     val memoryState by DeviceInfoViewModel.memoryInfoState.collectAsStateWithLifecycle()
 
+    val load by animateFloatAsState(targetValue = memoryState?.totalUsed ?: 0f)
+    val memoryLoad by animateFloatAsState(targetValue = memoryState?.memoryUsed ?: 0f)
+    val swapLoad by animateFloatAsState(targetValue = memoryState?.swapUsed ?: 0f)
+
     CategoryCard(
         title = stringResource(Res.string.text_memory_state)
     ) {
@@ -264,7 +280,7 @@ private fun MemoryInfoContent() {
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
-                    progress = memoryState?.totalUsed,
+                    progress = load,
                     size = 80.dp,
                     strokeWidth = 16.dp,
                 )
@@ -294,7 +310,7 @@ private fun MemoryInfoContent() {
                     ) {
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
-                            progress = memoryState?.memoryUsed,
+                            progress = memoryLoad,
                             height = 8.dp,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
@@ -312,7 +328,7 @@ private fun MemoryInfoContent() {
 
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
-                            progress = memoryState?.swapUsed,
+                            progress = swapLoad,
                             height = 8.dp,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
@@ -389,5 +405,92 @@ private fun MemoryTable(
             style = MiuixTheme.textStyles.footnote2,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+@Composable
+private fun GpuInfoContent() {
+    val density = LocalDensity.current
+    val translateY = remember {
+        with(density) {
+            (-1.5f).dp.toPx()
+        }
+    }
+    val gpuInfoModel by DeviceInfoViewModel.gpuInfoState.collectAsStateWithLifecycle()
+    val load by animateFloatAsState(targetValue = gpuInfoModel?.load ?: 0f)
+
+    CategoryCard(
+        title = stringResource(Res.string.text_gpu_state)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    progress = load,
+                    size = 80.dp,
+                    strokeWidth = 16.dp,
+                )
+
+                Text(
+                    text = stringResource(Res.string.text_used_load),
+                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                    style = MiuixTheme.textStyles.body2,
+                )
+            }
+
+            VerticalDivider(
+                modifier = Modifier.fillMaxHeight()
+                    .padding(horizontal = 8.dp)
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Text(
+                        text = gpuInfoModel?.currentFreq ?: "N/A",
+                        color = MiuixTheme.colorScheme.onSurface.copy(.7f),
+                        style = MiuixTheme.textStyles.body1,
+                    )
+
+                    Text(
+                        text = gpuInfoModel?.freqRangeText ?: "N/A",
+                        color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                        style = MiuixTheme.textStyles.footnote2,
+                        modifier = Modifier.padding(start = 4f.dp)
+                            .graphicsLayer {
+                                translationY = translateY
+                            },
+                    )
+                }
+
+                Text(
+                    text = gpuInfoModel?.loadText ?: "N/A",
+                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                    style = MiuixTheme.textStyles.footnote2
+                        .copy(
+                            fontSize = 10.sp,
+                            lineHeight = 10.sp,
+                        ),
+                )
+
+                Text(
+                    text = gpuInfoModel?.displayInfo ?: "N/A",
+                    color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                    style = MiuixTheme.textStyles.footnote2
+                        .copy(
+                            fontSize = 10.sp,
+                            lineHeight = 10.sp,
+                        ),
+                )
+            }
+        }
     }
 }

@@ -24,6 +24,19 @@ android {
     namespace = "io.github.lumkit.tweak"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
+    signingConfigs {
+        create("tweakRelease") {
+            keyAlias =  "lumkit"
+            keyPassword =  "0409.kaly"
+            storeFile =  file("./sign/tweak-alpha")
+            storePassword = "0409.kaly"
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+            enableV4Signing = true
+        }
+    }
+
     defaultConfig {
         applicationId = "io.github.lumkit.tweak"
         minSdk = libs.versions.android.minSdk.get().toInt()
@@ -44,6 +57,8 @@ android {
             isShrinkResources = true
             isDebuggable = false
             isJniDebuggable = false
+
+            signingConfig = signingConfigs["tweakRelease"]
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
