@@ -23,8 +23,12 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.isActive
 import org.jetbrains.compose.resources.painterResource
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import tweak.shared.generated.resources.Res
-import tweak.shared.generated.resources.*
+import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.ic_logo_android
+import tweak_alpha.shared.generated.resources.ic_logo_background
+import tweak_alpha.shared.generated.resources.ic_logo_eyes
+import tweak_alpha.shared.generated.resources.ic_logo_foreground
+import tweak_alpha.shared.generated.resources.ic_logo_mid
 
 @Composable
 fun Logo(

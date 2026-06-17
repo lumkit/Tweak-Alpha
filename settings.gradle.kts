@@ -1,4 +1,4 @@
-rootProject.name = "Tweak"
+rootProject.name = "Tweak-Alpha"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {

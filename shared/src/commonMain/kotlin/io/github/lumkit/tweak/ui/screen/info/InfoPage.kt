@@ -35,7 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -46,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lumkit.tweak.common.component.CategoryCard
 import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.rememberChartState
+import io.github.lumkit.tweak.common.utils.shadowMask
 import io.github.lumkit.tweak.ui.theme.ContentSafeHorizontalPadding
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import org.jetbrains.compose.resources.stringResource
@@ -56,14 +56,14 @@ import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import tweak.shared.generated.resources.Res
-import tweak.shared.generated.resources.text_cpu_state
-import tweak.shared.generated.resources.text_cpu_state_description
-import tweak.shared.generated.resources.text_memory_physical
-import tweak.shared.generated.resources.text_memory_state
-import tweak.shared.generated.resources.text_swap
-import tweak.shared.generated.resources.text_total_memory
-import tweak.shared.generated.resources.text_total_memory_used
+import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.text_cpu_state
+import tweak_alpha.shared.generated.resources.text_cpu_state_description
+import tweak_alpha.shared.generated.resources.text_memory_physical
+import tweak_alpha.shared.generated.resources.text_memory_state
+import tweak_alpha.shared.generated.resources.text_swap
+import tweak_alpha.shared.generated.resources.text_total_memory
+import tweak_alpha.shared.generated.resources.text_total_memory_used
 
 @Composable
 fun InfoPage() {
@@ -79,7 +79,7 @@ fun InfoPage() {
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize()
-                .blur(blurDp),
+                .shadowMask(blurDp),
             contentPadding = PaddingValues(
                 top = with(density) {
                     16.dp + WindowInsets.statusBars.getTop(this).toDp()

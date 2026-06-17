@@ -1,19 +1,21 @@
 package io.github.lumkit.tweak.common.utils
 
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.os.HardwarePropertiesManager
 import io.github.lumkit.tweak.application
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 internal actual object PlatformTemperatureSource {
-    private var thermalDumpEntries: List<ThermalDumpEntry> = emptyList()
-    private var thermalDumpMark: TimeMark? = null
+    private var platformEntries: List<PlatformTemperatureEntry> = emptyList()
+    private var platformEntriesMark: TimeMark? = null
 
     actual suspend fun getTemperatures(category: TemperatureCategory): List<Pair<String, Float>> {
-        return getThermalDumpEntries()
+        return getPlatformTemperatureEntries()
             .filter { it.category == category }
             .map { it.name to it.temperature }
     }
@@ -30,80 +32,85 @@ internal actual object PlatformTemperatureSource {
         return rawTemperature / 10f
     }
 
-    private suspend fun getThermalDumpEntries(): List<ThermalDumpEntry> {
-        val cacheMark = thermalDumpMark
+    private fun getPlatformTemperatureEntries(): List<PlatformTemperatureEntry> {
+        val cacheMark = platformEntriesMark
         if (cacheMark != null && cacheMark.elapsedNow() < 2.seconds) {
-            return thermalDumpEntries
+            return platformEntries
         }
 
-        val result = KernelProps.exec("dumpsys thermalservice")
-        if (!result.isSuccess) {
-            return thermalDumpEntries
+        val hardwarePropertiesManager = application.getSystemService(Context.HARDWARE_PROPERTIES_SERVICE)
+            as? HardwarePropertiesManager
+        if (hardwarePropertiesManager == null) {
+            return platformEntries
         }
 
-        val parsedEntries = parseThermalDump(result.out.joinToString(separator = "\n"))
-        thermalDumpEntries = parsedEntries
-        thermalDumpMark = TimeSource.Monotonic.markNow()
-        return parsedEntries
+        val resolvedEntries = buildList {
+            addAll(
+                readTemperatures(
+                    manager = hardwarePropertiesManager,
+                    type = HardwarePropertiesManager.DEVICE_TEMPERATURE_CPU,
+                    category = TemperatureCategory.CPU,
+                    labelPrefix = "cpu",
+                )
+            )
+            addAll(
+                readTemperatures(
+                    manager = hardwarePropertiesManager,
+                    type = HardwarePropertiesManager.DEVICE_TEMPERATURE_GPU,
+                    category = TemperatureCategory.GPU,
+                    labelPrefix = "gpu",
+                )
+            )
+            addAll(
+                readTemperatures(
+                    manager = hardwarePropertiesManager,
+                    type = HardwarePropertiesManager.DEVICE_TEMPERATURE_BATTERY,
+                    category = TemperatureCategory.BATTERY,
+                    labelPrefix = "battery",
+                )
+            )
+        }
+        platformEntries = resolvedEntries
+        platformEntriesMark = TimeSource.Monotonic.markNow()
+        return resolvedEntries
     }
 
-    private fun parseThermalDump(dump: String): List<ThermalDumpEntry> {
-        if (dump.isBlank()) {
+    private fun readTemperatures(
+        manager: HardwarePropertiesManager,
+        type: Int,
+        category: TemperatureCategory,
+        labelPrefix: String,
+    ): List<PlatformTemperatureEntry> {
+        val rawTemperatures = try {
+            manager.getDeviceTemperatures(type, HardwarePropertiesManager.TEMPERATURE_CURRENT)
+        } catch (_: Throwable) {
             return emptyList()
         }
 
-        val objectPattern = Regex("""Temperature\{([^}]*)\}""")
-        val valuePattern = Regex("""(?:mValue|value)\s*=\s*(-?\d+(?:\.\d+)?)""")
-        val typePattern = Regex("""(?:mType|type)\s*=\s*([^,}]+)""")
-        val namePattern = Regex("""(?:mName|name)\s*=\s*([^,}]+)""")
+        if (rawTemperatures.isEmpty()) {
+            return emptyList()
+        }
 
         return buildList {
-            objectPattern.findAll(dump).forEach { match ->
-                val content = match.groupValues[1]
-                val rawValue = valuePattern.find(content)?.groupValues?.getOrNull(1)?.toFloatOrNull()
-                    ?: return@forEach
-                val normalizedValue = normalizeTemperatureValue(rawValue) ?: return@forEach
-                val rawType = typePattern.find(content)?.groupValues?.getOrNull(1)
-                    ?.trim()
-                    ?.trim('"')
-                    ?.trim()
-                    .orEmpty()
-                val rawName = namePattern.find(content)?.groupValues?.getOrNull(1)
-                    ?.trim()
-                    ?.trim('"')
-                    ?.trim()
-                    .orEmpty()
-                val category = resolveCategory(rawType, rawName) ?: return@forEach
-                val displayName = rawName.ifBlank {
-                    when (category) {
-                        TemperatureCategory.CPU -> "cpu"
-                        TemperatureCategory.GPU -> "gpu"
-                        TemperatureCategory.BATTERY -> "battery"
-                    }
+            rawTemperatures.forEachIndexed { index, rawTemperature ->
+                val normalizedValue = normalizeTemperatureValue(rawTemperature) ?: return@forEachIndexed
+                val displayName = if (rawTemperatures.size == 1) {
+                    labelPrefix
+                } else {
+                    "$labelPrefix${index + 1}"
                 }
-                add(ThermalDumpEntry(category, displayName, normalizedValue))
+                add(
+                    PlatformTemperatureEntry(
+                        category = category,
+                        name = displayName,
+                        temperature = normalizedValue,
+                    )
+                )
             }
         }
     }
 
-    private fun resolveCategory(rawType: String, rawName: String): TemperatureCategory? {
-        return when (rawType.lowercase()) {
-            "0", "cpu" -> TemperatureCategory.CPU
-            "1", "gpu" -> TemperatureCategory.GPU
-            "2", "battery" -> TemperatureCategory.BATTERY
-            else -> {
-                val normalizedName = rawName.lowercase()
-                when {
-                    "cpu" in normalizedName || "soc" in normalizedName -> TemperatureCategory.CPU
-                    "gpu" in normalizedName || "kgsl" in normalizedName || "adreno" in normalizedName || "mali" in normalizedName -> TemperatureCategory.GPU
-                    "battery" in normalizedName || "bms" in normalizedName || "bat" in normalizedName -> TemperatureCategory.BATTERY
-                    else -> null
-                }
-            }
-        }
-    }
-
-    private data class ThermalDumpEntry(
+    private data class PlatformTemperatureEntry(
         val category: TemperatureCategory,
         val name: String,
         val temperature: Float,

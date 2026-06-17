@@ -3,9 +3,9 @@ package io.github.lumkit.tweak.model
 import androidx.compose.runtime.Composable
 import io.github.lumkit.tweak.common.utils.NativeFileBackend
 import org.jetbrains.compose.resources.stringResource
-import tweak.shared.generated.resources.Res
-import tweak.shared.generated.resources.text_root_mode
-import tweak.shared.generated.resources.text_root_mode_description
+import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.text_root_mode
+import tweak_alpha.shared.generated.resources.text_root_mode_description
 
 /**
  * 运行模式

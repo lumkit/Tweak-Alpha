@@ -2,7 +2,7 @@ package io.github.lumkit.tweak.common.utils
 
 import io.github.lumkit.tweak.model.AndroidSoc
 import kotlinx.serialization.json.Json
-import tweak.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.Res
 import java.io.File
 import java.io.FileNotFoundException
 

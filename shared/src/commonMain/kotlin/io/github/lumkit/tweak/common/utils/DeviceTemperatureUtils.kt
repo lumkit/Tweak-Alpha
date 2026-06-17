@@ -19,7 +19,7 @@ internal expect object PlatformTemperatureSource {
  * - thermal zone：兼容大多数 Android 内核
  * - hwmon：补充部分内核只暴露在 hwmon 下的温度节点
  * - power_supply：优先处理电池温度
- * - Android 平台来源：由 [PlatformTemperatureSource] 提供电池广播和系统 thermal dump 兜底
+ * - Android 平台来源：由 [PlatformTemperatureSource] 提供电池广播和硬件温度 API 兜底
  *
  * 仍需说明的是，Android 不存在能覆盖全部厂商全部机型的统一公开温度 API。当前实现已经尽量
  * 聚合常见来源，但如果某些 ROM 完全不暴露 CPU/GPU 温度节点，依然可能无法读到。
@@ -105,7 +105,7 @@ object DeviceTemperatureUtils {
      * 1. Android 电池广播
      * 2. 常见 power_supply/battery 节点
      * 3. 扫描 power_supply 目录内所有可能的电池温度节点
-     * 4. thermal zone / hwmon / 平台 thermal dump 的 battery 项
+     * 4. thermal zone / hwmon / 平台温度来源的 battery 项
      */
     suspend fun getBatteryTemperature(): Float? {
         PlatformTemperatureSource.getBatteryTemperature()?.let { return it }

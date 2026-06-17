@@ -7,3 +7,8 @@ import androidx.annotation.ChecksSdkIntAtLeast
 actual fun isAdvancedBackdropEffectSupported(): Boolean {
     return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 }
+
+@ChecksSdkIntAtLeast(api = Build.VERSION_CODES.S)
+actual fun isAdvancedRenderEffectSupported(): Boolean {
+    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+}

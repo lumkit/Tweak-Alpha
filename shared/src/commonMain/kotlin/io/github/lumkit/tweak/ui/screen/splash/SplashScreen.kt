@@ -49,13 +49,13 @@ import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
-import tweak.shared.generated.resources.Res
-import tweak.shared.generated.resources.ic_sharp
-import tweak.shared.generated.resources.text_checking_runtime
-import tweak.shared.generated.resources.text_restart
-import tweak.shared.generated.resources.text_root_permisstion_denied
-import tweak.shared.generated.resources.text_select_runtime_mode
-import tweak.shared.generated.resources.toolkit_tweak
+import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.ic_sharp
+import tweak_alpha.shared.generated.resources.text_checking_runtime
+import tweak_alpha.shared.generated.resources.text_restart
+import tweak_alpha.shared.generated.resources.text_root_permisstion_denied
+import tweak_alpha.shared.generated.resources.text_select_runtime_mode
+import tweak_alpha.shared.generated.resources.toolkit_tweak
 
 @Composable
 internal fun SplashScreen(

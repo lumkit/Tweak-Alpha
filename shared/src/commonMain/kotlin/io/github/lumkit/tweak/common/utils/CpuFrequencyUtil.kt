@@ -1,7 +1,5 @@
 package io.github.lumkit.tweak.common.utils
 
-import io.github.lumkit.tweak.model.CpuState
-
 class CpuFrequencyUtil {
     private val cpuDir = "/sys/devices/system/cpu/cpu0/"
     private val cpufreqSysDir = "/sys/devices/system/cpu/cpu0/cpufreq/"
@@ -101,21 +99,16 @@ class CpuFrequencyUtil {
         }
 
         if (isMtk()) {
-            KernelProps.exec(
-                "echo $cluster $minFrequency > /proc/ppm/policy/hard_userlimit_min_cpu_freq"
-            )
+            writeNode("/proc/ppm/policy/hard_userlimit_min_cpu_freq", "$cluster $minFrequency")
             return
         }
 
-        val commands = buildList {
-            for (core in clusters[cluster]) {
-                val path = scalingMinFreq.replace("cpu0", "cpu$core")
-                add("chmod 0664 $path")
-                add("echo $minFrequency > $path")
-            }
-        }
-        if (commands.isNotEmpty()) {
-            KernelProps.exec(commands)
+        for (core in clusters[cluster]) {
+            writeNode(
+                path = scalingMinFreq.replace("cpu0", "cpu$core"),
+                value = minFrequency,
+                mode = "0664",
+            )
         }
     }
 
@@ -126,24 +119,28 @@ class CpuFrequencyUtil {
         }
 
         if (isMtk()) {
-            KernelProps.exec(
-                "echo $cluster $maxFrequency > /proc/ppm/policy/hard_userlimit_max_cpu_freq"
-            )
+            writeNode("/proc/ppm/policy/hard_userlimit_max_cpu_freq", "$cluster $maxFrequency")
             return
         }
 
-        val commands = buildList {
-            add("chmod 0664 /sys/module/msm_performance/parameters/cpu_max_freq")
-            val values = StringBuilder()
-            for (core in clusters[cluster]) {
-                val path = scalingMaxFreq.replace("cpu0", "cpu$core")
-                add("chmod 0664 $path")
-                add("echo $maxFrequency > $path")
-                values.append(core).append(':').append(maxFrequency).append(' ')
-            }
-            add("echo ${values}> /sys/module/msm_performance/parameters/cpu_max_freq")
+        val values = StringBuilder()
+        for (core in clusters[cluster]) {
+            val path = scalingMaxFreq.replace("cpu0", "cpu$core")
+            writeNode(
+                path = path,
+                value = maxFrequency,
+                mode = "0664",
+            )
+            values.append(core).append(':').append(maxFrequency).append(' ')
         }
-        KernelProps.exec(commands)
+        val msmPerformancePath = "/sys/module/msm_performance/parameters/cpu_max_freq"
+        if (values.isNotEmpty() && pathExists(msmPerformancePath)) {
+            writeNode(
+                path = msmPerformancePath,
+                value = values.toString().trim(),
+                mode = "0664",
+            )
+        }
     }
 
     suspend fun setGovernor(governor: String, cluster: Int) {
@@ -152,15 +149,12 @@ class CpuFrequencyUtil {
             return
         }
 
-        val commands = buildList {
-            for (core in clusters[cluster]) {
-                val path = scalingGovernor.replace("cpu0", "cpu$core")
-                add("chmod 0755 $path")
-                add("echo $governor > $path")
-            }
-        }
-        if (commands.isNotEmpty()) {
-            KernelProps.exec(commands)
+        for (core in clusters[cluster]) {
+            writeNode(
+                path = scalingGovernor.replace("cpu0", "cpu$core"),
+                value = governor,
+                mode = "0755",
+            )
         }
     }
 
@@ -169,15 +163,18 @@ class CpuFrequencyUtil {
     }
 
     suspend fun setCoreOnlineState(coreIndex: Int, online: Boolean) {
-        val commands = buildList {
-            if (exynosCpuhotplugSupport() && getExynosHotplug()) {
-                add("echo 0 > /sys/devices/system/cpu/cpuhotplug/enabled;")
-            }
-            val onlinePath = onlinePath(coreIndex)
-            add("chmod 0755 $onlinePath")
-            add("echo ${if (online) 1 else 0} > $onlinePath")
+        if (exynosCpuhotplugSupport() && getExynosHotplug()) {
+            writeNode(
+                path = "/sys/devices/system/cpu/cpuhotplug/enabled",
+                value = "0",
+                mode = "0664",
+            )
         }
-        KernelProps.exec(commands)
+        writeNode(
+            path = onlinePath(coreIndex),
+            value = if (online) "1" else "0",
+            mode = "0755",
+        )
     }
 
     suspend fun getExynosHmpUP(): Int {
@@ -185,9 +182,10 @@ class CpuFrequencyUtil {
     }
 
     suspend fun setExynosHmpUP(up: Int) {
-        KernelProps.exec(
-            "chmod 0664 /sys/kernel/hmp/up_threshold;",
-            "echo $up > /sys/kernel/hmp/up_threshold;"
+        writeNode(
+            path = "/sys/kernel/hmp/up_threshold",
+            value = up.toString(),
+            mode = "0664",
         )
     }
 
@@ -196,9 +194,10 @@ class CpuFrequencyUtil {
     }
 
     suspend fun setExynosHmpDown(down: Int) {
-        KernelProps.exec(
-            "chmod 0664 /sys/kernel/hmp/down_threshold;",
-            "echo $down > /sys/kernel/hmp/down_threshold;"
+        writeNode(
+            path = "/sys/kernel/hmp/down_threshold",
+            value = down.toString(),
+            mode = "0664",
         )
     }
 
@@ -208,9 +207,10 @@ class CpuFrequencyUtil {
     }
 
     suspend fun setExynosBooster(enabled: Boolean) {
-        KernelProps.exec(
-            "chmod 0664 /sys/kernel/hmp/boost",
-            "echo ${if (enabled) 1 else 0} > /sys/kernel/hmp/boost"
+        writeNode(
+            path = "/sys/kernel/hmp/boost",
+            value = if (enabled) "1" else "0",
+            mode = "0664",
         )
     }
 
@@ -222,9 +222,10 @@ class CpuFrequencyUtil {
     }
 
     suspend fun setExynosHotplug(enabled: Boolean) {
-        KernelProps.exec(
-            "chmod 0664 /sys/devices/system/cpu/cpuhotplug/enabled;",
-            "echo ${if (enabled) 1 else 0} > /sys/devices/system/cpu/cpuhotplug/enabled;"
+        writeNode(
+            path = "/sys/devices/system/cpu/cpuhotplug/enabled",
+            value = if (enabled) "1" else "0",
+            mode = "0664",
         )
     }
 
@@ -271,25 +272,6 @@ class CpuFrequencyUtil {
         return pathExists("/sys/kernel/hmp/down_threshold") &&
             pathExists("/sys/kernel/hmp/up_threshold") &&
             pathExists("/sys/kernel/hmp/boost")
-    }
-
-    suspend fun buildShell(cpuStates: List<CpuState>): List<String> {
-        return buildList {
-            for (cpuState in cpuStates) {
-                val cpu = "cpu${cpuState.number}"
-                add("chmod 0755 ${onlinePath(cpuState.number)}")
-                add("echo ${if (cpuState.enabled) 1 else 0} > ${onlinePath(cpuState.number)}")
-
-                add("chmod 0755 ${scalingGovernor.replace("cpu0", cpu)}")
-                add("echo ${cpuState.governor} > ${scalingGovernor.replace("cpu0", cpu)}")
-
-                add("chmod 0664 ${scalingMaxFreq.replace("cpu0", cpu)}")
-                add("echo ${cpuState.maxFrequency} > ${scalingMaxFreq.replace("cpu0", cpu)}")
-
-                add("chmod 0664 ${scalingMinFreq.replace("cpu0", cpu)}")
-                add("echo ${cpuState.minFrequency} > ${scalingMinFreq.replace("cpu0", cpu)}")
-            }
-        }
     }
 
     private suspend fun isMtk(): Boolean {
@@ -339,6 +321,18 @@ class CpuFrequencyUtil {
                 put(entry.substringAfterLast('/'), content)
             }
         }
+    }
+
+    private suspend fun writeNode(
+        path: String,
+        value: String,
+        mode: String? = null,
+    ) {
+        if (mode != null) {
+            Files.chmod(path, mode)
+        }
+        val normalizedValue = if (value.endsWith('\n')) value else "$value\n"
+        Files.writeText(path, normalizedValue)
     }
 
     private fun splitValues(rawValue: String): List<String> {

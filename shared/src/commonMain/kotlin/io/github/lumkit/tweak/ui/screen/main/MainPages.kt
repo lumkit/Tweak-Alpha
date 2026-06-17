@@ -2,11 +2,11 @@ package io.github.lumkit.tweak.ui.screen.main
 
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
-import tweak.shared.generated.resources.Res
-import tweak.shared.generated.resources.ic_category
-import tweak.shared.generated.resources.ic_home
-import tweak.shared.generated.resources.nav_category
-import tweak.shared.generated.resources.nav_home
+import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.ic_category
+import tweak_alpha.shared.generated.resources.ic_home
+import tweak_alpha.shared.generated.resources.nav_category
+import tweak_alpha.shared.generated.resources.nav_home
 
 enum class MainPages {
     Func, Info
