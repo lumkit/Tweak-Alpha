@@ -118,7 +118,6 @@ object DeviceInfoViewModel : BaseViewModel() {
                 updateCpuInfo()
                 // 更新内存信息
                 updateMemoryInfo()
-
                 // 更新GPU信息
                 updateGpuInfo()
 

@@ -31,6 +31,6 @@ dependencyResolutionManagement {
 
 include(":androidApp")
 include(":shared")
-include(":sharedNative")
+include(":androidSharedNative")
 include(":backdrop")
 include(":glass")

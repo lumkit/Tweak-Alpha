@@ -32,7 +32,7 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.libsu.core)
             implementation(libs.libsu.service)
-            implementation(projects.sharedNative)
+            implementation(projects.androidSharedNative)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)

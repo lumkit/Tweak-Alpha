@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lumkit.tweak.common.component.CategoryCard
 import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.rememberChartState
+import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.shadowMask
 import io.github.lumkit.tweak.ui.theme.ContentSafeHorizontalPadding
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
@@ -56,6 +57,7 @@ import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -269,6 +271,10 @@ private fun MemoryInfoContent() {
     val memoryLoad by animateFloatAsState(targetValue = memoryState?.memoryUsed ?: 0f)
     val swapLoad by animateFloatAsState(targetValue = memoryState?.swapUsed ?: 0f)
 
+    val loadColor by animatedColorAsUsed(load)
+    val memoryLoadColor by animatedColorAsUsed(memoryLoad)
+    val swapLoadColor by animatedColorAsUsed(swapLoad)
+
     CategoryCard(
         title = stringResource(Res.string.text_memory_state)
     ) {
@@ -283,6 +289,9 @@ private fun MemoryInfoContent() {
                     progress = load,
                     size = 80.dp,
                     strokeWidth = 16.dp,
+                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                        foregroundColor = loadColor
+                    ),
                 )
 
                 Text(
@@ -312,6 +321,9 @@ private fun MemoryInfoContent() {
                             modifier = Modifier.fillMaxWidth(),
                             progress = memoryLoad,
                             height = 8.dp,
+                            colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                                foregroundColor = memoryLoadColor
+                            ),
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         MemoryTable(
@@ -330,6 +342,9 @@ private fun MemoryInfoContent() {
                             modifier = Modifier.fillMaxWidth(),
                             progress = swapLoad,
                             height = 8.dp,
+                            colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                                foregroundColor = swapLoadColor
+                            ),
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         MemoryTable(
@@ -418,6 +433,7 @@ private fun GpuInfoContent() {
     }
     val gpuInfoModel by DeviceInfoViewModel.gpuInfoState.collectAsStateWithLifecycle()
     val load by animateFloatAsState(targetValue = gpuInfoModel?.load ?: 0f)
+    val loadColor by animatedColorAsUsed(load)
 
     CategoryCard(
         title = stringResource(Res.string.text_gpu_state)
@@ -433,6 +449,9 @@ private fun GpuInfoContent() {
                     progress = load,
                     size = 80.dp,
                     strokeWidth = 16.dp,
+                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                        foregroundColor = loadColor
+                    ),
                 )
 
                 Text(

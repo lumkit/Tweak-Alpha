@@ -333,7 +333,11 @@ object DeviceTemperatureUtils {
         if (isEmpty()) {
             return null
         }
-        return sumOf { it.second.toDouble() }.toFloat() / size
+        val nonZeroEntries = filter { it.second != 0f }
+        if (nonZeroEntries.isEmpty()) {
+            return 0f
+        }
+        return nonZeroEntries.sumOf { it.second.toDouble() }.toFloat() / nonZeroEntries.size
     }
 }
 
