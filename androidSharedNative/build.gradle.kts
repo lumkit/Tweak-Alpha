@@ -62,5 +62,6 @@ android {
     dependencies {
         compileOnly(libs.libsu.core)
         compileOnly(libs.libsu.service)
+        compileOnlyApi(fileTree("dir" to "libs", "include" to listOf("*.jar")))
     }
 }
