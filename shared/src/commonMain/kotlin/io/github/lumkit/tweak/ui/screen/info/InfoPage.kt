@@ -50,14 +50,10 @@ import io.github.lumkit.tweak.common.component.CategoryCard
 import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
-import io.github.lumkit.tweak.common.utils.UpdateEngineUtils
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
-import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.shadowMask
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -97,12 +93,6 @@ fun InfoPage() {
     val direction = LocalLayoutDirection.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
-
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.Main) {
-            logD(UpdateEngineUtils.bind().toString())
-        }
-    }
 
     Box(
         modifier = Modifier.fillMaxSize()
