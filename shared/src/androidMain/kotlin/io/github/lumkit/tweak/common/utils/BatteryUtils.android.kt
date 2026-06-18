@@ -8,4 +8,22 @@ internal actual object PlatformBatterySource {
         if (value == Int.MIN_VALUE) return null
         return value.toLong()
     }
+
+    actual fun getVoltage(): Int? {
+        val value = BatteryBridge.getVoltage()
+        if (value == Int.MIN_VALUE) return null
+        return value
+    }
+
+    actual fun getTemperature(): Int? {
+        val value = BatteryBridge.getTemperature()
+        if (value == Int.MIN_VALUE) return null
+        return value
+    }
+
+    actual fun getCapacity(): Int? {
+        val value = BatteryBridge.getCapacity()
+        if (value == Int.MIN_VALUE) return null
+        return value
+    }
 }

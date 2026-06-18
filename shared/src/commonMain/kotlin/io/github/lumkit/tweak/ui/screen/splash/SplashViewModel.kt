@@ -1,17 +1,14 @@
 package io.github.lumkit.tweak.ui.screen.splash
 
-import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.LibSuX
+import io.github.lumkit.tweak.common.utils.ShizukuX
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.stateIn
 
 class SplashViewModel: BaseViewModel() {
 
@@ -38,6 +35,13 @@ class SplashViewModel: BaseViewModel() {
                 }
                 block()
             }
+            RuntimeMode.Shizuku -> {
+                if (!checkShizukuMode()) {
+                    setRuntimeMode(RuntimeMode.Unknow)
+                    return
+                }
+                block()
+            }
         }
     }
 
@@ -50,4 +54,18 @@ class SplashViewModel: BaseViewModel() {
         }
     }
 
+    suspend fun checkShizukuMode(): Boolean {
+        _checkLoadingState.value = true
+        return try {
+            ShizukuX.checkShizuku().let {
+                if (!it) {
+                    ShizukuX.requestPermission()
+                } else {
+                    true
+                }
+            }
+        } finally {
+            _checkLoadingState.value = false
+        }
+    }
 }

@@ -148,36 +148,46 @@ object BatteryUtils {
     }
 
     private suspend fun readBatterySnapshot(): BatterySnapshot {
-        val voltageRaw = readFirstAvailable(voltagePaths)?.toLongOrNull()
-        val tempRaw = readFirstAvailable(temperaturePaths)?.toIntOrNull()
         val cycleCount = readFirstAvailable(cycleCountPaths)?.toIntOrNull()
-        val capacity = readFirstAvailable(capacityPaths)?.toIntOrNull()
         val designCapacityRaw = readFirstAvailable(designCapacityPaths)?.toLongOrNull()
         val currentFullCapacityRaw = readFirstAvailable(currentCapacityPaths)?.toLongOrNull()
 
-        // 通过 BatteryManager API 获取标准化电流值（µA），比 sysfs 更可靠
+        // 优先通过 Android API 获取电压（mV），无需 ROOT/Shizuku 权限
+        val voltageMv = PlatformBatterySource.getVoltage() ?: run {
+            // 回退到 sysfs
+            val voltageRaw = readFirstAvailable(voltagePaths)?.toLongOrNull()
+            voltageRaw?.let { raw ->
+                if (raw > 100_000) (raw / 1000).toInt() else raw.toInt()
+            }
+        }
+
+        // 优先通过 Android API 获取温度（0.1°C）
+        val temperatureCelsius = PlatformBatterySource.getTemperature()?.let { raw ->
+            raw / 10f
+        } ?: run {
+            // 回退到 sysfs
+            val tempRaw = readFirstAvailable(temperaturePaths)?.toIntOrNull()
+            tempRaw?.let { raw ->
+                if (raw > 1000 || raw < -1000) raw / 1000f
+                else if (raw > 200 || raw < -200) raw / 10f
+                else raw.toFloat()
+            }
+        }
+
+        // 优先通过 BatteryManager API 获取电流（µA）
         val batteryCurrentUa = PlatformBatterySource.getCurrentNow()
         val currentMa = if (batteryCurrentUa != null) {
             (batteryCurrentUa / 1000).toInt()
         } else {
-            // 回退到 sysfs 读取
             val currentRaw = readFirstAvailable(currentPaths)?.toLongOrNull()
             currentRaw?.let { raw ->
                 if (raw > 100_000 || raw < -100_000) (raw / 1000).toInt() else raw.toInt()
             }
         }
 
-        // voltage_now 单位通常是 µV，转换为 mV
-        val voltageMv = voltageRaw?.let { raw ->
-            if (raw > 100_000) (raw / 1000).toInt() else raw.toInt()
-        }
-
-        // temp 单位通常是 0.1°C
-        val temperatureCelsius = tempRaw?.let { raw ->
-            if (raw > 1000 || raw < -1000) raw / 1000f
-            else if (raw > 200 || raw < -200) raw / 10f
-            else raw.toFloat()
-        }
+        // 优先通过 Android API 获取电量百分比
+        val capacity = PlatformBatterySource.getCapacity()
+            ?: readFirstAvailable(capacityPaths)?.toIntOrNull()
 
         // charge_full_design 单位通常是 µAh，转换为 mAh
         val designCapacityMah = designCapacityRaw?.let { raw ->
@@ -254,4 +264,22 @@ internal expect object PlatformBatterySource {
      * 返回 null 表示不可用。
      */
     fun getCurrentNow(): Long?
+
+    /**
+     * 获取电池电压，单位 mV。
+     * 返回 null 表示不可用。
+     */
+    fun getVoltage(): Int?
+
+    /**
+     * 获取电池温度，单位 0.1°C（需除以10得到摄氏度）。
+     * 返回 null 表示不可用。
+     */
+    fun getTemperature(): Int?
+
+    /**
+     * 获取电池电量百分比 0-100。
+     * 返回 null 表示不可用。
+     */
+    fun getCapacity(): Int?
 }

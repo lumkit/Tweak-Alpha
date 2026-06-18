@@ -3,9 +3,12 @@
     <string name="toolkit_tweak">TOOLKIT · Tweak</string>
     <string name="text_select_runtime_mode">选择运行模式</string>
     <string name="text_root_mode">ROOT模式</string>
+    <string name="text_shizuku_mode">Shizuku模式</string>
     <string name="text_root_mode_description">可使用全部功能</string>
+    <string name="text_shizuku_mode_description">可使用部分功能</string>
     <string name="text_checking_runtime">检测运行环境中...</string>
     <string name="text_root_permisstion_denied">权限被拒绝，重启App后再试</string>
+    <string name="text_shizuku_permission_denied">Shizuku权限被拒绝，请检查Shizuku是否运行</string>
     <string name="text_restart">重启</string>
     <string name="nav_home">面板</string>
     <string name="nav_category">功能</string>

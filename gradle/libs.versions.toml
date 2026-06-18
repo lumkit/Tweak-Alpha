@@ -17,6 +17,7 @@ coil3 = "3.5.0"
 liquid-glass = "2.0.0"
 kyantShapes = "1.2.0"
 annotations = "26.1.0"
+shizuku = "13.1.5"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -48,6 +49,8 @@ coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil3" }
 liquid-glass = { module = "io.github.kyant0:backdrop", version.ref = "liquid-glass" }
 kyant-shapes = { group = "io.github.kyant0", name = "shapes", version.ref = "kyantShapes" }
 annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
+shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
+shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.ui.screen.splash
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,10 +52,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_sharp
+import tweak_alpha.shared.generated.resources.ic_shizuku_logo
 import tweak_alpha.shared.generated.resources.text_checking_runtime
 import tweak_alpha.shared.generated.resources.text_restart
 import tweak_alpha.shared.generated.resources.text_root_permisstion_denied
 import tweak_alpha.shared.generated.resources.text_select_runtime_mode
+import tweak_alpha.shared.generated.resources.text_shizuku_permission_denied
 import tweak_alpha.shared.generated.resources.toolkit_tweak
 
 @Composable
@@ -150,6 +153,29 @@ internal fun SplashScreen(
                                                             restartApp()
                                                         }
                                                     }
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+
+                                RuntimeMode.Shizuku -> {
+                                    ModeItem(
+                                        icon = {
+                                            Image(
+                                                painter = painterResource(Res.drawable.ic_shizuku_logo),
+                                                contentDescription = null
+                                            )
+                                        },
+                                        title = stringResourceByRuntimeMode(mode),
+                                        description = stringResourceByRuntimeModeDescription(mode),
+                                        action = {
+                                            scope.launch {
+                                                if (viewModel.checkShizukuMode()) {
+                                                    viewModel.setRuntimeMode(RuntimeMode.Shizuku)
+                                                    navigator.navigate(Screen.Main, true)
+                                                } else {
+                                                    snackbarHostState.showSnackbar(getString(Res.string.text_shizuku_permission_denied))
                                                 }
                                             }
                                         }

@@ -6,6 +6,8 @@ import org.jetbrains.compose.resources.stringResource
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.text_root_mode
 import tweak_alpha.shared.generated.resources.text_root_mode_description
+import tweak_alpha.shared.generated.resources.text_shizuku_mode
+import tweak_alpha.shared.generated.resources.text_shizuku_mode_description
 
 /**
  * 运行模式
@@ -19,7 +21,12 @@ enum class RuntimeMode {
     /**
      * Root模式
      */
-    Root
+    Root,
+
+    /**
+     * Shizuku模式
+     */
+    Shizuku
 }
 
 @Composable
@@ -27,6 +34,7 @@ fun stringResourceByRuntimeMode(runtimeMode: RuntimeMode): String {
     return when (runtimeMode) {
         RuntimeMode.Unknow -> ""
         RuntimeMode.Root -> stringResource(Res.string.text_root_mode)
+        RuntimeMode.Shizuku -> stringResource(Res.string.text_shizuku_mode)
     }
 }
 
@@ -35,10 +43,12 @@ fun stringResourceByRuntimeModeDescription(runtimeMode: RuntimeMode): String {
     return when (runtimeMode) {
         RuntimeMode.Unknow -> ""
         RuntimeMode.Root -> stringResource(Res.string.text_root_mode_description)
+        RuntimeMode.Shizuku -> stringResource(Res.string.text_shizuku_mode_description)
     }
 }
 
 fun RuntimeMode.asNativeFileBackend(): NativeFileBackend = when (this) {
     RuntimeMode.Unknow -> NativeFileBackend.User
     RuntimeMode.Root -> NativeFileBackend.ROOT
+    RuntimeMode.Shizuku -> NativeFileBackend.SHIZUKU
 }

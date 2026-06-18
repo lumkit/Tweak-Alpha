@@ -147,7 +147,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         viewModelScope.launch {
             _loadingState.value = false
             // 初始化GPU是否支持
-            _gpuSupported.value = GpuUtils.supported()
+            _gpuSupported.value = GpuUtils.canReadGpuInfo()
 
             while (isActive) {
                 // 更新CPU信息
@@ -275,9 +275,6 @@ object DeviceInfoViewModel : BaseViewModel() {
     }
 
     private suspend fun updateGpuInfo() {
-        if (!_gpuSupported.value) {
-            return
-        }
         val currentFreq = GpuUtils.getGpuFreq()
         val maxFreq = GpuUtils.getMaxFreq()
         val minFreq = GpuUtils.getMinFreq()

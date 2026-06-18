@@ -93,7 +93,6 @@ fun InfoPage() {
     val direction = LocalLayoutDirection.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
-    val gpuSupportedState by DeviceInfoViewModel.gpuSupported.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -138,10 +137,8 @@ fun InfoPage() {
                     MemoryInfoContent()
                 }
 
-                if (gpuSupportedState) {
-                    item {
-                        GpuInfoContent()
-                    }
+                item {
+                    GpuInfoContent()
                 }
 
                 item {
@@ -471,82 +468,91 @@ private fun GpuInfoContent() {
     val gpuInfoModel by DeviceInfoViewModel.gpuInfoState.collectAsStateWithLifecycle()
     val load by animateFloatAsState(targetValue = gpuInfoModel?.load ?: 0f)
     val loadColor by animatedColorAsUsed(load)
+    val gpuSupportedState by DeviceInfoViewModel.gpuSupported.collectAsStateWithLifecycle()
 
     CategoryCard(
         title = stringResource(Res.string.text_gpu_state)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    progress = load,
-                    size = 80.dp,
-                    strokeWidth = 16.dp,
-                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                        foregroundColor = loadColor
-                    ),
-                )
-
-                Text(
-                    text = stringResource(Res.string.text_used_load),
-                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                    style = MiuixTheme.textStyles.body2,
-                )
-            }
-
-            VerticalDivider(
-                modifier = Modifier.fillMaxHeight()
-                    .padding(horizontal = 8.dp)
-            )
-
-            Column(
+        if (gpuSupportedState) {
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    verticalAlignment = Alignment.Bottom,
+                Box(
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = gpuInfoModel?.currentFreq ?: "N/A",
-                        color = MiuixTheme.colorScheme.onSurface.copy(.7f),
-                        style = MiuixTheme.textStyles.body1,
+                    CircularProgressIndicator(
+                        progress = load,
+                        size = 80.dp,
+                        strokeWidth = 16.dp,
+                        colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                            foregroundColor = loadColor
+                        ),
                     )
 
                     Text(
-                        text = gpuInfoModel?.freqRangeText ?: "N/A",
+                        text = stringResource(Res.string.text_used_load),
                         color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                        style = MiuixTheme.textStyles.footnote2,
-                        modifier = Modifier.padding(start = 4f.dp)
-                            .graphicsLayer {
-                                translationY = translateY
-                            },
+                        style = MiuixTheme.textStyles.body2,
                     )
                 }
 
-                Text(
-                    text = gpuInfoModel?.loadText ?: "N/A",
-                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                    style = MiuixTheme.textStyles.footnote2
-                        .copy(
-                            fontSize = 10.sp,
-                            lineHeight = 10.sp,
-                        ),
+                VerticalDivider(
+                    modifier = Modifier.fillMaxHeight()
+                        .padding(horizontal = 8.dp)
                 )
 
-                Text(
-                    text = gpuInfoModel?.displayInfo ?: "N/A",
-                    color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-                    style = MiuixTheme.textStyles.footnote2
-                        .copy(
-                            fontSize = 10.sp,
-                            lineHeight = 10.sp,
-                        ),
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Text(
+                            text = gpuInfoModel?.currentFreq ?: "N/A",
+                            color = MiuixTheme.colorScheme.onSurface.copy(.7f),
+                            style = MiuixTheme.textStyles.body1,
+                        )
+
+                        Text(
+                            text = gpuInfoModel?.freqRangeText ?: "N/A",
+                            color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                            style = MiuixTheme.textStyles.footnote2,
+                            modifier = Modifier.padding(start = 4f.dp)
+                                .graphicsLayer {
+                                    translationY = translateY
+                                },
+                        )
+                    }
+
+                    Text(
+                        text = gpuInfoModel?.loadText ?: "N/A",
+                        color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                        style = MiuixTheme.textStyles.footnote2
+                            .copy(
+                                fontSize = 10.sp,
+                                lineHeight = 10.sp,
+                            ),
+                    )
+
+                    Text(
+                        text = gpuInfoModel?.displayInfo ?: "N/A",
+                        color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                        style = MiuixTheme.textStyles.footnote2
+                            .copy(
+                                fontSize = 10.sp,
+                                lineHeight = 10.sp,
+                            ),
+                    )
+                }
             }
+        } else {
+            Text(
+                text = gpuInfoModel?.displayInfo ?: "N/A",
+                color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                style = MiuixTheme.textStyles.footnote2,
+            )
         }
     }
 }

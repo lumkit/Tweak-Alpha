@@ -53,6 +53,8 @@ object GpuUtils {
         }
     }
 
+    suspend fun canReadGpuInfo(): Boolean = getGpuFreq().isNotEmpty()
+
     suspend fun getGpuFreq(): String {
         return when (val source = resolveFrequencySource()) {
             FrequencySource.None -> ""
