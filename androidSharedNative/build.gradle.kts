@@ -21,6 +21,33 @@ android {
         }
     }
 
+    buildTypes {
+        release {
+            externalNativeBuild {
+                cmake {
+                    cppFlags += listOf(
+                        "-O2",
+                        "-fvisibility=hidden",
+                        "-fvisibility-inlines-hidden",
+                        "-ffunction-sections",
+                        "-fdata-sections",
+                        "-flto",
+                    )
+                    cFlags += listOf(
+                        "-O2",
+                        "-fvisibility=hidden",
+                        "-ffunction-sections",
+                        "-fdata-sections",
+                        "-flto",
+                    )
+                    arguments += listOf(
+                        "-DCMAKE_BUILD_TYPE=Release",
+                    )
+                }
+            }
+        }
+    }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
