@@ -9,6 +9,7 @@
     <string name="text_restart">重启</string>
     <string name="nav_home">面板</string>
     <string name="nav_category">功能</string>
+    <string name="nav_settings">设置</string>
 
     <string name="text_cpu_state">CPU状态</string>
     <string name="text_cpu_state_description">负载：%s     温度：%s</string>
@@ -20,4 +21,12 @@
     <string name="text_gpu_state">GPU状态</string>
     <string name="text_gpu_load_format">负载：%s     内存使用：%s</string>
     <string name="text_used_load">负载</string>
+    <string name="text_settings">设置</string>
+    <string name="text_battery">电池</string>
+    <string name="text_storage">存储</string>
+    <string name="text_storage_used">已用：%s</string>
+    <string name="text_storage_total">总计：%s</string>
+    <string name="text_storage_flash_type">闪存：%s</string>
+    <string name="text_storage_user_splace">用户：%s</string>
+    <string name="text_storage_free">空闲：%s</string>
 </resources>

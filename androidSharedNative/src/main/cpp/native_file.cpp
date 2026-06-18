@@ -1,84 +1,7 @@
-#include <EGL/egl.h>
-#include <GLES2/gl2.h>
-#include <dirent.h>
-#include <cerrno>
-#include <fcntl.h>
-#include <jni.h>
-#include <sstream>
-#include <string>
-#include <sys/stat.h>
-#include <sys/system_properties.h>
-#include <unistd.h>
-#include <vector>
-#include <algorithm>
-
-#ifndef EGL_OPENGL_ES3_BIT_KHR
-#define EGL_OPENGL_ES3_BIT_KHR 0x0040
-#endif
+#include "native_common.h"
+#include <limits.h>
 
 namespace {
-
-class ScopedUtfChars {
-public:
-    ScopedUtfChars(JNIEnv *env, jstring value) : env_(env), value_(value) {
-        if (value_ != nullptr) {
-            chars_ = env_->GetStringUTFChars(value_, nullptr);
-        }
-    }
-
-    ~ScopedUtfChars() {
-        if (chars_ != nullptr) {
-            env_->ReleaseStringUTFChars(value_, chars_);
-        }
-    }
-
-    [[nodiscard]] const char *get() const {
-        return chars_;
-    }
-
-private:
-    JNIEnv *env_;
-    jstring value_;
-    const char *chars_ = nullptr;
-};
-
-[[noreturn]] void throwIOException(JNIEnv *env, const std::string &message) {
-    jclass exceptionClass = env->FindClass("java/io/IOException");
-    env->ThrowNew(exceptionClass, message.c_str());
-    throw 0;
-}
-
-std::string lastError(const std::string &prefix) {
-    std::ostringstream stream;
-    stream << prefix << ": " << strerror(errno);
-    return stream.str();
-}
-
-std::string requirePath(JNIEnv *env, jstring value, const char *label) {
-    if (value == nullptr) {
-        throwIOException(env, std::string(label) + " must not be null");
-    }
-    ScopedUtfChars chars(env, value);
-    if (chars.get() == nullptr) {
-        throwIOException(env, std::string("Unable to decode ") + label);
-    }
-    return chars.get();
-}
-
-std::string joinPath(const std::string &parent, const std::string &child) {
-    if (parent.empty() || parent == "/") {
-        return parent == "/" ? "/" + child : child;
-    }
-    if (parent.back() == '/') {
-        return parent + child;
-    }
-    return parent + "/" + child;
-}
-
-bool pathExists(const std::string &path) {
-    struct stat status{};
-    return lstat(path.c_str(), &status) == 0;
-}
 
 struct stat requireStatus(JNIEnv *env, const std::string &path) {
     struct stat status{};
@@ -289,105 +212,6 @@ mode_t parseMode(JNIEnv *env, const std::string &modeString) {
     return static_cast<mode_t>(parsed);
 }
 
-std::string joinNonEmptyParts(
-    const std::string &vendor,
-    const std::string &renderer,
-    const std::string &version
-) {
-    std::ostringstream stream;
-    if (!vendor.empty()) {
-        stream << vendor;
-    }
-    if (!renderer.empty()) {
-        if (!vendor.empty()) {
-            stream << " ";
-        }
-        stream << renderer;
-    }
-    if (!version.empty()) {
-        if (!vendor.empty() || !renderer.empty()) {
-            stream << "\n";
-        }
-        stream << version;
-    }
-    return stream.str();
-}
-
-std::string queryGlesInfo(EGLint renderableType, EGLint clientVersion) {
-    EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    if (display == EGL_NO_DISPLAY) {
-        return "";
-    }
-
-    EGLint majorVersion = 0;
-    EGLint minorVersion = 0;
-    if (eglInitialize(display, &majorVersion, &minorVersion) != EGL_TRUE) {
-        return "";
-    }
-
-    const EGLint configAttributes[] = {
-        EGL_RENDERABLE_TYPE, renderableType,
-        EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_NONE
-    };
-
-    EGLConfig config = nullptr;
-    EGLint configCount = 0;
-    if (eglChooseConfig(display, configAttributes, &config, 1, &configCount) != EGL_TRUE || configCount == 0) {
-        eglTerminate(display);
-        return "";
-    }
-
-    const EGLint surfaceAttributes[] = {
-        EGL_WIDTH, 1,
-        EGL_HEIGHT, 1,
-        EGL_NONE
-    };
-    EGLSurface surface = eglCreatePbufferSurface(display, config, surfaceAttributes);
-    if (surface == EGL_NO_SURFACE) {
-        eglTerminate(display);
-        return "";
-    }
-
-    const EGLint contextAttributes[] = {
-        EGL_CONTEXT_CLIENT_VERSION, clientVersion,
-        EGL_NONE
-    };
-    EGLContext context = eglCreateContext(display, config, EGL_NO_CONTEXT, contextAttributes);
-    if (context == EGL_NO_CONTEXT) {
-        eglDestroySurface(display, surface);
-        eglTerminate(display);
-        return "";
-    }
-
-    if (eglMakeCurrent(display, surface, surface, context) != EGL_TRUE) {
-        eglDestroyContext(display, context);
-        eglDestroySurface(display, surface);
-        eglTerminate(display);
-        return "";
-    }
-
-    const char *vendorChars = reinterpret_cast<const char *>(glGetString(GL_VENDOR));
-    const char *rendererChars = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
-    const char *versionChars = reinterpret_cast<const char *>(glGetString(GL_VERSION));
-
-    std::string result = joinNonEmptyParts(
-        vendorChars != nullptr ? vendorChars : "",
-        rendererChars != nullptr ? rendererChars : "",
-        versionChars != nullptr ? versionChars : ""
-    );
-
-    eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-    eglDestroyContext(display, context);
-    eglDestroySurface(display, surface);
-    eglTerminate(display);
-    return result;
-}
-
 }  // namespace
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -397,31 +221,6 @@ Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_exists(JNIEnv *env, jc
     } catch (...) {
         return JNI_FALSE;
     }
-}
-
-extern "C" JNIEXPORT jstring JNICALL
-Java_io_github_lumkit_tweak_sharednative_SystemPropertyBridge_get(JNIEnv *env, jclass, jstring name) {
-    try {
-        std::string propertyName = requirePath(env, name, "name");
-        std::vector<char> buffer(static_cast<size_t>(PROP_VALUE_MAX) + 1, '\0');
-        int length = __system_property_get(propertyName.c_str(), buffer.data());
-        if (length < 0) {
-            throwIOException(env, "Failed to read system property " + propertyName);
-        }
-        buffer[static_cast<size_t>(length)] = '\0';
-        return env->NewStringUTF(buffer.data());
-    } catch (...) {
-        return env->NewStringUTF("");
-    }
-}
-
-extern "C" JNIEXPORT jstring JNICALL
-Java_io_github_lumkit_tweak_sharednative_GpuInfoBridge_getGlesInfo(JNIEnv *env, jclass) {
-    std::string result = queryGlesInfo(EGL_OPENGL_ES3_BIT_KHR, 3);
-    if (result.empty()) {
-        result = queryGlesInfo(EGL_OPENGL_ES2_BIT, 2);
-    }
-    return env->NewStringUTF(result.c_str());
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
@@ -434,9 +233,7 @@ Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_readBytes(JNIEnv *env,
         }
         if (!bytes.empty()) {
             env->SetByteArrayRegion(
-                array,
-                0,
-                static_cast<jsize>(bytes.size()),
+                array, 0, static_cast<jsize>(bytes.size()),
                 reinterpret_cast<const jbyte *>(bytes.data())
             );
         }
@@ -447,12 +244,7 @@ Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_readBytes(JNIEnv *env,
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_writeBytes(
-    JNIEnv *env,
-    jclass,
-    jstring path,
-    jbyteArray bytes
-) {
+Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_writeBytes(JNIEnv *env, jclass, jstring path, jbyteArray bytes) {
     try {
         if (bytes == nullptr) {
             throwIOException(env, "bytes must not be null");
@@ -469,12 +261,7 @@ Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_writeBytes(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_delete(
-    JNIEnv *env,
-    jclass,
-    jstring path,
-    jboolean recursive
-) {
+Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_delete(JNIEnv *env, jclass, jstring path, jboolean recursive) {
     try {
         deleteRecursively(env, requirePath(env, path, "path"), recursive == JNI_TRUE);
     } catch (...) {
@@ -529,32 +316,15 @@ Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_mkdirs(JNIEnv *env, jc
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_copy(
-    JNIEnv *env,
-    jclass,
-    jstring sourcePath,
-    jstring targetPath,
-    jboolean overwrite
-) {
+Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_copy(JNIEnv *env, jclass, jstring sourcePath, jstring targetPath, jboolean overwrite) {
     try {
-        copyRecursively(
-            env,
-            requirePath(env, sourcePath, "sourcePath"),
-            requirePath(env, targetPath, "targetPath"),
-            overwrite == JNI_TRUE
-        );
+        copyRecursively(env, requirePath(env, sourcePath, "sourcePath"), requirePath(env, targetPath, "targetPath"), overwrite == JNI_TRUE);
     } catch (...) {
     }
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_move(
-    JNIEnv *env,
-    jclass,
-    jstring sourcePath,
-    jstring targetPath,
-    jboolean overwrite
-) {
+Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_move(JNIEnv *env, jclass, jstring sourcePath, jstring targetPath, jboolean overwrite) {
     try {
         std::string source = requirePath(env, sourcePath, "sourcePath");
         std::string target = requirePath(env, targetPath, "targetPath");
@@ -579,12 +349,7 @@ Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_move(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_chmod(
-    JNIEnv *env,
-    jclass,
-    jstring path,
-    jstring mode
-) {
+Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_chmod(JNIEnv *env, jclass, jstring path, jstring mode) {
     try {
         std::string resolvedPath = requirePath(env, path, "path");
         mode_t resolvedMode = parseMode(env, requirePath(env, mode, "mode"));

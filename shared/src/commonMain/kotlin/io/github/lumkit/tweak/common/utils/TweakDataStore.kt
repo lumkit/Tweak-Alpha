@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import io.github.lumkit.tweak.model.BatteryDisplayType
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
@@ -41,6 +42,11 @@ object TweakDataStore {
 
     // Settings相关
     private val infoUpdateTimeSpan = longPreferencesKey("info_update_time_span")
+
+    /**
+     * 电池信息显示类型，0 - 显示功率，1显示电流
+     */
+    private val infoBatteryDisplayType = intPreferencesKey("info_battery_display_type")
 
     fun themeModeFlow(): Flow<ColorSchemeMode> = preferences.data.map {
         it[themeModeKey] ?: 0
@@ -115,6 +121,22 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[infoUpdateTimeSpan] = span
+            }
+        }
+    }
+
+    fun infoBatteryDisplayTypeFlow(): Flow<BatteryDisplayType> = preferences.data.map {
+        it[infoBatteryDisplayType] ?: 0
+    }.map {
+        runCatching {
+            BatteryDisplayType.entries[it]
+        }.getOrNull() ?: BatteryDisplayType.Power
+    }
+
+    suspend fun setInfoBatteryDisplayType(type: BatteryDisplayType) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[infoBatteryDisplayType] = type.ordinal
             }
         }
     }

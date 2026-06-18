@@ -11,18 +11,14 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -32,9 +28,7 @@ import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.ui.screen.category.FuncCategoryPage
 import io.github.lumkit.tweak.ui.screen.info.InfoPage
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import io.github.lumkit.tweak.ui.screen.settings.SettingsPage
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -50,8 +44,8 @@ internal fun MainScreen(
     val scope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        MainScreenContent(backdrop, viewModel, pagerState)
-        NavBar(backdrop, viewModel) {
+        MainScreenContent(backdrop, pagerState)
+        NavBar(pagerState, backdrop, viewModel) {
             scope.launch {
                 pagerState.animateScrollToPage(it)
             }
@@ -60,17 +54,21 @@ internal fun MainScreen(
 }
 
 @Composable
-private fun BoxScope.NavBar(backdrop: LayerBackdrop, viewModel: MainViewModel, onTabSelected: (Int) -> Unit) {
+private fun BoxScope.NavBar(
+    pagerState: PagerState,
+    backdrop: LayerBackdrop,
+    viewModel: MainViewModel,
+    onTabSelected: (Int) -> Unit
+) {
     val density = LocalDensity.current
-
-    val selectedTabIndex by viewModel.selectedTabIndex.collectAsStateWithLifecycle()
     val contentColor = MiuixTheme.colorScheme.onSurface
 
     LiquidBottomTabs(
-        selectedTabIndex = { selectedTabIndex },
-        onTabSelected = {
-            viewModel.setSelectedTabIndex(it)
-            onTabSelected(it)
+        selectedTabIndex = { pagerState.currentPage },
+        onTabSelected = { index, isUserChange ->
+            if (isUserChange) {
+                onTabSelected(index)
+            }
         },
         backdrop = backdrop,
         tabsCount = viewModel.pagerCount,
@@ -83,7 +81,7 @@ private fun BoxScope.NavBar(backdrop: LayerBackdrop, viewModel: MainViewModel, o
 
             LiquidBottomTab(
                 onClick = {
-                    viewModel.setSelectedTabIndex(index)
+                    onTabSelected(index)
                 }
             ) {
                 Box(
@@ -104,18 +102,8 @@ private fun BoxScope.NavBar(backdrop: LayerBackdrop, viewModel: MainViewModel, o
 @Composable
 private fun MainScreenContent(
     backdrop: LayerBackdrop,
-    viewModel: MainViewModel,
     pagerState: PagerState
 ) {
-
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }
-            .distinctUntilChanged()
-            .onEach {
-                viewModel.setSelectedTabIndex(it)
-            }.launchIn(this)
-    }
-
     ScreenSurface(
         modifier = Modifier.layerBackdrop(backdrop)
             .fillMaxSize()
@@ -129,6 +117,7 @@ private fun MainScreenContent(
             when (page) {
                 MainPages.Func -> FuncCategoryPage()
                 MainPages.Info -> InfoPage()
+                MainPages.Settings -> SettingsPage()
             }
         }
     }

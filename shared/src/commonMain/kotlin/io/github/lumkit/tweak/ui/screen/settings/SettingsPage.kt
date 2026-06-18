@@ -1,4 +1,4 @@
-package io.github.lumkit.tweak.ui.screen.category
+package io.github.lumkit.tweak.ui.screen.settings
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,10 +20,10 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
-import tweak_alpha.shared.generated.resources.nav_category
+import tweak_alpha.shared.generated.resources.text_settings
 
 @Composable
-fun FuncCategoryPage() {
+fun SettingsPage() {
     val direction = LocalLayoutDirection.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
@@ -31,7 +31,7 @@ fun FuncCategoryPage() {
     Scaffold(
         topBar = {
             TopBar(
-                title = stringResource(Res.string.nav_category),
+                title = stringResource(Res.string.text_settings),
                 scrollBehavior = scrollBehavior,
                 backdrop = backdrop,
             )

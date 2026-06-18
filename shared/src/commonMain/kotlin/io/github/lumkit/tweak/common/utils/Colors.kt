@@ -32,6 +32,7 @@ fun animatedColorAsUsed(
     midColor: Color = Color(0xFFFC8A1B).copy(.75f),
     highColor: Color = Color(0xFFF9592F).copy(.75f),
     animationSpec: AnimationSpec<Color> = UsedColorAnimationSpec,
+    reverse: Boolean = false,
 ): State<Color> {
     val level = when {
         targetUsed > HIGH_USED_THRESHOLD -> UsedColorLevel.HIGH
@@ -39,11 +40,19 @@ fun animatedColorAsUsed(
         else -> UsedColorLevel.DEFAULT
     }
 
-    val targetColor = remember(level, defaultColor, midColor, highColor) {
-        when (level) {
-            UsedColorLevel.HIGH -> highColor
-            UsedColorLevel.MID -> midColor
-            UsedColorLevel.DEFAULT -> defaultColor
+    val targetColor = remember(level, defaultColor, midColor, highColor, reverse) {
+        if (reverse) {
+            when (level) {
+                UsedColorLevel.HIGH -> defaultColor
+                UsedColorLevel.MID -> midColor
+                UsedColorLevel.DEFAULT -> highColor
+            }
+        } else {
+            when (level) {
+                UsedColorLevel.HIGH -> highColor
+                UsedColorLevel.MID -> midColor
+                UsedColorLevel.DEFAULT -> defaultColor
+            }
         }
     }
 

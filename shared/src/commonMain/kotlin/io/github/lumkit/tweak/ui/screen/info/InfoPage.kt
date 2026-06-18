@@ -16,15 +16,13 @@ import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
@@ -37,7 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
@@ -45,28 +45,39 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.common.component.CategoryCard
 import io.github.lumkit.tweak.common.component.LintStackChart
+import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
+import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.shadowMask
-import io.github.lumkit.tweak.ui.theme.ContentSafeHorizontalPadding
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
+import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.nav_home
+import tweak_alpha.shared.generated.resources.text_battery
 import tweak_alpha.shared.generated.resources.text_cpu_state
 import tweak_alpha.shared.generated.resources.text_cpu_state_description
 import tweak_alpha.shared.generated.resources.text_gpu_state
 import tweak_alpha.shared.generated.resources.text_memory_physical
 import tweak_alpha.shared.generated.resources.text_memory_state
+import tweak_alpha.shared.generated.resources.text_storage
+import tweak_alpha.shared.generated.resources.text_storage_flash_type
+import tweak_alpha.shared.generated.resources.text_storage_free
+import tweak_alpha.shared.generated.resources.text_storage_total
 import tweak_alpha.shared.generated.resources.text_swap
 import tweak_alpha.shared.generated.resources.text_total_memory
 import tweak_alpha.shared.generated.resources.text_total_memory_used
@@ -74,43 +85,67 @@ import tweak_alpha.shared.generated.resources.text_used_load
 
 @Composable
 fun InfoPage() {
-    val density = LocalDensity.current
     val loadState by DeviceInfoViewModel.loadingState.collectAsStateWithLifecycle()
     val blurDp by animateDpAsState(
         targetValue = if (loadState) 0.dp else 15.dp,
         animationSpec = tween(durationMillis = 400)
     )
+    val direction = LocalLayoutDirection.current
+    val scrollBehavior = MiuixScrollBehavior()
+    val backdrop = rememberLayerBackdropColor()
     val gpuSupportedState by DeviceInfoViewModel.gpuSupported.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize()
-                .shadowMask(blurDp),
-            contentPadding = PaddingValues(
-                top = with(density) {
-                    16.dp + WindowInsets.statusBars.getTop(this).toDp()
-                },
-                bottom = with(density) {
-                    NavigationBarHeight + 28.dp + WindowInsets.navigationBars.getBottom(this).toDp()
-                },
-                start = ContentSafeHorizontalPadding,
-                end = ContentSafeHorizontalPadding,
-            ),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Scaffold(
+            topBar = {
+                TopBar(
+                    title = stringResource(Res.string.nav_home),
+                    scrollBehavior = scrollBehavior,
+                    backdrop = backdrop,
+                )
+            },
+            containerColor = MiuixTheme.colorScheme.background,
         ) {
-            item {
-                CpuInfoContent()
+            val padding = remember(it) {
+                PaddingValues(
+                    start = it.calculateLeftPadding(direction),
+                    end = it.calculateRightPadding(direction),
+                )
             }
 
-            item {
-                MemoryInfoContent()
-            }
-
-            if (gpuSupportedState) {
+            LazyColumn(
+                modifier = Modifier.layerBackdrop(backdrop)
+                    .padding(padding)
+                    .fillMaxSize()
+                    .overScrollVertical()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .shadowMask(blurDp),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = it.calculateTopPadding() + 16.dp,
+                    bottom = it.calculateBottomPadding() + NavigationBarHeight + 28.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 item {
-                    GpuInfoContent()
+                    CpuInfoContent()
+                }
+
+                item {
+                    MemoryInfoContent()
+                }
+
+                if (gpuSupportedState) {
+                    item {
+                        GpuInfoContent()
+                    }
+                }
+
+                item {
+                    MoreInfoContent()
                 }
             }
         }
@@ -125,7 +160,7 @@ fun InfoPage() {
                         .clickable(
                             indication = null,
                             interactionSource = null
-                        ){},
+                        ) {},
                     contentAlignment = Alignment.Center,
                 ) {
                     InfiniteProgressIndicator(
@@ -191,8 +226,10 @@ private fun CpuInfoContent() {
             }
         }
 
-        HorizontalDivider(modifier = Modifier.fillMaxWidth()
-            .padding(vertical = 8.dp))
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth()
+                .padding(vertical = 8.dp)
+        )
 
         CpuCoreContent()
     }
@@ -508,6 +545,157 @@ private fun GpuInfoContent() {
                             fontSize = 10.sp,
                             lineHeight = 10.sp,
                         ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoreInfoContent() {
+    val moreInfoModel by DeviceInfoViewModel.moreInfoState.collectAsStateWithLifecycle()
+
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        maxItemsInEachRow = 2,
+    ) {
+        BatteryContent(moreInfoModel?.battery)
+        StorageContent(moreInfoModel?.storage)
+
+    }
+}
+
+@Composable
+private fun FlowRowScope.BatteryContent(
+    batteryModel: DeviceInfoViewModel.BatteryInfoModel?,
+) {
+    val load by animateFloatAsState(targetValue = batteryModel?.capacity ?: 0f)
+    val loadColor by animatedColorAsUsed(load, reverse = true)
+
+    CategoryCard(
+        title = stringResource(Res.string.text_battery),
+        modifier = Modifier.fillMaxWidth()
+            .weight(1f)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    progress = load,
+                    size = 48.dp,
+                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                        foregroundColor = loadColor
+                    ),
+                    strokeWidth = 8.dp,
+                )
+                Text(
+                    text = batteryModel?.capacityText ?: "N/A",
+                    style = MiuixTheme.textStyles.footnote2.copy(
+                        fontSize = 10.sp,
+                        lineHeight = 10.sp
+                    ),
+                    color = MiuixTheme.colorScheme.onSurface.copy(.5f)
+                )
+            }
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row {
+                    Text(
+                        text = batteryModel?.levelText ?: "N/A",
+                        style = MiuixTheme.textStyles.footnote2,
+                        color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                    )
+                    Spacer(modifier = Modifier.weight(1f).defaultMinSize(minWidth = 4.dp))
+                    Text(
+                        text = batteryModel?.currentText ?: "N/A",
+                        style = MiuixTheme.textStyles.footnote2,
+                        color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                    )
+                }
+                Row {
+                    Text(
+                        text = batteryModel?.temperatureText ?: "N/A",
+                        style = MiuixTheme.textStyles.footnote2,
+                        color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                    )
+                    Spacer(modifier = Modifier.weight(1f).defaultMinSize(minWidth = 4.dp))
+                    Text(
+                        text = batteryModel?.powerText ?: "N/A",
+                        style = MiuixTheme.textStyles.footnote2,
+                        color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FlowRowScope.StorageContent(
+    storageModel: DeviceInfoViewModel.StorageInfoModel?,
+) {
+    val load by animateFloatAsState(targetValue = storageModel?.usedLoad ?: 0f)
+    val loadColor by animatedColorAsUsed(load, reverse = true)
+
+    CategoryCard(
+        title = stringResource(Res.string.text_storage),
+        modifier = Modifier.fillMaxWidth()
+            .weight(1f)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    progress = load,
+                    size = 48.dp,
+                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                        foregroundColor = loadColor
+                    ),
+                    strokeWidth = 8.dp,
+                )
+                Text(
+                    text = storageModel?.usedText ?: "N/A",
+                    style = MiuixTheme.textStyles.footnote2.copy(
+                        fontSize = 10.sp,
+                        lineHeight = 10.sp
+                    ),
+                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Column {
+                Text(
+                    text = stringResource(Res.string.text_storage_free)
+                        .format(storageModel?.freeText ?: "N/A"),
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                )
+                Text(
+                    text = stringResource(Res.string.text_storage_total)
+                        .format(storageModel?.totalText ?: "N/A"),
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                )
+                Text(
+                    text = stringResource(Res.string.text_storage_flash_type)
+                        .format(storageModel?.flashType ?: "N/A"),
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                 )
             }
         }

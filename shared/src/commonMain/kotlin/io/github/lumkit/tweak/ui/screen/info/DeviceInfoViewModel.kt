@@ -3,13 +3,18 @@ package io.github.lumkit.tweak.ui.screen.info
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.utils.BatteryUtils
 import io.github.lumkit.tweak.common.utils.CpuCodenameUtils
 import io.github.lumkit.tweak.common.utils.CpuFrequencyUtil
 import io.github.lumkit.tweak.common.utils.CpuLoadUtils
 import io.github.lumkit.tweak.common.utils.DeviceMemoryInfoUtils
 import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.common.utils.GpuUtils
+import io.github.lumkit.tweak.common.utils.StorageUtils
+import io.github.lumkit.tweak.common.utils.formatCurrent
 import io.github.lumkit.tweak.common.utils.formatMemorySize
+import io.github.lumkit.tweak.common.utils.formatPower
+import io.github.lumkit.tweak.common.utils.formatVoltage
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
 import kotlinx.coroutines.async
@@ -88,6 +93,35 @@ object DeviceInfoViewModel : BaseViewModel() {
         val memoryUsage: String?,
     )
 
+    @Immutable
+    @Serializable
+    data class MoreInfoModel(
+        val battery: BatteryInfoModel,
+        val storage: StorageInfoModel,
+    )
+
+    @Immutable
+    @Serializable
+    data class BatteryInfoModel(
+        val levelText: String,
+        val currentText: String,
+        val temperatureText: String,
+        val powerText: String,
+        val capacity: Float,
+        val capacityText: String,
+    )
+
+    @Immutable
+    @Serializable
+    data class StorageInfoModel(
+        val flashType: String,
+        val usedLoad: Float,
+        val totalText: String,
+        val usedText: String,
+        val userSpace: String,
+        val freeText: String,
+    )
+
     val cpuFrequencyUtil = CpuFrequencyUtil()
     private val cpuLoadUtils = CpuLoadUtils()
 
@@ -106,6 +140,9 @@ object DeviceInfoViewModel : BaseViewModel() {
     private val _gpuInfoState = MutableStateFlow<GpuInfoModel?>(null)
     val gpuInfoState = _gpuInfoState.asStateFlow()
 
+    private val _moreInfoState = MutableStateFlow<MoreInfoModel?>(null)
+    val moreInfoState = _moreInfoState.asStateFlow()
+
     init {
         viewModelScope.launch {
             _loadingState.value = false
@@ -120,6 +157,8 @@ object DeviceInfoViewModel : BaseViewModel() {
                 updateMemoryInfo()
                 // 更新GPU信息
                 updateGpuInfo()
+                // 更新更多信息
+                updateMoreInfo()
 
                 println("load time: ${Clock.System.now().toEpochMilliseconds() - tag}ms")
                 _loadingState.value = true
@@ -261,6 +300,65 @@ object DeviceInfoViewModel : BaseViewModel() {
             displayInfo = display,
             memoryUsage = memoryUsage,
             freqRangeText = "(${minFreqFormat}~${maxFreqFormat}MHz)"
+        )
+    }
+
+    private var flashType = ""
+    private var totalSize: Long = 0L
+    private suspend fun updateMoreInfo() {
+        val batteryModel = run {
+            val level = BatteryUtils.getVoltage() ?: 0
+            val current = BatteryUtils.getCurrent() ?: 0
+            val temperature = BatteryUtils.getTemperature()
+            val power = BatteryUtils.getPower() ?: 0
+            val capacity = BatteryUtils.getCapacityPercent() ?: 0
+
+            BatteryInfoModel(
+                levelText = level.formatVoltage(),
+                temperatureText = "%.1f°C".format(temperature),
+                powerText = power.formatPower(),
+                capacity = capacity.toFloat() / 100f,
+                capacityText = "%d%%".format(capacity),
+                currentText = current.formatCurrent(),
+            )
+        }
+
+        //val flashType: String,
+        //        val usedLoad: Float,
+        //        val totalText: String,
+        //        val usedText: String,
+        //        val userSpace: String,
+        val storage = run {
+            val flashType = this.flashType.ifEmpty {
+                val type = StorageUtils.getFlashType()
+                this.flashType = type
+                type
+            }
+            val total = run {
+                if (totalSize <= 0L) {
+                    totalSize = StorageUtils.getTotalBytes()
+                }
+                totalSize
+            }
+            val used = StorageUtils.getUsedBytes()
+            val usedLoad = used.toFloat() / total.toFloat()
+            val userSpace = StorageUtils.getUserProfiles()
+            val free = StorageUtils.getFreeBytes()
+
+            StorageInfoModel(
+                flashType = flashType,
+                usedLoad = usedLoad,
+                totalText = total.formatMemorySize(),
+                usedText = used.formatMemorySize("\n"),
+                userSpace = userSpace.joinToString("|"),
+                freeText = free.formatMemorySize(),
+            )
+        }
+
+        println("flashType = ${flashType}")
+        _moreInfoState.value = MoreInfoModel(
+            battery = batteryModel,
+            storage = storage,
         )
     }
 }

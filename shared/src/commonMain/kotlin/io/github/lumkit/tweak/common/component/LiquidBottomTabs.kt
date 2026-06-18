@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -48,9 +49,9 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
-import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.DampedDragAnimation
 import io.github.lumkit.tweak.common.utils.InteractiveHighlight
+import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
@@ -62,7 +63,7 @@ import kotlin.math.sign
 @Composable
 fun LiquidBottomTabs(
     selectedTabIndex: () -> Int,
-    onTabSelected: (index: Int) -> Unit,
+    onTabSelected: (index: Int, isUserChange: Boolean) -> Unit,
     backdrop: Backdrop,
     tabsCount: Int,
     modifier: Modifier = Modifier,
@@ -103,6 +104,7 @@ fun LiquidBottomTabs(
         var currentIndex by remember(selectedTabIndex) {
             mutableIntStateOf(selectedTabIndex())
         }
+        var isUserTriggered by remember { mutableStateOf(false) }
         val dampedDragAnimation = remember(animationScope) {
             DampedDragAnimation(
                 animationScope = animationScope,
@@ -114,6 +116,7 @@ fun LiquidBottomTabs(
                 onDragStarted = {},
                 onDragStopped = {
                     val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
+                    isUserTriggered = true
                     currentIndex = targetIndex
                     animateToValue(targetIndex.toFloat())
                     animationScope.launch {
@@ -145,7 +148,9 @@ fun LiquidBottomTabs(
                 .drop(1)
                 .collectLatest { index ->
                     dampedDragAnimation.animateToValue(index.toFloat())
-                    onTabSelected(index)
+                    val userChange = isUserTriggered
+                    isUserTriggered = false
+                    onTabSelected(index, userChange)
                 }
         }
 

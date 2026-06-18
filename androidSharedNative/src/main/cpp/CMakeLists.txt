@@ -5,7 +5,10 @@ project("tweak_shared_native")
 add_library(
         ${CMAKE_PROJECT_NAME}
         SHARED
-        native-lib.cpp
+        native_file.cpp
+        native_gpu.cpp
+        native_sysprop.cpp
+        native_storage.cpp
 )
 
 target_link_libraries(
