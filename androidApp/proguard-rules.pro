@@ -27,3 +27,16 @@
 -keep class * implements coil3.util.DecoderServiceLoaderTarget { *; }
 -keep class * implements coil3.util.FetcherServiceLoaderTarget { *; }
 
+# Shizuku
+-keep class rikka.shizuku.** { *; }
+-keep class moe.shizuku.** { *; }
+-keepclassmembers class * implements android.content.ServiceConnection {
+    public void onServiceConnected(android.content.ComponentName, android.os.IBinder);
+    public void onServiceDisconnected(android.content.ComponentName);
+}
+# Shizuku UserService 需要保留无参构造函数和 AIDL Stub
+-keep class io.github.lumkit.tweak.sharednative.ShizukuFileService { *; }
+-keep class io.github.lumkit.tweak.sharednative.IRootFileService { *; }
+-keep class io.github.lumkit.tweak.sharednative.IRootFileService$Stub { *; }
+-keep class io.github.lumkit.tweak.sharednative.IRootFileService$Stub$Proxy { *; }
+

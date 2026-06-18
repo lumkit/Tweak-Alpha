@@ -42,7 +42,7 @@ fun App() {
     TweakTheme(
         viewModel = themeViewModel,
     ) {
-        val backgroundColor = MiuixTheme.colorScheme.background
+        val backgroundColor = MiuixTheme.colorScheme.surface
 
         GlobalCompositionProvider {
             val snackbarHostState = LocalSnackBarHostState.current

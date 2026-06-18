@@ -105,7 +105,7 @@ fun InfoPage() {
                     backdrop = backdrop,
                 )
             },
-            containerColor = MiuixTheme.colorScheme.background,
+            containerColor = MiuixTheme.colorScheme.surface,
         ) {
             val padding = remember(it) {
                 PaddingValues(
@@ -119,8 +119,8 @@ fun InfoPage() {
                     .padding(padding)
                     .fillMaxSize()
                     .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .shadowMask(blurDp),
+                    .shadowMask(blurDp)
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
@@ -650,7 +650,7 @@ private fun FlowRowScope.StorageContent(
     storageModel: DeviceInfoViewModel.StorageInfoModel?,
 ) {
     val load by animateFloatAsState(targetValue = storageModel?.usedLoad ?: 0f)
-    val loadColor by animatedColorAsUsed(load, reverse = true)
+    val loadColor by animatedColorAsUsed(load)
 
     CategoryCard(
         title = stringResource(Res.string.text_storage),

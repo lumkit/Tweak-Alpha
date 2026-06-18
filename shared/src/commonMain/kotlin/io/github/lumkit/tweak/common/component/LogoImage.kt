@@ -77,7 +77,7 @@ fun Logo(
             modifier = Modifier.fillMaxSize().graphicsLayer {
                 rotationZ = rotation
             },
-            colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.surface),
+            colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.surfaceContainer),
         )
 
         Image(
@@ -97,7 +97,7 @@ fun Logo(
                     translationX = 1f
                     translationY = 1f
                 },
-            colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.surface),
+            colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.surfaceContainer),
         )
 
         Image(

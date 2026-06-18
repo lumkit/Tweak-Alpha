@@ -32,7 +32,7 @@ fun CategoryCard(
         modifier = modifier.fillMaxWidth(),
         pressFeedbackType = PressFeedbackType.Sink,
         colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.surface
+            color = MiuixTheme.colorScheme.surfaceContainer
         )
     ) {
         Row(

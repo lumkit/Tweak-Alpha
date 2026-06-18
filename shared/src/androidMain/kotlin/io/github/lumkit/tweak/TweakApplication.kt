@@ -19,7 +19,6 @@ class TweakApplication: Application() {
     }
 
     private fun initLibSu() {
-        println("TweakApplication.initLibSu")
         Shell.enableVerboseLogging = isDebugBuild()
         Shell.setDefaultBuilder(
             Shell.Builder.create()

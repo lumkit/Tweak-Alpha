@@ -7,7 +7,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun rememberLayerBackdropColor(): LayerBackdrop {
-    val backgroundColor = MiuixTheme.colorScheme.background
+    val backgroundColor = MiuixTheme.colorScheme.surface
 
     return rememberLayerBackdrop {
         drawRect(backgroundColor)

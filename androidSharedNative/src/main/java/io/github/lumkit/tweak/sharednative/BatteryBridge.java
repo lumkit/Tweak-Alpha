@@ -48,8 +48,21 @@ public final class BatteryBridge {
      */
     public static int getCurrentNow() {
         BatteryManager bm = batteryManager;
-        if (bm == null) return Integer.MIN_VALUE;
-        return bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
+        if (bm != null) {
+            int current = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
+            if (current != Integer.MIN_VALUE) {
+                return current;
+            }
+        }
+        
+        // BatteryManager 不可用时，尝试从广播获取（部分三星设备需要）
+        Intent intent = lastBatteryStatus;
+        if (intent != null && intent.hasExtra("current_now")) {
+            // 三星和部分厂商在广播中提供 current_now，单位通常是 µA
+            return intent.getIntExtra("current_now", Integer.MIN_VALUE);
+        }
+        
+        return Integer.MIN_VALUE;
     }
 
     /**

@@ -58,7 +58,7 @@ fun ScreenSurface(
         modifier = modifier.squircleClip(
             cornerRadius = radius,
         ),
-        color = MiuixTheme.colorScheme.background
+        color = MiuixTheme.colorScheme.surface
     ) {
         AnimatedContent(
             targetState = enabledBackgroundImage,
@@ -94,7 +94,7 @@ fun ScreenScaffold(
         topBar = {
             Topbar(title, scrollBehavior, backdrop)
         },
-        containerColor = MiuixTheme.colorScheme.background,
+        containerColor = MiuixTheme.colorScheme.surface,
     ) {
         val bottom = remember(it, navigationSpace) {
             if (navigationSpace) {
@@ -121,7 +121,7 @@ private fun Topbar(
     backdrop: LayerBackdrop,
 ) {
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
-    val background = MiuixTheme.colorScheme.background
+    val background = MiuixTheme.colorScheme.surface
 
     TopAppBar(
         title = title,

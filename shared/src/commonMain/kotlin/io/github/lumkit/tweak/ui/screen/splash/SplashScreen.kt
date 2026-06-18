@@ -216,7 +216,7 @@ private fun ModeItem(
                 color = Color.Transparent
             ) {
                 CompositionLocalProvider(
-                    LocalContentColor provides MiuixTheme.colorScheme.surface
+                    LocalContentColor provides MiuixTheme.colorScheme.surfaceContainer
                 ) {
                     icon()
                 }

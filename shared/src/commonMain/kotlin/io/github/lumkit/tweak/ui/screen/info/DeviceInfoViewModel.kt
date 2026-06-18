@@ -15,6 +15,7 @@ import io.github.lumkit.tweak.common.utils.formatCurrent
 import io.github.lumkit.tweak.common.utils.formatMemorySize
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.formatVoltage
+import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
 import kotlinx.coroutines.async
@@ -160,7 +161,7 @@ object DeviceInfoViewModel : BaseViewModel() {
                 // 更新更多信息
                 updateMoreInfo()
 
-                println("load time: ${Clock.System.now().toEpochMilliseconds() - tag}ms")
+                logD("load time: ${Clock.System.now().toEpochMilliseconds() - tag}ms")
                 _loadingState.value = true
                 delay(GlobalViewModel.infoUpdateTimeSpanState.value.milliseconds)
             }
@@ -320,11 +321,6 @@ object DeviceInfoViewModel : BaseViewModel() {
             )
         }
 
-        //val flashType: String,
-        //        val usedLoad: Float,
-        //        val totalText: String,
-        //        val usedText: String,
-        //        val userSpace: String,
         val storage = run {
             val flashType = this.flashType.ifEmpty {
                 val type = StorageUtils.getFlashType()
@@ -352,7 +348,6 @@ object DeviceInfoViewModel : BaseViewModel() {
             )
         }
 
-        println("flashType = ${flashType}")
         _moreInfoState.value = MoreInfoModel(
             battery = batteryModel,
             storage = storage,

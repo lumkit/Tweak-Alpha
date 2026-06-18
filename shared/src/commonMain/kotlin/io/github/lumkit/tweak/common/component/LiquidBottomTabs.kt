@@ -72,9 +72,9 @@ fun LiquidBottomTabs(
     val supportsAdvancedEffects = remember { isAdvancedBackdropEffectSupported() }
     val accentColor = MiuixTheme.colorScheme.primary
     val containerColor = if (supportsAdvancedEffects) {
-        MiuixTheme.colorScheme.surface.copy(0.4f)
+        MiuixTheme.colorScheme.surfaceContainer.copy(0.4f)
     } else {
-        MiuixTheme.colorScheme.surface
+        MiuixTheme.colorScheme.surfaceContainer
     }
     val contentColor = MiuixTheme.colorScheme.onSurface
 

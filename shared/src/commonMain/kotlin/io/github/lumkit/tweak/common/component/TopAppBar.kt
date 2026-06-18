@@ -25,7 +25,7 @@ fun TopBar(
     scrollBehavior: ScrollBehavior,
     backdrop: Backdrop,
 ) {
-    val background = MiuixTheme.colorScheme.background
+    val background = MiuixTheme.colorScheme.surface
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
 
     TopAppBar(

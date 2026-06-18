@@ -13,7 +13,6 @@
     <string name="nav_home">面板</string>
     <string name="nav_category">功能</string>
     <string name="nav_settings">设置</string>
-
     <string name="text_cpu_state">CPU状态</string>
     <string name="text_cpu_state_description">负载：%s     温度：%s</string>
     <string name="text_memory_state">内存状态</string>
@@ -32,4 +31,19 @@
     <string name="text_storage_flash_type">闪存：%s</string>
     <string name="text_storage_user_splace">用户：%s</string>
     <string name="text_storage_free">空闲：%s</string>
+    <string name="text_theme">主题</string>
+    <string name="text_theme_system">跟随系统</string>
+    <string name="text_theme_light">浅色</string>
+    <string name="text_theme_dark">深色</string>
+    <string name="text_theme_monet_system">莫奈取色（系统）</string>
+    <string name="text_theme_monet_light">莫奈取色（浅色）</string>
+    <string name="text_theme_monet_dark">莫奈取色（深色）</string>
+    <string name="text_theme_mode">主题模式</string>
+    <string name="text_theme_mode_description">选择应用内的主题模式</string>
+    <string name="text_framework">框架</string>
+    <string name="text_framework_mode">运行模式</string>
+    <string name="text_framework_mode_description">选择应用运行模式(需要重启APP)</string>
+    <string name="text_framework_mode_root">ROOT模式</string>
+    <string name="text_framework_mode_shizuku">Shizuku模式</string>
+    <string name="text_framework_mode_unknow">默认</string>
 </resources>

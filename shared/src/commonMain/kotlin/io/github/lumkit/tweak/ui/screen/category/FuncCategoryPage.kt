@@ -36,7 +36,7 @@ fun FuncCategoryPage() {
                 backdrop = backdrop,
             )
         },
-        containerColor = MiuixTheme.colorScheme.background,
+        containerColor = MiuixTheme.colorScheme.surface,
     ) {
         val padding = remember(it) {
             PaddingValues(
