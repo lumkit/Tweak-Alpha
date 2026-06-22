@@ -26,7 +26,7 @@ import io.github.lumkit.tweak.common.component.LiquidBottomTab
 import io.github.lumkit.tweak.common.component.LiquidBottomTabs
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
-import io.github.lumkit.tweak.ui.screen.category.FuncCategoryPage
+import io.github.lumkit.tweak.ui.screen.feature.FeaturePage
 import io.github.lumkit.tweak.ui.screen.info.InfoPage
 import io.github.lumkit.tweak.ui.screen.settings.SettingsPage
 import kotlinx.coroutines.launch
@@ -115,7 +115,7 @@ private fun MainScreenContent(
             val page = remember(it) { MainPages.entries[it] }
 
             when (page) {
-                MainPages.Func -> FuncCategoryPage()
+                MainPages.Func -> FeaturePage()
                 MainPages.Info -> InfoPage()
                 MainPages.Settings -> SettingsPage()
             }

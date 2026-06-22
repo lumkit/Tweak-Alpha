@@ -12,6 +12,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Navigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.navigation.rememberNavigationState
+import io.github.lumkit.tweak.ui.screen.feature.FeatureRegistry
 import io.github.lumkit.tweak.ui.screen.main.MainScreen
 import io.github.lumkit.tweak.ui.screen.splash.SplashScreen
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -90,14 +92,21 @@ private fun AppRoute(
 ) {
     val navigator = LocalNavigator.current
     val navigationState = remember(navigator) { navigator.state }
+    val provides by FeatureRegistry.providers
+    val featureProviders = remember(provides) { provides.flatMap { it.features } }
 
-    val entryProvider = remember {
+    val entryProvider = remember(provides) {
         entryProvider<NavKey> {
             entry<Screen.Splash> {
                 SplashScreen()
             }
             entry<Screen.Main> {
                 MainScreen()
+            }
+            featureProviders.onEach { featureProvider ->
+                entry(featureProvider.feature.route) {
+                    featureProvider.Content()
+                }
             }
         }
     }

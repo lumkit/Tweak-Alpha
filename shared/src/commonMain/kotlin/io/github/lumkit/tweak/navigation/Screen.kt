@@ -11,4 +11,8 @@ sealed class Screen: NavKey {
 
     @Serializable
     data object Main: Screen()
+
+    @Serializable
+    data object UpdateSystem: Screen()
+
 }

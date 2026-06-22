@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.common.component
 
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -22,20 +23,26 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun TopBar(
     title: String,
     modifier: Modifier = Modifier,
+    largeTitle: String = title,
     scrollBehavior: ScrollBehavior,
     backdrop: Backdrop,
+    navigationIcon: @Composable (() -> Unit) = {},
+    actions: @Composable (RowScope.() -> Unit) = {},
 ) {
     val background = MiuixTheme.colorScheme.surface
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
 
     TopAppBar(
         title = title,
+        largeTitle = largeTitle,
         scrollBehavior = scrollBehavior,
         color = if (advancedBackdropEffectSupported) {
             Color.Transparent
         } else {
             background
         },
+        navigationIcon = navigationIcon,
+        actions = actions,
         modifier = modifier.fillMaxWidth()
             .drawBackdrop(
                 backdrop = backdrop,

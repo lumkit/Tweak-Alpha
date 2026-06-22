@@ -12,21 +12,21 @@ import tweak_alpha.shared.generated.resources.text_shizuku_mode_description
 /**
  * 运行模式
  */
-enum class RuntimeMode {
+enum class RuntimeMode(val user: Int) {
     /**
      * 未知模式，一般不予进入App
      */
-    Unknow,
+    Unknow(-1),
 
     /**
      * Root模式
      */
-    Root,
+    Root(0),
 
     /**
      * Shizuku模式
      */
-    Shizuku
+    Shizuku(1)
 }
 
 @Composable

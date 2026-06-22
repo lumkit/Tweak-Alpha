@@ -46,4 +46,8 @@
     <string name="text_framework_mode_root">ROOT模式</string>
     <string name="text_framework_mode_shizuku">Shizuku模式</string>
     <string name="text_framework_mode_unknow">默认</string>
+    <string name="text_feature_system">系统功能</string>
+    <string name="text_feature_update_system">V-AB系统更新</string>
+    <string name="text_feature_update_system_description">给V-AB设备刷写ROM</string>
+    <string name="text_go_back">返回</string>
 </resources>
