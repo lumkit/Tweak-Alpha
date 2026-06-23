@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
-import io.github.lumkit.tweak.common.utils.startService
+import io.github.lumkit.tweak.common.utils.startSmartService
 import io.github.lumkit.tweak.service.KeepAliveService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +29,7 @@ class BootBroadcastReceiver: BroadcastReceiver() {
                         logD("autoStartAppSwitchFlow: $switch", TAG)
                         if (switch) {
                             // 启动Daemon
-                            context.startService(KeepAliveService::class.java)
+                            context.startSmartService(KeepAliveService::class.java)
                         }
                     }
                 }

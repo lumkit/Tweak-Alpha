@@ -10,14 +10,17 @@ import android.os.Build
 import android.os.IBinder
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import io.github.lumkit.tweak.MainActivity
 import io.github.lumkit.tweak.R
 import io.github.lumkit.tweak.common.utils.logD
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
-class KeepAliveService: Service() {
+class KeepAliveService : Service() {
 
     companion object {
         private const val TAG = "KeepAliveService"
@@ -37,11 +40,13 @@ class KeepAliveService: Service() {
 
     private fun startPersistentTaskService() {
         scope.launch {
-//            val intent = Intent(this@KeepAliveService, PersistentTaskService::class.java)
-//            while (true) {
-//                startService(intent)
-//                delay(5000)
-//            }
+            val intent = Intent(this@KeepAliveService, PersistentTaskService::class.java)
+            intent.action = "EXTRA_KEEP_ALIVE"
+            while (true) {
+                logD("KeepAliveService.startPersistentTaskService", TAG)
+                startService(intent)
+                delay(5000.milliseconds)
+            }
         }
     }
 
@@ -62,7 +67,8 @@ class KeepAliveService: Service() {
         //在创建的通知渠道上发送通知
         val builder: NotificationCompat.Builder =
             NotificationCompat.Builder(this, KEEP_ALIVE_NOTIFICATION_CHANNEL_NAME)
-        val notificationIntent = Intent(this, KeepAliveService::class.java)
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        notificationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val contentIntent = PendingIntent.getActivity(
             this, 0, notificationIntent,
             PendingIntent.FLAG_MUTABLE

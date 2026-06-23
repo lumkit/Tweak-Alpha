@@ -50,6 +50,7 @@ import io.github.lumkit.tweak.common.component.CategoryCard
 import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
+import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.shadowMask
@@ -578,7 +579,7 @@ private fun FlowRowScope.BatteryContent(
     batteryModel: DeviceInfoViewModel.BatteryInfoModel?,
 ) {
     val load by animateFloatAsState(targetValue = batteryModel?.capacity ?: 0f)
-    val loadColor by animatedColorAsUsed(load, reverse = true)
+    val loadColor by animatedColorAsBattery(load)
 
     CategoryCard(
         title = stringResource(Res.string.text_battery),

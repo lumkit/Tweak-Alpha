@@ -102,6 +102,10 @@
                 android:value="fileWatcher" />
         </service>
 
+        <service android:name=".service.PersistentTaskService"
+            android:enabled="true"
+            android:exported="false"/>
+
     </application>
 
 </manifest>
