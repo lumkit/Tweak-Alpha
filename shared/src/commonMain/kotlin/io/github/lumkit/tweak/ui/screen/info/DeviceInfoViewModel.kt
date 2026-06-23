@@ -163,7 +163,7 @@ object DeviceInfoViewModel : BaseViewModel() {
 
                 logD("load time: ${Clock.System.now().toEpochMilliseconds() - tag}ms")
                 _loadingState.value = true
-                delay(GlobalViewModel.infoUpdateTimeSpanState.value.milliseconds)
+                delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
             }
         }
     }

@@ -1,9 +1,14 @@
 package io.github.lumkit.tweak.common.utils
 
+import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.os.Build
+import android.os.PowerManager
 import android.os.Process
+import android.provider.Settings
+import androidx.core.net.toUri
 import io.github.lumkit.tweak.application
 import kotlin.system.exitProcess
 
@@ -30,3 +35,19 @@ actual val SDK_INT: Int
 
 actual val BOARD: String
     get() = Build.BOARD
+
+private val powerManager by lazy {
+    application.getSystemService(Context.POWER_SERVICE) as PowerManager
+}
+
+actual fun isIgnoringBatteryOptimizations(): Boolean {
+    return powerManager.isIgnoringBatteryOptimizations(application.packageName)
+}
+
+@SuppressLint("BatteryLife")
+actual fun trySetIsIgnoringBatteryOptimizations() {
+    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    intent.data = "package:${application.packageName}".toUri()
+    application.startActivity(intent)
+}

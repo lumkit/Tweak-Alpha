@@ -5,6 +5,7 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 object GlobalViewModel: BaseViewModel() {
@@ -22,6 +23,17 @@ object GlobalViewModel: BaseViewModel() {
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_MILLISECONDS
+            initialValue = TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_LEVEL
+        )
+
+    val infoUpdateTimeSpanMillisecondsState = TweakDataStore.infoUpdateTimeSpanFlow()
+        .distinctUntilChanged()
+        .map {
+            (it * TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_RANGE).toLong()
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = (TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_LEVEL * TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_RANGE).toLong()
         )
 }

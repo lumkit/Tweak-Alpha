@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.common.utils
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -41,7 +42,9 @@ object TweakDataStore {
     private val runtimeModeKey = intPreferencesKey("runtime_mode")
 
     // Settings相关
-    private val infoUpdateTimeSpan = longPreferencesKey("info_update_time_span")
+    private val infoUpdateTimeSpan = intPreferencesKey("info_update_time_span")
+    // 自动启动应用开关
+    private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
 
     /**
      * 电池信息显示类型，0 - 显示功率，1显示电流
@@ -111,13 +114,14 @@ object TweakDataStore {
         }
     }
 
-    const val DEFAULT_INFO_UPDATE_TIME_SP_MILLISECONDS = 1000L
+    const val DEFAULT_INFO_UPDATE_TIME_SP_LEVEL = 2
+    const val DEFAULT_INFO_UPDATE_TIME_SP_RANGE = 500f
 
-    fun infoUpdateTimeSpanFlow(): Flow<Long> = preferences.data.map {
-        it[infoUpdateTimeSpan] ?: DEFAULT_INFO_UPDATE_TIME_SP_MILLISECONDS
+    fun infoUpdateTimeSpanFlow(): Flow<Int> = preferences.data.map {
+        it[infoUpdateTimeSpan] ?: DEFAULT_INFO_UPDATE_TIME_SP_LEVEL
     }
 
-    suspend fun setInfoUpdateTimeSpan(span: Long) {
+    suspend fun setInfoUpdateTimeSpan(span: Int) {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[infoUpdateTimeSpan] = span
@@ -137,6 +141,18 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[infoBatteryDisplayType] = type.ordinal
+            }
+        }
+    }
+
+    fun autoStartAppSwitchFlow(): Flow<Boolean> = preferences.data.map {
+        it[autoStartAppSwitch] ?: false
+    }
+
+    suspend fun setAutoStartAppSwitch(enable: Boolean) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[autoStartAppSwitch] = enable
             }
         }
     }

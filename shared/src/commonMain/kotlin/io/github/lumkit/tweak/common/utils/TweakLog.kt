@@ -11,18 +11,20 @@ expect object TweakLog {
     fun e(message: String, throwable: Throwable? = null, tag: String = "Tweak_Log")
 }
 
-fun logD(message: String, tag: String = "Tweak_Log") {
-    TweakLog.d(message, tag)
+private const val APP_TAG = "Tweak_Log"
+
+fun logD(message: String, tag: String = "") {
+    TweakLog.d(message, "${APP_TAG}_$tag")
 }
 
-fun logI(message: String, tag: String = "Tweak_Log") {
-    TweakLog.i(message, tag)
+fun logI(message: String, tag: String = "") {
+    TweakLog.i(message, "${APP_TAG}_$tag")
 }
 
-fun logW(message: String, tag: String = "Tweak_Log") {
-    TweakLog.w(message, tag)
+fun logW(message: String, tag: String = "") {
+    TweakLog.w(message, "${APP_TAG}_$tag")
 }
 
-fun logE(message: String, throwable: Throwable? = null, tag: String = "Tweak_Log") {
-    TweakLog.e(message, throwable, tag)
+fun logE(message: String, throwable: Throwable? = null, tag: String = "") {
+    TweakLog.e(message, throwable, "${APP_TAG}_$tag")
 }

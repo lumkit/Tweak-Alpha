@@ -50,4 +50,10 @@
     <string name="text_feature_update_system">V-AB系统更新</string>
     <string name="text_feature_update_system_description">给V-AB设备刷写ROM</string>
     <string name="text_go_back">返回</string>
+    <string name="text_auto_start">自启动</string>
+    <string name="text_auto_start_description">部分机型需要手动开启权限</string>
+    <string name="text_panel_refresh_tick">面板刷新间隔</string>
+    <string name="text_panel_refresh_tick_description">当前：%d ms</string>
+    <string name="text_battery_ignore_optimization_white_list">电池优化忽略白名单</string>
+    <string name="text_battery_ignore_optimization_white_list_description">设置后应用数据将更精准</string>
 </resources>

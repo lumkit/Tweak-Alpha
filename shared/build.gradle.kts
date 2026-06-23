@@ -34,7 +34,7 @@ kotlin {
             implementation(libs.libsu.service)
             implementation(projects.androidSharedNative)
             implementation(libs.shizuku.api)
-            implementation(libs.shizuku.provider)
+            api(libs.shizuku.provider)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
