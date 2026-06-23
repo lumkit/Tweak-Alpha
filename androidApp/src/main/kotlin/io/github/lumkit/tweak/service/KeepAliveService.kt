@@ -10,8 +10,8 @@ import android.os.Build
 import android.os.IBinder
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import io.github.lumkit.tweak.R
 import io.github.lumkit.tweak.common.utils.logD
-import io.github.lumkit.tweak.shared.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
