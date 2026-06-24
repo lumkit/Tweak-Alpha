@@ -40,6 +40,7 @@ object TweakDataStore {
     // Shell相关
     private val shellTimeoutKey = longPreferencesKey("shell_timeout")
     private val runtimeModeKey = intPreferencesKey("runtime_mode")
+    private val keepShellUserId = stringPreferencesKey("keep_shell_user_id")
 
     // Settings相关
     private val infoUpdateTimeSpan = intPreferencesKey("info_update_time_span")
@@ -153,6 +154,18 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[autoStartAppSwitch] = enable
+            }
+        }
+    }
+
+    fun keepShellUserIdFlow(): Flow<String?> = preferences.data.map {
+        it[keepShellUserId]
+    }
+
+    suspend fun setKeepShellUserId(userId: String) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[keepShellUserId] = userId
             }
         }
     }
