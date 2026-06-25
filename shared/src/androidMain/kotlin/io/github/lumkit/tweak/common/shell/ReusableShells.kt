@@ -4,7 +4,7 @@ import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
 import java.util.concurrent.ConcurrentHashMap
 
-object ReusableShells {
+actual object ReusableShells {
     private val shells = ConcurrentHashMap<String, KeepShell>()
 
     private fun getRuntime(): Process {
@@ -19,7 +19,7 @@ object ReusableShells {
     private const val MAX_DEFAULT_PRECESS_SIZE = 8
 
     @Synchronized
-    fun getInstance(
+    actual fun getInstance(
         key: String
     ): KeepShell {
         val shell = KeepShell().apply {
@@ -31,7 +31,7 @@ object ReusableShells {
         return shell
     }
 
-    fun destroyInstance(key: String) {
+    actual fun destroyInstance(key: String) {
         if (!shells.containsKey(key)) {
             return
         } else {
@@ -40,7 +40,7 @@ object ReusableShells {
         }
     }
 
-    fun destroyAll() {
+    actual fun destroyAll() {
         shells.onEach {
             // 跳过更新引擎进程
             if (it.key != "update_engine_client")
@@ -49,7 +49,7 @@ object ReusableShells {
         shells.clear()
     }
 
-    private val defaultReusableShell: KeepShell
+    private val _defaultReusableShell: KeepShell
         get() = getDefault("defaultReusableShell")
 
     private fun getDefault(key: String): KeepShell {
@@ -65,9 +65,9 @@ object ReusableShells {
         }
     }
 
-    val getDefaultInstance: KeepShell
+    actual val defaultInstance: KeepShell
         get() {
-            var shell = defaultReusableShell
+            var shell = _defaultReusableShell
             for (i in 0 until MAX_DEFAULT_PRECESS_SIZE) {
                 val key = "default-$i"
                 val process = getDefault(key)
@@ -79,8 +79,8 @@ object ReusableShells {
             return shell
         }
 
-    fun tryExit() {
-        defaultReusableShell.tryExit()
+    actual fun tryExit() {
+        _defaultReusableShell.tryExit()
         for (i in 0 until MAX_DEFAULT_PRECESS_SIZE) {
             val key = "default-$i"
             shells[key]?.tryExit()
@@ -90,12 +90,12 @@ object ReusableShells {
     /**
      * 同步执行命令行
      */
-    suspend fun execSync(vararg cmd: String): String =
-        defaultReusableShell.doCmdSync(cmd.joinToString("\n"))
+    actual suspend fun execSync(vararg cmd: String): String =
+        _defaultReusableShell.doCmdSync(cmd.joinToString("\n"))
 
     /**
      * 同步执行命令行
      */
-    suspend fun execSync(cmd: List<String>): String =
-        defaultReusableShell.doCmdSync(cmd.joinToString("\n"))
+    actual suspend fun execSync(cmd: List<String>): String =
+        _defaultReusableShell.doCmdSync(cmd.joinToString("\n"))
 }

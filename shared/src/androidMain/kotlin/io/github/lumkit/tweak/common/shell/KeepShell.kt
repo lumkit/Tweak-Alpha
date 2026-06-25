@@ -22,21 +22,10 @@ import java.io.OutputStream
 import java.nio.charset.Charset
 
 /**
- * 输出监听器接口
- */
-fun interface OutputListener {
-    /**
-     * 接收实时输出行
-     * @param line 输出的一行内容
-     */
-    fun onOutputReceived(line: String)
-}
-
-/**
  * 复用Process工具类 - 协程版本
  * 通过setRuntime设置Process实例，支持协程并发控制和实时输出监听
  */
-class KeepShell {
+actual class KeepShell actual constructor() {
     private var p: Process? = null
     private var out: OutputStream? = null
     private var reader: BufferedReader? = null
@@ -46,7 +35,7 @@ class KeepShell {
     @Volatile
     private var currentIsIdle = true
     
-    val isIdle: Boolean
+    actual val isIdle: Boolean
         get() = currentIsIdle
 
     private val mutex = Mutex()
@@ -70,7 +59,7 @@ class KeepShell {
      * 设置Runtime进程实例
      * @param process 外部传入的Process实例（可以是root或普通shell）
      */
-    fun setRuntime(process: Process) {
+    internal fun setRuntime(process: Process) {
         runBlocking {
             mutex.withLock {
                 tryExitInternal()
@@ -83,7 +72,7 @@ class KeepShell {
     /**
      * 获取当前Runtime实例
      */
-    fun getRuntime(): Process? = p
+    internal fun getRuntime(): Process? = p
 
     /**
      * 初始化输入输出流和错误流监听
@@ -119,7 +108,7 @@ class KeepShell {
     /**
      * 尝试退出命令行程序
      */
-    fun tryExit() {
+    actual fun tryExit() {
         runBlocking {
             mutex.withLock {
                 tryExitInternal()
@@ -150,7 +139,7 @@ class KeepShell {
      * @param cmd 要执行的命令
      * @return 命令输出结果
      */
-    suspend fun doCmdSync(cmd: String): String = withContext(Dispatchers.IO) {
+    actual suspend fun doCmdSync(cmd: String): String = withContext(Dispatchers.IO) {
         // 检查锁超时
         if (mutex.isLocked && enterLockTime > 0 && 
             System.currentTimeMillis() - enterLockTime > LOCK_TIMEOUT) {
@@ -186,7 +175,7 @@ class KeepShell {
      * @param listener 输出监听器，每行输出都会回调
      * @return 可取消的Job，调用cancel()可停止监听
      */
-    fun doCmdWithListener(cmd: String, listener: OutputListener): Job {
+    actual fun doCmdWithListener(cmd: String, listener: OutputListener): Job {
         if (p == null) {
             throw IllegalStateException("Process not set. Call setRuntime() first.")
         }
@@ -238,7 +227,7 @@ class KeepShell {
      * @param cmd 要执行的命令
      * @return Flow<String> 每行输出作为Flow元素发射
      */
-    fun doCmdAsFlow(cmd: String): Flow<String> = flow {
+    actual fun doCmdAsFlow(cmd: String): Flow<String> = flow {
         if (p == null) {
             throw IllegalStateException("Process not set. Call setRuntime() first.")
         }
@@ -278,7 +267,7 @@ class KeepShell {
     /**
      * 停止当前的监听任务
      */
-    fun stopMonitoring() {
+    actual fun stopMonitoring() {
         monitorJob?.cancel()
         monitorJob = null
         currentIsIdle = true
@@ -331,14 +320,14 @@ class KeepShell {
     /**
      * 阻塞式执行命令（为兼容旧代码提供）
      */
-    fun doCmdSyncBlocking(cmd: String): String = runBlocking {
+    actual fun doCmdSyncBlocking(cmd: String): String = runBlocking {
         doCmdSync(cmd)
     }
 
     /**
      * 清理资源
      */
-    fun cleanup() {
+    actual fun cleanup() {
         scope.cancel()
         tryExit()
     }
