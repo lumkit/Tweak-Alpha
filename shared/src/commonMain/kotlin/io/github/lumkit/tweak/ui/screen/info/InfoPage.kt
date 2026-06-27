@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
@@ -52,8 +55,8 @@ import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
 import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
+import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
-import io.github.lumkit.tweak.common.utils.shadowMask
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
@@ -94,9 +97,11 @@ fun InfoPage() {
     val direction = LocalLayoutDirection.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
+    val backdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
 
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
     ) {
         Scaffold(
             topBar = {
@@ -120,7 +125,7 @@ fun InfoPage() {
                     .padding(padding)
                     .fillMaxSize()
                     .overScrollVertical()
-                    .shadowMask(blurDp)
+                    .blur(blurDp)
                     .nestedScroll(scrollBehavior.nestedScrollConnection),
                 contentPadding = PaddingValues(
                     start = 16.dp,
@@ -148,23 +153,45 @@ fun InfoPage() {
             }
         }
 
+        val alpha by animateFloatAsState(
+            targetValue = if (loadState) 0f else .5f,
+            animationSpec = tween(durationMillis = 400)
+        )
+
+        Box(
+            modifier = Modifier.fillMaxSize()
+                .then(
+                    if (!loadState) {
+                        Modifier.clickable(
+                            indication = null,
+                            interactionSource = null,
+                        ) {}
+                    } else {
+                        Modifier
+                    }
+                )
+                .alpha(alpha)
+                .background(
+                    color = if (backdropEffectSupported) {
+                        Color.Transparent
+                    } else {
+                        MiuixTheme.colorScheme.onSurface
+                    }
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            InfiniteProgressIndicator(
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
         AnimatedContent(
+            modifier = Modifier.fillMaxSize(),
             targetState = loadState,
-            transitionSpec = { fadeIn() togetherWith fadeOut() }
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
         ) {
             if (!it) {
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                        .clickable(
-                            indication = null,
-                            interactionSource = null
-                        ) {},
-                    contentAlignment = Alignment.Center,
-                ) {
-                    InfiniteProgressIndicator(
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+
             }
         }
     }
