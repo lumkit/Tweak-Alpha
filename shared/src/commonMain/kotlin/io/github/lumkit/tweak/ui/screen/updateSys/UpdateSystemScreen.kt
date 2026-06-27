@@ -1,8 +1,24 @@
 package io.github.lumkit.tweak.ui.screen.updateSys
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.utils.Files
+import io.github.lumkit.tweak.common.utils.NativeFileResult
 import io.github.lumkit.tweak.common.utils.SDK_INT
+import io.github.lumkit.tweak.common.utils.ZipEntry
+import io.github.lumkit.tweak.common.utils.getOrNull
+import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
@@ -15,6 +31,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -75,6 +92,25 @@ fun UpdateSystemScreen() {
         },
         containerColor = MiuixTheme.colorScheme.surface,
     ) {
+        var entries by remember { mutableStateOf(emptyList<ZipEntry>()) }
 
+        LaunchedEffect(Unit) {
+            entries = Files.zipEntries("/storage/emulated/0/Download/DLManager/aurora-ota_full-OS3.0.305.0.WNACNXM-user-16.0-366972ea82.zip")
+                .also {
+                    if (it is NativeFileResult.Failure) {
+                        logE(it.toString(), null, "zipEntries")
+                    }
+                }
+                .getOrNull() ?: emptyList()
+        }
+
+        LazyColumn(
+            modifier = Modifier.padding(it),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(entries) {
+                Text(it.toString())
+            }
+        }
     }
 }

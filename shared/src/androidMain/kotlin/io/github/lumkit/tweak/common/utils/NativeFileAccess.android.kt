@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.common.utils
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -128,6 +129,15 @@ private object RootNativeFileService : NativeFileService {
                 bundle.getStringArrayList(NativeFileBundles.KEY_STRING_LIST)?.toList().orEmpty()
             },
             block = { service -> service.list(path) },
+        )
+    }
+
+    override suspend fun zipEntries(path: String): NativeFileResult<List<ZipEntry>> {
+        return execute(
+            operation = "zipEntries",
+            primaryPath = path,
+            transform = { bundle -> bundle.toZipEntries() },
+            block = { service -> service.zipEntries(path) },
         )
     }
 
@@ -350,6 +360,15 @@ private object ShizukuNativeFileService : NativeFileService {
         )
     }
 
+    override suspend fun zipEntries(path: String): NativeFileResult<List<ZipEntry>> {
+        return execute(
+            operation = "zipEntries",
+            primaryPath = path,
+            transform = { bundle -> bundle.toZipEntries() },
+            block = { service -> service.zipEntries(path) },
+        )
+    }
+
     override suspend fun readBytes(path: String): NativeFileResult<ByteArray> {
         return execute(
             operation = "readBytes",
@@ -471,4 +490,29 @@ private object ShizukuNativeFileService : NativeFileService {
             block = block,
         )
     }
+}
+
+private fun Bundle.toZipEntries(): List<ZipEntry> {
+    return getParcelableArrayListCompat(NativeFileBundles.KEY_BUNDLE_LIST).orEmpty().map { entryBundle ->
+        ZipEntry(
+            name = entryBundle.getString(NativeFileBundles.KEY_NAME).orEmpty(),
+            isDirectory = entryBundle.getBoolean(NativeFileBundles.KEY_IS_DIRECTORY),
+            size = entryBundle.getLong(NativeFileBundles.KEY_SIZE),
+            compressedSize = entryBundle.getLong(NativeFileBundles.KEY_COMPRESSED_SIZE),
+            crc = entryBundle.getLong(NativeFileBundles.KEY_CRC),
+            time = entryBundle.getLong(NativeFileBundles.KEY_TIME),
+            offset = entryBundle.getLong(NativeFileBundles.KEY_OFFSET),
+        )
+    }
+}
+
+@Suppress("DEPRECATION")
+private fun Bundle.getParcelableArrayListCompat(key: String): List<Bundle>? {
+    val list = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getParcelableArrayList(key, Bundle::class.java)
+    } else {
+        getParcelableArrayList(key)
+    }
+
+    return list?.filterIsInstance<Bundle>()
 }

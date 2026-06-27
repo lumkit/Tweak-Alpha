@@ -48,6 +48,10 @@ object Files {
         return service.list(path)
     }
 
+    suspend fun zipEntries(path: String): NativeFileResult<List<ZipEntry>> {
+        return service.zipEntries(path)
+    }
+
     /**
      * 以二进制形式读取文件内容。
      *

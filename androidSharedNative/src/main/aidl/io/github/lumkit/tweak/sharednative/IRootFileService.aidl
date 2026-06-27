@@ -5,6 +5,7 @@ import android.os.Bundle;
 interface IRootFileService {
     Bundle exists(String path);
     Bundle list(String path);
+    Bundle zipEntries(String path);
     Bundle readBytes(String path);
     Bundle readText(String path);
     Bundle writeBytes(String path, in byte[] bytes);
