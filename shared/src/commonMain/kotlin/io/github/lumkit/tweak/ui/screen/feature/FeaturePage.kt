@@ -1,6 +1,5 @@
 package io.github.lumkit.tweak.ui.screen.feature
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -51,13 +51,12 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.nav_category
-import tweak_alpha.shared.generated.resources.text_system_not_supported
 
 @Composable
 fun FeaturePage() {
@@ -181,10 +180,10 @@ private fun RowScope.FeatureItem(
                 .onSizeChanged {
                     size = with(density) { it.toSize().toDpSize() }
                 },
-            contentAlignment = Alignment.Center
         ) {
             Row(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(16.dp)
+                    .alpha(if (enabled) 1f else .31f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -203,25 +202,14 @@ private fun RowScope.FeatureItem(
             }
 
             if (!enabled) {
-                Row(
-                    modifier = Modifier.size(size)
-                        .background(MiuixTheme.colorScheme.onSurface.copy(.75f)),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Info,
-                        contentDescription = null,
-                        tint = MiuixTheme.colorScheme.error,
-                        modifier = Modifier.size(24.dp)
-                    )
-
-                    Text(
-                        text = stringResource(Res.string.text_system_not_supported),
-                        color = MiuixTheme.colorScheme.surface,
-                        style = MiuixTheme.textStyles.body2,
-                    )
-                }
+                Icon(
+                    imageVector = MiuixIcons.Lock,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.error,
+                    modifier = Modifier.padding(4.dp)
+                        .size(16.dp)
+                        .align(Alignment.TopEnd)
+                )
             }
         }
     }
