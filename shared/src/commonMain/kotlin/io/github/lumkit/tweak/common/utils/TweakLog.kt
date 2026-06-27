@@ -14,17 +14,23 @@ expect object TweakLog {
 private const val APP_TAG = "Tweak_Log"
 
 fun logD(message: String, tag: String = "") {
-    TweakLog.d(message, "${APP_TAG}_$tag")
+    TweakLog.d(message, APP_TAG tag tag)
 }
 
 fun logI(message: String, tag: String = "") {
-    TweakLog.i(message, "${APP_TAG}_$tag")
+    TweakLog.i(message, APP_TAG tag tag)
 }
 
 fun logW(message: String, tag: String = "") {
-    TweakLog.w(message, "${APP_TAG}_$tag")
+    TweakLog.w(message, APP_TAG tag tag)
 }
 
 fun logE(message: String, throwable: Throwable? = null, tag: String = "") {
-    TweakLog.e(message, throwable, "${APP_TAG}_$tag")
+    TweakLog.e(message, throwable, APP_TAG tag tag)
+}
+
+private infix fun String.tag(tag: String = ""): String = if (tag.isEmpty()) {
+    this
+} else {
+    "${this}_$tag"
 }
