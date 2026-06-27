@@ -1,6 +1,8 @@
 package io.github.lumkit.tweak.ui.screen.feature
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,14 +15,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.common.component.TopBar
@@ -42,11 +50,14 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.nav_category
+import tweak_alpha.shared.generated.resources.text_system_not_supported
 
 @Composable
 fun FeaturePage() {
@@ -131,45 +142,87 @@ private fun RowScope.FeatureItem(
     runtimeMode: RuntimeMode?,
     onClick: (route: Screen) -> Unit,
 ) {
+    val density = LocalDensity.current
     val featureState = remember(runtimeMode) { provider.feature.availableState(runtimeMode) }
-    val pressFeedbackType = remember(featureState) {
-        when (featureState) {
-            FeatureState.ENABLED -> PressFeedbackType.Sink
-            FeatureState.DISABLED -> PressFeedbackType.None
-            FeatureState.HIDE -> PressFeedbackType.None
+    var enabled by remember { mutableStateOf(true) }
+    val pressFeedbackType = remember(featureState, enabled) {
+        if (!enabled) {
+            PressFeedbackType.None
+        } else {
+            when (featureState) {
+                FeatureState.ENABLED -> PressFeedbackType.Sink
+                FeatureState.DISABLED -> PressFeedbackType.None
+                FeatureState.HIDE -> PressFeedbackType.None
+            }
         }
     }
-    val enabled = remember { featureState == FeatureState.ENABLED }
+
+    LaunchedEffect(provider.feature, featureState) {
+        enabled = provider.feature.rule() && featureState == FeatureState.ENABLED
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth()
-            .weight(1f)
-            .alpha(if (enabled) 1f else 0.31f),
+            .weight(1f),
         pressFeedbackType = pressFeedbackType,
         colors = CardDefaults.defaultColors(
             color = MiuixTheme.colorScheme.surfaceContainer
         ),
         onClick = {
-            onClick(provider.feature.route)
-        }
+            if (enabled) {
+                onClick(provider.feature.route)
+            }
+        },
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painter = painterResource(provider.feature.icon),
-                contentDescription = stringResource(provider.feature.title),
-                modifier = Modifier.size(24.dp),
-                tint = MiuixTheme.colorScheme.primary,
-            )
+        var size by remember { mutableStateOf(DpSize.Zero) }
 
-            Text(
-                text = stringResource(provider.feature.title),
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.onSurface,
-            )
+        Box(
+            modifier = Modifier.fillMaxWidth()
+                .onSizeChanged {
+                    size = with(density) { it.toSize().toDpSize() }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(provider.feature.icon),
+                    contentDescription = stringResource(provider.feature.title),
+                    modifier = Modifier.size(24.dp),
+                    tint = MiuixTheme.colorScheme.primary,
+                )
+
+                Text(
+                    text = stringResource(provider.feature.title),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+            }
+
+            if (!enabled) {
+                Row(
+                    modifier = Modifier.size(size)
+                        .background(MiuixTheme.colorScheme.onSurface.copy(.75f)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Info,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+
+                    Text(
+                        text = stringResource(Res.string.text_system_not_supported),
+                        color = MiuixTheme.colorScheme.surface,
+                        style = MiuixTheme.textStyles.body2,
+                    )
+                }
+            }
         }
     }
 }

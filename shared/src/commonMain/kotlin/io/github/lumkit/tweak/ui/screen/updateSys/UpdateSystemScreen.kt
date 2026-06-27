@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.ui.screen.updateSys
 
 import androidx.compose.runtime.Composable
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.utils.SDK_INT
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
@@ -35,6 +36,10 @@ internal val UpdateSystemProvider = object : FeatureProvider {
             ),
             route = Screen.UpdateSystem,
             defaultState = FeatureState.ENABLED,
+            rule = {
+                // Update功能只在Android11以上引入
+                SDK_INT >= 30
+            }
         )
 
     @Composable

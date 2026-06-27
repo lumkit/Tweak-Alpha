@@ -20,6 +20,7 @@ data class Feature(
     val capabilities: Set<Capability>,
     val route: Screen,
     val defaultState: FeatureState,
+    val rule: suspend () -> Boolean = { true }
 )
 
 fun Feature.availableState(
