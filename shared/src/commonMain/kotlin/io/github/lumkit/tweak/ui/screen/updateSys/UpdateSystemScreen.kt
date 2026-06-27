@@ -13,9 +13,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.NativeFileResult
-import io.github.lumkit.tweak.common.utils.SDK_INT
 import io.github.lumkit.tweak.common.utils.ZipEntry
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.logE
@@ -54,10 +54,17 @@ internal val UpdateSystemProvider = object : FeatureProvider {
             route = Screen.UpdateSystem,
             defaultState = FeatureState.ENABLED,
             rule = {
-                // Update功能只在Android11以上引入
-                SDK_INT >= 30
+                runCatching {
+                    support()
+                }.getOrNull() ?: false
             }
         )
+
+    suspend fun support(): Boolean {
+        val result = ReusableShells.execSync("ls /dev/block/bootdevice/by-name")
+        return result.contains("_a|_b".toRegex()) && Files.exists("/system/bin/update_engine_client")
+            .getOrNull() ?: false
+    }
 
     @Composable
     override fun Content() {

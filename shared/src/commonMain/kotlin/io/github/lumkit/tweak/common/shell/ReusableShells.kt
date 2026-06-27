@@ -4,7 +4,7 @@ package io.github.lumkit.tweak.common.shell
  * 可复用 Shell 管理器。
  */
 expect object ReusableShells {
-    fun getInstance(key: String): KeepShell
+    fun getInstance(key: String, redirectErrorStream: Boolean = false): KeepShell
 
     fun destroyInstance(key: String)
 

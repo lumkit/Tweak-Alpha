@@ -38,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.lumkit.tweak"
+        applicationId = "io.github.lumkit.tweak.aplha"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1

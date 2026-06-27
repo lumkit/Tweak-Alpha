@@ -7,10 +7,10 @@ import java.util.concurrent.ConcurrentHashMap
 actual object ReusableShells {
     private val shells = ConcurrentHashMap<String, KeepShell>()
 
-    private fun getRuntime(): Process {
+    private fun getRuntime(redirectErrorStream: Boolean = false): Process {
         return when (GlobalViewModel.runtimeModeState.value) {
             RuntimeMode.Unknow -> error("this should not happen, please report this to the developer")
-            RuntimeMode.Root -> ShellExecutor.getSuperUserRuntime()
+            RuntimeMode.Root -> ShellExecutor.getSuperUserRuntime(redirectErrorStream)
             RuntimeMode.Shizuku -> ShellExecutor.getShizukuRuntime()
             null -> error("this should not happen, please report this to the developer")
         }
@@ -20,7 +20,8 @@ actual object ReusableShells {
 
     @Synchronized
     actual fun getInstance(
-        key: String
+        key: String,
+        redirectErrorStream: Boolean
     ): KeepShell {
         val shell = KeepShell().apply {
             setRuntime(this@ReusableShells.getRuntime())

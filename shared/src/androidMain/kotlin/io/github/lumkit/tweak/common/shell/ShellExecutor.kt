@@ -12,8 +12,6 @@ import java.lang.reflect.Method
 
 object ShellExecutor {
     private const val TAG = "ShellExecutor"
-    private var extraEnvPath: String = ""
-    private var defaultEnvPath: String = "" // /sbin:/system/sbin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin
     private val shizukuNewProcessMethod: Method by lazy(LazyThreadSafetyMode.PUBLICATION) {
         Shizuku::class.java.getDeclaredMethod(
             "newProcess",
@@ -24,67 +22,49 @@ object ShellExecutor {
             isAccessible = true
         }
     }
+    private var workPath: String = ""
+    private var defaultWorkPath: String = ""
 
-    fun setExtraEnvPath(extraEnvPath: String) {
-        ShellExecutor.extraEnvPath = extraEnvPath
-    }
+    private fun smartWorkPath(): String? {
+        if (workPath.isNotBlank()) {
+            if (defaultWorkPath.isBlank()) {
+                defaultWorkPath = try {
+                    Runtime.getRuntime().exec("sh").let {
+                        it.outputStream.use { os ->
+                            os.write("echo \$PATH".toByteArray())
+                            os.flush()
+                        }
 
-    private fun getEnvPath(): String? {
-        // FIXME:非root模式下，默认的 TMPDIR=/data/local/tmp 变量可能会导致某些需要写缓存的场景（例如使用source指令）脚本执行失败！
-        if (!extraEnvPath.isEmpty()) {
-            if (defaultEnvPath.isEmpty()) {
-                try {
-                    val process = Runtime.getRuntime().exec("sh")
-                    val outputStream = process.outputStream
-                    outputStream.write($$"echo $PATH".toByteArray())
-                    outputStream.flush()
-                    outputStream.close()
-
-                    val inputStream = process.inputStream
-                    val cache = ByteArray(16384)
-                    val length = inputStream.read(cache)
-                    inputStream.close()
-                    process.destroy()
-
-                    val path = String(cache, 0, length).trim { it <= ' ' }
-                    if (path.isNotEmpty()) {
-                        defaultEnvPath = path
-                    } else {
-                        throw RuntimeException("未能获取到\$PATH参数")
+                        it.inputStream.use { input ->
+                            val cache = ByteArray(16384)
+                            val len = input.read(cache)
+                            String(cache, 0, len).trim().ifBlank {
+                                throw RuntimeException("未能获取到\$PATH参数")
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    defaultEnvPath = "/sbin:/system/sbin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin"
+                    "/sbin:/system/sbin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin"
                 }
             }
 
-            val path = defaultEnvPath
-
-            return "PATH=$path:$extraEnvPath"
+            return "PATH=$defaultWorkPath:$workPath"
         }
-
         return null
     }
 
     @Throws(IOException::class)
-    private fun getProcess(run: String?): Process {
-        val env = getEnvPath()
-        val runtime = Runtime.getRuntime()
-        /*
-        // 部分机型会有Aborted错误
-        if (env != null) {
-            return runtime.exec(run, new String[]{
-                env
-            });
-        }
-        */
-
-
-        val process = runtime.exec(run)
-        if (env != null) {
+    private fun getProcess(run: String?, redirectErrorStream: Boolean = false): Process {
+        val path = smartWorkPath()
+        val process = ProcessBuilder()
+            .command(run)
+            .redirectErrorStream(redirectErrorStream)
+            .start()
+        if (path != null) {
             val outputStream = process.outputStream
             outputStream.write("export ".toByteArray())
-            outputStream.write(env.toByteArray())
+            outputStream.write(path.toByteArray())
             outputStream.write("\n".toByteArray())
             outputStream.flush()
         }
@@ -125,10 +105,10 @@ object ShellExecutor {
     }
 
     @Throws(IOException::class)
-    fun getSuperUserRuntime(): Process {
+    fun getSuperUserRuntime(redirectErrorStream: Boolean = false): Process {
         val userId = resolveSuperUserId()
         logD("user id=$userId", TAG)
-        return getProcess(userId)
+        return getProcess(userId, redirectErrorStream)
     }
 
     @Throws(IOException::class)
@@ -145,7 +125,7 @@ object ShellExecutor {
             throw IOException("Shizuku permission not granted")
         }
 
-        val env = getEnvPath()?.let(::arrayOf)
+        val env = smartWorkPath()?.let(::arrayOf)
         return try {
             val process = shizukuNewProcessMethod.invoke(
                 null,
