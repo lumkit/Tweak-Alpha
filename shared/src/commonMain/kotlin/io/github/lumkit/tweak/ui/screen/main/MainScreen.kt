@@ -11,6 +11,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -25,6 +26,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.common.component.LiquidBottomTab
 import io.github.lumkit.tweak.common.component.LiquidBottomTabs
 import io.github.lumkit.tweak.common.component.ScreenSurface
+import io.github.lumkit.tweak.common.feature.setupUpdateForegroundService
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.ui.screen.feature.FeaturePage
 import io.github.lumkit.tweak.ui.screen.info.InfoPage
@@ -34,6 +36,16 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+@Composable
+private fun Setup() {
+
+    LaunchedEffect(Unit) {
+        // 启动系统更新前台服务
+        setupUpdateForegroundService()
+    }
+
+}
 
 @Composable
 internal fun MainScreen(
@@ -51,6 +63,8 @@ internal fun MainScreen(
             }
         }
     }
+
+    Setup()
 }
 
 @Composable

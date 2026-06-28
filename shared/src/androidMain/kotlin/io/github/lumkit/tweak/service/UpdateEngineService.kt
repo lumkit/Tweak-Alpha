@@ -18,12 +18,15 @@ import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
+import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.shared.R
 import io.github.lumkit.tweak.ui.screen.updateSys.UpdateEngineViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -171,10 +174,20 @@ class UpdateEngineService: Service() {
 
     override fun onBind(p0: Intent?): IBinder? = null
 
+    private var startCommandState = START_STICKY
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForegroundWithNotification()
+
+        val mode = GlobalViewModel.runtimeModeState.value
+
+        if (mode != RuntimeMode.Root) {
+            startCommandState = START_NOT_STICKY
+            stopSelf()
+            return
+        }
 
         logD("start update service", TAG)
         client.setOnReadLineListener(updateListener)
@@ -267,13 +280,15 @@ class UpdateEngineService: Service() {
             }
         }
 
-        return START_STICKY
+        return startCommandState
     }
 
     override fun onDestroy() {
+        logD("onDestroy", TAG)
         client.removeOnReadLineListener()
         followJob?.cancel()
         followJob = null
+        updateScope.cancel()
         notificationManager.cancel(NOTIFICATION_ID + 1)
         notificationManager.cancel(NOTIFICATION_ID + 2)
         super.onDestroy()

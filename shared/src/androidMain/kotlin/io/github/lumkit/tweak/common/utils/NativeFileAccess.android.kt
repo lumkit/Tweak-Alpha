@@ -290,9 +290,9 @@ private object ShizukuFileServiceConnectionManager {
             val args = Shizuku.UserServiceArgs(
                 ComponentName(application, ShizukuFileService::class.java)
             )
-                .daemon(false)
+                .daemon(true)
                 .processNameSuffix("file_service")
-                .debuggable(false)
+                .debuggable(isDebugBuild())
                 .tag("shizuku_file_service")
 
             val connection = object : ServiceConnection {

@@ -231,15 +231,15 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
     ) {
         // 运行模式
         Block {
-            val selected by TweakDataStore.runtimeModeFlow()
-                .collectAsStateWithLifecycle(RuntimeMode.Unknow)
-            val modes = remember { RuntimeMode.entries }
+            val selected by TweakDataStore.runtimeModeFlow().collectAsStateWithLifecycle(RuntimeMode.Unknow)
+            val modes = remember { RuntimeMode.entries.filter { it != RuntimeMode.Unknow } }
+            val selectedIndex = remember(selected) { modes.indexOf(selected).coerceIn(modes.indices) }
 
             OverlayDropdownPreference(
                 title = stringResource(Res.string.text_framework_mode),
                 summary = stringResource(Res.string.text_framework_mode_description),
                 items = modes.map { stringResource(it.stringResource) },
-                selectedIndex = selected.ordinal,
+                selectedIndex = selectedIndex,
                 onSelectedIndexChange = {
                     val newModel = modes[it]
                     val oldMode = selected

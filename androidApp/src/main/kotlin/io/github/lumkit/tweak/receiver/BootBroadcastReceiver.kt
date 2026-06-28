@@ -3,7 +3,6 @@ package io.github.lumkit.tweak.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.feature.UpdateEngineClient
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
@@ -42,7 +41,7 @@ class BootBroadcastReceiver: BroadcastReceiver() {
                             context.startSmartService(KeepAliveService::class.java)
 
                             // 配置更新服务
-                            setupUpdateService()
+                            setupUpdateService(context)
                         }
                     }
                 }
@@ -51,7 +50,7 @@ class BootBroadcastReceiver: BroadcastReceiver() {
     }
 
 
-    private fun CoroutineScope.setupUpdateService() {
+    private fun CoroutineScope.setupUpdateService(context: Context) {
         launch {
             // 如果是Root模式并且支持OTA则启动更新服务
             val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
@@ -61,8 +60,8 @@ class BootBroadcastReceiver: BroadcastReceiver() {
             logD("runtimeMode: $runtimeMode, support: $support", TAG)
 
             if (runtimeMode == RuntimeMode.Root && support) {
-                val intent = Intent(application, UpdateEngineService::class.java)
-                application.startSmartService(intent)
+                val intent = Intent(context, UpdateEngineService::class.java)
+                context.startSmartService(intent)
             }
         }
     }

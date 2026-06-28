@@ -6,5 +6,5 @@ expect object ShellExecutor {
     @Throws(exceptionClasses = [IOException::class])
     fun resolveSuperUserId(): String
 
-    fun getRuntimeWithRuntimeMode(redirectErrorStream: Boolean = false): Process
+    suspend fun getRuntimeWithRuntimeMode(redirectErrorStream: Boolean = false): Process
 }

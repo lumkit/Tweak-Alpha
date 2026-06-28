@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 actual object ReusableShells {
     private val shells = ConcurrentHashMap<String, ReusableShell>()
 
-    private fun getRuntime(redirectErrorStream: Boolean = false): Process = ShellExecutor.getRuntimeWithRuntimeMode(redirectErrorStream)
+    private suspend fun getRuntime(redirectErrorStream: Boolean = false): Process = ShellExecutor.getRuntimeWithRuntimeMode(redirectErrorStream)
 
     private const val MAX_DEFAULT_PRECESS_SIZE = 8
 

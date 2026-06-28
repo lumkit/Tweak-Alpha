@@ -12,7 +12,6 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -23,7 +22,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
-import io.github.lumkit.tweak.common.feature.setupUpdateForegroundService
 import io.github.lumkit.tweak.common.utils.ripple
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Navigator
@@ -37,16 +35,6 @@ import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-
-@Composable
-private fun Setup() {
-
-    LaunchedEffect(Unit) {
-        // 启动系统更新前台服务
-        setupUpdateForegroundService()
-    }
-
-}
 
 @Composable
 @Preview
@@ -72,7 +60,6 @@ fun App() {
                         SnackbarHost(state = snackbarHostState)
                     }
                 ) {
-                    Setup()
                     AppRoute(modifier = Modifier.fillMaxSize())
                 }
             }
