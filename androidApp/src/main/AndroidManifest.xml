@@ -37,6 +37,7 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
@@ -105,6 +106,11 @@
         <service android:name=".service.PersistentTaskService"
             android:enabled="true"
             android:exported="false"/>
+
+        <service android:name=".service.UpdateEngineService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
 
     </application>
 

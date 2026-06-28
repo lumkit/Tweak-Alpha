@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.layerBackdrop
+import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.model.GlobalViewModel
@@ -41,6 +43,8 @@ import io.github.lumkit.tweak.ui.screen.feature.model.FeatureCategory
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
 import io.github.lumkit.tweak.ui.screen.feature.model.availableState
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.Card
@@ -49,6 +53,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Lock
@@ -66,6 +71,8 @@ fun FeaturePage() {
     val providers by FeatureRegistry.providers
     val runtimeMode by GlobalViewModel.runtimeModeState.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
+    val hostState = LocalSnackBarHostState.current
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -98,7 +105,7 @@ fun FeaturePage() {
             )
         ) {
             items(providers) { category ->
-                FeatureCategoryItem(category, runtimeMode, navigator::navigate)
+                FeatureCategoryItem(category, runtimeMode, hostState, scope, navigator::navigate)
             }
         }
     }
@@ -108,6 +115,8 @@ fun FeaturePage() {
 private fun FeatureCategoryItem(
     category: FeatureCategory,
     runtimeMode: RuntimeMode?,
+    hostState: SnackbarHostState,
+    scope: CoroutineScope,
     onClick: (route: Screen) -> Unit,
 ) {
     Column(
@@ -123,7 +132,7 @@ private fun FeatureCategoryItem(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     rowItems.onEach { provider ->
-                        FeatureItem(provider, runtimeMode, onClick)
+                        FeatureItem(provider, runtimeMode, hostState, scope, onClick)
                     }
 
                     repeat(2 - rowItems.size) {
@@ -139,6 +148,8 @@ private fun FeatureCategoryItem(
 private fun RowScope.FeatureItem(
     provider: FeatureProvider,
     runtimeMode: RuntimeMode?,
+    hostState: SnackbarHostState,
+    scope: CoroutineScope,
     onClick: (route: Screen) -> Unit,
 ) {
     val density = LocalDensity.current
@@ -155,6 +166,7 @@ private fun RowScope.FeatureItem(
             }
         }
     }
+    val description = provider.feature.ruleDescription()
 
     LaunchedEffect(provider.feature, featureState) {
         enabled = provider.feature.rule() && featureState == FeatureState.ENABLED
@@ -170,6 +182,10 @@ private fun RowScope.FeatureItem(
         onClick = {
             if (enabled) {
                 onClick(provider.feature.route)
+            } else {
+                scope.launch {
+                    description?.let { hostState.showSnackbar(it) }
+                }
             }
         },
     ) {

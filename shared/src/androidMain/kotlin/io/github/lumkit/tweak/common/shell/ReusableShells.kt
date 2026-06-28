@@ -1,20 +1,11 @@
 package io.github.lumkit.tweak.common.shell
 
-import io.github.lumkit.tweak.model.GlobalViewModel
-import io.github.lumkit.tweak.model.RuntimeMode
 import java.util.concurrent.ConcurrentHashMap
 
 actual object ReusableShells {
-    private val shells = ConcurrentHashMap<String, KeepShell>()
+    private val shells = ConcurrentHashMap<String, ReusableShell>()
 
-    private fun getRuntime(redirectErrorStream: Boolean = false): Process {
-        return when (GlobalViewModel.runtimeModeState.value) {
-            RuntimeMode.Unknow -> error("this should not happen, please report this to the developer")
-            RuntimeMode.Root -> ShellExecutor.getSuperUserRuntime(redirectErrorStream)
-            RuntimeMode.Shizuku -> ShellExecutor.getShizukuRuntime()
-            null -> error("this should not happen, please report this to the developer")
-        }
-    }
+    private fun getRuntime(redirectErrorStream: Boolean = false): Process = ShellExecutor.getRuntimeWithRuntimeMode(redirectErrorStream)
 
     private const val MAX_DEFAULT_PRECESS_SIZE = 8
 
@@ -22,10 +13,8 @@ actual object ReusableShells {
     actual fun getInstance(
         key: String,
         redirectErrorStream: Boolean
-    ): KeepShell {
-        val shell = KeepShell().apply {
-            setRuntime(this@ReusableShells.getRuntime())
-        }
+    ): ReusableShell {
+        val shell = ReusableShell(redirectErrorStream)
         if (!shells.containsKey(key)) {
             shells[key] = shell
         }
@@ -50,15 +39,13 @@ actual object ReusableShells {
         shells.clear()
     }
 
-    private val _defaultReusableShell: KeepShell
+    private val _defaultReusableShell: ReusableShell
         get() = getDefault("defaultReusableShell")
 
-    private fun getDefault(key: String): KeepShell {
+    private fun getDefault(key: String): ReusableShell {
         val default = shells[key]
         return if (default == null) {
-            val shell = KeepShell().apply {
-                setRuntime(this@ReusableShells.getRuntime())
-            }
+            val shell = ReusableShell()
             shells[key] = shell
             shell
         } else {
@@ -66,7 +53,7 @@ actual object ReusableShells {
         }
     }
 
-    actual val defaultInstance: KeepShell
+    actual val defaultInstance: ReusableShell
         get() {
             var shell = _defaultReusableShell
             for (i in 0 until MAX_DEFAULT_PRECESS_SIZE) {
@@ -92,11 +79,11 @@ actual object ReusableShells {
      * 同步执行命令行
      */
     actual suspend fun execSync(vararg cmd: String): String =
-        _defaultReusableShell.doCmdSync(cmd.joinToString("\n"))
+        _defaultReusableShell.commitCmdSync(cmd.joinToString("\n"))
 
     /**
      * 同步执行命令行
      */
     actual suspend fun execSync(cmd: List<String>): String =
-        _defaultReusableShell.doCmdSync(cmd.joinToString("\n"))
+        _defaultReusableShell.commitCmdSync(cmd.joinToString("\n"))
 }

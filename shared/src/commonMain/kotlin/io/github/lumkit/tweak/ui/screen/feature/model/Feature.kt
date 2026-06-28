@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.ui.screen.feature.model
 
+import androidx.compose.runtime.Composable
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.ui.screen.feature.FeatureProvider
@@ -20,7 +21,8 @@ data class Feature(
     val capabilities: Set<Capability>,
     val route: Screen,
     val defaultState: FeatureState,
-    val rule: suspend () -> Boolean = { true }
+    val rule: suspend () -> Boolean = { true },
+    val ruleDescription: @Composable () -> String?,
 )
 
 fun Feature.availableState(

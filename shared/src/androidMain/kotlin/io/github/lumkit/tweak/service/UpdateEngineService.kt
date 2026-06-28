@@ -1,0 +1,357 @@
+package io.github.lumkit.tweak.service
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import android.os.IBinder
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import io.github.lumkit.tweak.application
+import io.github.lumkit.tweak.common.feature.UpdateEngineClient
+import io.github.lumkit.tweak.common.feature.UpdateEngineEvent
+import io.github.lumkit.tweak.common.feature.UpdateErrorCode
+import io.github.lumkit.tweak.common.feature.UpdateStatus
+import io.github.lumkit.tweak.common.utils.Files
+import io.github.lumkit.tweak.common.utils.getOrNull
+import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.common.utils.logE
+import io.github.lumkit.tweak.shared.R
+import io.github.lumkit.tweak.ui.screen.updateSys.UpdateEngineViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+class UpdateEngineService: Service() {
+
+    companion object {
+        private const val TAG = "UpdateEngineService"
+
+        private const val CHANNEL_ID = "TweakAlphaUpdateEngineService"
+        private const val NOTIFICATION_ID = 1000
+        private const val NOTIFICATION_ID_PROGRESS = 1001
+        private const val NOTIFICATION_ID_MESSAGE = 1002
+
+        internal const val ACTION_UPDATE_ROM = "io.github.lumkit.tweak.service.UpdateEngineService.ACTION_UPDATE_ROM"
+        internal const val ACTION_CANCEL_UPDATE = "io.github.lumkit.tweak.service.UpdateEngineService.ACTION_CANCEL_UPDATE"
+        internal const val ACTION_MERGE_UPDATE = "io.github.lumkit.tweak.service.UpdateEngineService.ACTION_MERGE_UPDATE"
+        internal const val ACTION_RESET_UPDATE = "io.github.lumkit.tweak.service.UpdateEngineService.ACTION_RESET_UPDATE"
+        internal const val ACTION_SUSPEND_UPDATE = "io.github.lumkit.tweak.service.UpdateEngineService.ACTION_SUSPEND_UPDATE"
+        internal const val ACTION_RESUME_UPDATE = "io.github.lumkit.tweak.service.UpdateEngineService.ACTION_RESUME_UPDATE"
+
+        internal const val EXTRA_DATA_ROM_PATH = "EXTRA_DATA_ROM_PATH"
+
+        internal fun updateRom(path: String) {
+            val intent = Intent(application, UpdateEngineService::class.java)
+            intent.action = ACTION_UPDATE_ROM
+            intent.putExtra(EXTRA_DATA_ROM_PATH, path)
+            ContextCompat.startForegroundService(application, intent)
+        }
+
+        fun cancelUpdate() {
+            val intent = Intent(application, UpdateEngineService::class.java)
+            intent.action = ACTION_CANCEL_UPDATE
+            ContextCompat.startForegroundService(application, intent)
+        }
+
+        fun mergeUpdate() {
+            val intent = Intent(application, UpdateEngineService::class.java)
+            intent.action = ACTION_MERGE_UPDATE
+            ContextCompat.startForegroundService(application, intent)
+        }
+
+        fun resetUpdate() {
+            val intent = Intent(application, UpdateEngineService::class.java)
+            intent.action = ACTION_RESET_UPDATE
+            ContextCompat.startForegroundService(application, intent)
+        }
+
+        fun suspendUpdate() {
+            val intent = Intent(application, UpdateEngineService::class.java)
+            intent.action = ACTION_SUSPEND_UPDATE
+            ContextCompat.startForegroundService(application, intent)
+        }
+
+        fun resumeUpdate() {
+            val intent = Intent(application, UpdateEngineService::class.java)
+            intent.action = ACTION_RESUME_UPDATE
+            ContextCompat.startForegroundService(application, intent)
+        }
+    }
+
+    private var followJob: Job? = null
+    private val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val client by lazy {
+        UpdateEngineClient()
+    }
+
+    private val notificationManager by lazy {
+        getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+    }
+
+    private val updateListener: UpdateEngineClient.OnReadLineListener = { line ->
+        logD("line=$line", TAG)
+        val event = UpdateEngineEvent.parse(line)
+        logD("event=$event", TAG)
+        when (event) {
+            is UpdateEngineEvent.CommandTook -> {
+                logD("commandTook=$event", TAG)
+            }
+            is UpdateEngineEvent.PayloadComplete -> {
+                logD("payloadComplete=$event", TAG)
+                val msg: String = when (val errorCode = event.errorCode) {
+                    UpdateErrorCode.Success -> getString(R.string.update_error_success)
+                    UpdateErrorCode.Error -> getString(R.string.update_error_generic)
+                    UpdateErrorCode.FilesystemCopierError -> getString(R.string.update_error_filesystem_copier)
+                    UpdateErrorCode.PostInstallRunnerError -> getString(R.string.update_error_post_install_runner)
+                    UpdateErrorCode.PayloadMismatchedTypeError -> getString(R.string.update_error_payload_mismatched_type)
+                    UpdateErrorCode.InstallDeviceOpenError -> getString(R.string.update_error_install_device_open)
+                    UpdateErrorCode.KernelDeviceOpenError -> getString(R.string.update_error_kernel_device_open)
+                    UpdateErrorCode.DownloadTransferError -> getString(R.string.update_error_download_transfer)
+                    UpdateErrorCode.PayloadHashMismatchError -> getString(R.string.update_error_payload_hash_mismatch)
+                    UpdateErrorCode.PayloadSizeMismatchError -> getString(R.string.update_error_payload_size_mismatch)
+                    UpdateErrorCode.DownloadPayloadVerificationError -> getString(R.string.update_error_download_payload_verification)
+                    UpdateErrorCode.DownloadStateInitializationError -> getString(R.string.update_error_download_state_initialization)
+                    is UpdateErrorCode.Unknown -> getString(R.string.update_error_unknown, errorCode.code)
+                }
+
+                notifyMessage(
+                    title = getString(R.string.text_update_rom_title),
+                    text = msg,
+                    id = 1
+                )
+                notificationManager.cancel(NOTIFICATION_ID + 2)
+            }
+            is UpdateEngineEvent.StatusUpdate -> {
+                logD("statusUpdate=$event", TAG)
+                val status = event.status
+                val percent = (status.progress.coerceIn(0f, 1f) * 100).roundToInt()
+                val indeterminate = status.progress <= 0f || status.progress >= 1f
+
+                val msg: String = when (status) {
+                    is UpdateStatus.Idle -> getString(R.string.update_status_idle)
+                    is UpdateStatus.CheckingForUpdate -> getString(R.string.update_status_checking_for_update)
+                    is UpdateStatus.UpdateAvailable -> getString(R.string.update_status_update_available)
+                    is UpdateStatus.Downloading -> getString(R.string.update_status_downloading, percent)
+                    is UpdateStatus.Verifying -> getString(R.string.update_status_verifying, percent)
+                    is UpdateStatus.Finalizing -> getString(R.string.update_status_finalizing)
+                    is UpdateStatus.UpdatedNeedReboot -> getString(R.string.update_status_updated_need_reboot)
+                    is UpdateStatus.ReportingErrorEvent -> getString(R.string.update_status_reporting_error_event)
+                    is UpdateStatus.AttemptingRollback -> getString(R.string.update_status_attempting_rollback)
+                    is UpdateStatus.Disabled -> getString(R.string.update_status_disabled)
+                    is UpdateStatus.CleanupPreviousUpdate -> getString(R.string.update_status_cleanup_previous_update)
+                    is UpdateStatus.Unknown -> getString(R.string.update_status_unknown, status.code)
+                }
+                if (status is UpdateStatus.UpdatedNeedReboot || status is UpdateStatus.Idle) {
+                    notifyMessage(
+                        title = getString(R.string.text_update_rom_title),
+                        text = msg,
+                        id = 2,
+                    )
+                } else {
+                    notifyProgress(
+                        title = getString(R.string.text_update_rom_updating),
+                        text = msg,
+                        progress = percent,
+                        indeterminate = indeterminate,
+                        autoCancel = false,
+                        id = 2,
+                    )
+                }
+            }
+            null -> Unit
+        }
+        UpdateEngineViewModel.setUpdateEvent(event)
+    }
+
+    override fun onBind(p0: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+        startForegroundWithNotification()
+
+        logD("start update service", TAG)
+        client.setOnReadLineListener(updateListener)
+        client.watch()
+        followJob = updateScope.launch {
+            logD("follow update status", TAG)
+            client.follow()
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action
+        logD("action: $action", TAG)
+        when (action) {
+            ACTION_UPDATE_ROM -> {
+                updateScope.launch {
+                    val status = UpdateEngineViewModel.updateStatus.value
+                    if (status !is UpdateStatus.Idle) {
+                        logD("update status is not idle, skip update", TAG)
+                        return@launch
+                    }
+
+                    val path = intent.getStringExtra(EXTRA_DATA_ROM_PATH) ?: ""
+                    val exists = Files.exists(path).getOrNull() ?: false
+                    if (!exists) {
+                        logE("rom is not exists", null,TAG)
+                        notifyMessage(
+                            title = getString(R.string.text_update_rom_failed),
+                            text = getString(R.string.text_update_rom_msg_file_is_not_exists),
+                            id = 1,
+                        )
+                        notificationManager.cancel(NOTIFICATION_ID + 2)
+                        return@launch
+                    }
+
+                    // 先解压
+                    notifyMessage(
+                        title = getString(R.string.text_update_rom_title),
+                         text = getString(R.string.text_update_rom_msg_unzipping),
+                         id = 2,
+                         autoCancel = false,
+                    )
+                    val dir = UpdateEngineClient.unzipRom(path)
+                    val meta = Files.list(dir).getOrNull() ?: emptyList()
+
+                    if (meta.isEmpty()) {
+                        logE("unzip rom failed", null, TAG)
+                        notifyMessage(
+                            title = getString(R.string.text_update_rom_failed),
+                             text = getString(R.string.text_update_rom_msg_unzip_failed),
+                             id = 1,
+                        )
+                        notificationManager.cancel(NOTIFICATION_ID + 2)
+                        return@launch
+                    }
+                    // 开始安装
+
+                    UpdateEngineClient.installRom(dir)
+                }
+            }
+
+            ACTION_CANCEL_UPDATE -> {
+                updateScope.launch {
+                    UpdateEngineClient.cancel()
+                }
+            }
+
+            ACTION_MERGE_UPDATE -> {
+                updateScope.launch {
+                    UpdateEngineClient.merge()
+                }
+            }
+
+            ACTION_RESET_UPDATE -> {
+                updateScope.launch {
+                    UpdateEngineClient.reset()
+                }
+            }
+
+            ACTION_SUSPEND_UPDATE -> {
+                updateScope.launch {
+                    UpdateEngineClient.suspend()
+                }
+            }
+
+            ACTION_RESUME_UPDATE -> {
+                updateScope.launch {
+                    UpdateEngineClient.resume()
+                }
+            }
+        }
+
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        client.removeOnReadLineListener()
+        followJob?.cancel()
+        followJob = null
+        notificationManager.cancel(NOTIFICATION_ID + 1)
+        notificationManager.cancel(NOTIFICATION_ID + 2)
+        super.onDestroy()
+    }
+
+    /**
+     * 创建通知渠道。
+     */
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                getString(R.string.channel_update_engine),
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = getString(R.string.channel_update_engine_description)
+                setShowBadge(false)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * 启动前台服务，确保在后台时不被系统杀掉。
+     */
+    private fun startForegroundWithNotification() {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_logo_round)
+            .setContentTitle(getString(R.string.text_update_rom_title))
+            .setContentText(getString(R.string.update_status_idle))
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID + 2, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(NOTIFICATION_ID + 2, notification)
+        }
+    }
+
+    /**
+     * 发送带进度条的更新进度通知。
+     *
+     * @param title 通知标题
+     * @param text 通知内容文本
+     * @param progress 当前进度（0~100）
+     * @param indeterminate 是否为不确定进度（如清理阶段）
+     */
+    fun notifyProgress(title: String, text: String, progress: Int, indeterminate: Boolean = false, autoCancel: Boolean = true, id: Int = 0) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_logo_round)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setProgress(100, progress, indeterminate)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setAutoCancel(autoCancel)
+            .build()
+        notificationManager.notify(NOTIFICATION_ID + id, notification)
+    }
+
+    /**
+     * 发送无进度条的消息通知。
+     *
+     * @param title 通知标题
+     * @param text 通知内容文本
+     * @param autoCancel 点击后是否自动取消
+     */
+    fun notifyMessage(title: String, text: String, autoCancel: Boolean = true, id: Int = 0) {
+        notificationManager.cancel(NOTIFICATION_ID_PROGRESS)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_logo_round)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setAutoCancel(autoCancel)
+            .build()
+        notificationManager.notify(NOTIFICATION_ID + id, notification)
+    }
+}

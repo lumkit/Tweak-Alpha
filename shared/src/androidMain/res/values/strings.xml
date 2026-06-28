@@ -1,0 +1,45 @@
+<resources>
+    <string name="app_name">Tweak Alpha</string>
+    <string name="text_keep_alive">Keep Alive</string>
+    <string name="channel_update_engine">系统更新服务</string>
+    <string name="channel_update_engine_description">显示OTA系统更新的进度与状态通知</string>
+
+    <!-- UpdateEngineService 通知标题 -->
+    <string name="text_update_rom_title">系统更新</string>
+    <string name="text_update_rom_updating">正在安装系统更新</string>
+    <string name="text_update_rom_failed">系统更新失败</string>
+
+    <!-- UpdateEngineService 消息 -->
+    <string name="text_update_rom_msg_unzipping">解析ROM中</string>
+    <string name="text_update_rom_msg_file_is_not_exists">ROM文件不存在</string>
+    <string name="text_update_rom_msg_unzip_failed">ROM解压失败</string>
+
+    <!-- UpdateStatus 状态描述 -->
+    <string name="update_status_idle">空闲状态</string>
+    <string name="update_status_checking_for_update">正在检查更新</string>
+    <string name="update_status_update_available">有可用更新</string>
+    <string name="update_status_downloading">正在安装 %d%%</string>
+    <string name="update_status_verifying">正在校验 %d%%</string>
+    <string name="update_status_finalizing">正在完成安装</string>
+    <string name="update_status_updated_need_reboot">更新已完成，请重启设备</string>
+    <string name="update_status_reporting_error_event">更新过程中发生错误</string>
+    <string name="update_status_attempting_rollback">正在回滚到上一个版本</string>
+    <string name="update_status_disabled">更新功能已禁用</string>
+    <string name="update_status_cleanup_previous_update">正在清理上一次更新</string>
+    <string name="update_status_unknown">未知状态（%d）</string>
+
+    <!-- UpdateErrorCode 错误描述 -->
+    <string name="update_error_success">更新成功</string>
+    <string name="update_error_generic">更新失败：未知错误</string>
+    <string name="update_error_filesystem_copier">更新失败：文件系统复制错误</string>
+    <string name="update_error_post_install_runner">更新失败：安装后脚本执行出错</string>
+    <string name="update_error_payload_mismatched_type">更新失败：更新包类型不匹配</string>
+    <string name="update_error_install_device_open">更新失败：无法打开目标分区</string>
+    <string name="update_error_kernel_device_open">更新失败：无法打开内核分区</string>
+    <string name="update_error_download_transfer">更新失败：数据传输错误</string>
+    <string name="update_error_payload_hash_mismatch">更新失败：更新包哈希校验不通过</string>
+    <string name="update_error_payload_size_mismatch">更新失败：更新包大小不匹配</string>
+    <string name="update_error_download_payload_verification">更新失败：更新包验证失败</string>
+    <string name="update_error_download_state_initialization">更新失败：源分区数据校验不通过</string>
+    <string name="update_error_unknown">更新失败：错误码 %d</string>
+</resources>

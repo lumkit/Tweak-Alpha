@@ -2,6 +2,8 @@ package io.github.lumkit.tweak.common.utils
 
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.asNativeFileBackend
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 
 /**
  * 统一的 Native 文件访问入口。
@@ -20,11 +22,16 @@ import io.github.lumkit.tweak.model.asNativeFileBackend
  */
 object Files {
 
-    private val serviceBackend: NativeFileBackend
-        get() = GlobalViewModel.runtimeModeState.value?.asNativeFileBackend() ?: NativeFileBackend.User
+    private suspend fun resolveBackend(): NativeFileBackend {
+        val mode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        return mode.asNativeFileBackend()
+    }
 
-    private val service: NativeFileService
-        get() = NativeFiles.repository.require(serviceBackend)
+    private suspend fun getService(): NativeFileService {
+        val backend = resolveBackend()
+        return NativeFiles.repository.getOrNull(backend)
+            ?: throw RuntimeException("NativeFileService not found for backend: $backend")
+    }
 
     /**
      * 判断目标路径是否存在。
@@ -33,7 +40,7 @@ object Files {
      * @return 成功时返回该路径是否存在，失败时返回对应错误信息
      */
     suspend fun exists(path: String): NativeFileResult<Boolean> {
-        return service.exists(path)
+        return getService().exists(path)
     }
 
     /**
@@ -45,11 +52,11 @@ object Files {
      * @return 成功时返回目录下的子项路径列表
      */
     suspend fun list(path: String): NativeFileResult<List<String>> {
-        return service.list(path)
+        return getService().list(path)
     }
 
     suspend fun zipEntries(path: String): NativeFileResult<List<ZipEntry>> {
-        return service.zipEntries(path)
+        return getService().zipEntries(path)
     }
 
     /**
@@ -59,7 +66,7 @@ object Files {
      * @return 成功时返回完整文件字节数组
      */
     suspend fun readBytes(path: String): NativeFileResult<ByteArray> {
-        return service.readBytes(path)
+        return getService().readBytes(path)
     }
 
     /**
@@ -69,7 +76,7 @@ object Files {
      * @return 成功时返回 UTF-8 解码后的文本内容
      */
     suspend fun readText(path: String): NativeFileResult<String> {
-        return service.readText(path)
+        return getService().readText(path)
     }
 
     /**
@@ -83,7 +90,7 @@ object Files {
      * @return 成功时返回 [Unit]
      */
     suspend fun writeBytes(path: String, bytes: ByteArray): NativeFileResult<Unit> {
-        return service.writeBytes(path, bytes)
+        return getService().writeBytes(path, bytes)
     }
 
     /**
@@ -94,7 +101,7 @@ object Files {
      * @return 成功时返回 [Unit]
      */
     suspend fun writeText(path: String, text: String): NativeFileResult<Unit> {
-        return service.writeText(path, text)
+        return getService().writeText(path, text)
     }
 
     /**
@@ -108,7 +115,7 @@ object Files {
      * @return 成功时返回 [Unit]
      */
     suspend fun delete(path: String, recursive: Boolean = false): NativeFileResult<Unit> {
-        return service.delete(path, recursive)
+        return getService().delete(path, recursive)
     }
 
     /**
@@ -120,7 +127,7 @@ object Files {
      * @return 成功时返回 [Unit]
      */
     suspend fun mkdirs(path: String): NativeFileResult<Unit> {
-        return service.mkdirs(path)
+        return getService().mkdirs(path)
     }
 
     /**
@@ -138,7 +145,7 @@ object Files {
         targetPath: String,
         overwrite: Boolean = false,
     ): NativeFileResult<Unit> {
-        return service.copy(sourcePath, targetPath, overwrite)
+        return getService().copy(sourcePath, targetPath, overwrite)
     }
 
     /**
@@ -156,7 +163,7 @@ object Files {
         targetPath: String,
         overwrite: Boolean = false,
     ): NativeFileResult<Unit> {
-        return service.move(sourcePath, targetPath, overwrite)
+        return getService().move(sourcePath, targetPath, overwrite)
     }
 
     /**
@@ -169,7 +176,10 @@ object Files {
      * @return 成功时返回 [Unit]
      */
     suspend fun chmod(path: String, mode: String): NativeFileResult<Unit> {
-        return service.chmod(path, mode)
+        return getService().chmod(path, mode)
     }
 
 }
+
+
+expect infix fun String.joinPath(childPath: String): String

@@ -1,24 +1,15 @@
 package io.github.lumkit.tweak.ui.screen.updateSys
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.common.component.TopBar
-import io.github.lumkit.tweak.common.shell.ReusableShells
-import io.github.lumkit.tweak.common.utils.Files
-import io.github.lumkit.tweak.common.utils.NativeFileResult
-import io.github.lumkit.tweak.common.utils.ZipEntry
-import io.github.lumkit.tweak.common.utils.getOrNull
-import io.github.lumkit.tweak.common.utils.logE
+import io.github.lumkit.tweak.common.feature.UpdateEngineClient
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
@@ -27,6 +18,7 @@ import io.github.lumkit.tweak.ui.screen.feature.model.Capability
 import io.github.lumkit.tweak.ui.screen.feature.model.Feature
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
 import org.jetbrains.compose.resources.stringResource
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -37,6 +29,7 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_update
+import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_feature_update_system
 import tweak_alpha.shared.generated.resources.text_feature_update_system_description
 import tweak_alpha.shared.generated.resources.text_go_back
@@ -55,16 +48,13 @@ internal val UpdateSystemProvider = object : FeatureProvider {
             defaultState = FeatureState.ENABLED,
             rule = {
                 runCatching {
-                    support()
+                    UpdateEngineClient.support()
                 }.getOrNull() ?: false
+            },
+            ruleDescription = {
+                stringResource(Res.string.text_feature_rule_description_update_sys)
             }
         )
-
-    suspend fun support(): Boolean {
-        val result = ReusableShells.execSync("ls /dev/block/bootdevice/by-name")
-        return result.contains("_a|_b".toRegex()) && Files.exists("/system/bin/update_engine_client")
-            .getOrNull() ?: false
-    }
 
     @Composable
     override fun Content() {
@@ -76,8 +66,8 @@ internal val UpdateSystemProvider = object : FeatureProvider {
 @Composable
 fun UpdateSystemScreen() {
     val scrollBehavior = MiuixScrollBehavior()
-    val backdrop = rememberLayerBackdropColor()
     val navigator = LocalNavigator.current
+    val backdrop = rememberLayerBackdropColor()
 
     Scaffold(
         topBar = {
@@ -99,24 +89,19 @@ fun UpdateSystemScreen() {
         },
         containerColor = MiuixTheme.colorScheme.surface,
     ) {
-        var entries by remember { mutableStateOf(emptyList<ZipEntry>()) }
-
-        LaunchedEffect(Unit) {
-            entries = Files.zipEntries("/storage/emulated/0/Download/DLManager/aurora-ota_full-OS3.0.305.0.WNACNXM-user-16.0-366972ea82.zip")
-                .also {
-                    if (it is NativeFileResult.Failure) {
-                        logE(it.toString(), null, "zipEntries")
-                    }
-                }
-                .getOrNull() ?: emptyList()
-        }
-
-        LazyColumn(
-            modifier = Modifier.padding(it),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier.fillMaxSize()
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .layerBackdrop(backdrop)
+                .padding(it),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            items(entries) {
-                Text(it.toString())
+            Button(
+                onClick = {
+                    UpdateEngineViewModel.installRom("/storage/emulated/0/Download/DLManager/aurora-ota_full-OS3.0.305.0.WNACNXM-user-16.0-366972ea82.zip")
+                }
+            ) {
+                Text("安装测试")
             }
         }
     }

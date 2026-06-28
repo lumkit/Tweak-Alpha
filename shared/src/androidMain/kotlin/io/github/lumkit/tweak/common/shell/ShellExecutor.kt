@@ -3,6 +3,8 @@ package io.github.lumkit.tweak.common.shell
 import android.content.pm.PackageManager
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.runBlocking
 import rikka.shizuku.Shizuku
@@ -10,7 +12,7 @@ import java.io.IOException
 import java.lang.reflect.Method
 
 
-object ShellExecutor {
+actual object ShellExecutor {
     private const val TAG = "ShellExecutor"
     private val shizukuNewProcessMethod: Method by lazy(LazyThreadSafetyMode.PUBLICATION) {
         Shizuku::class.java.getDeclaredMethod(
@@ -72,7 +74,7 @@ object ShellExecutor {
     }
 
     @Throws(IOException::class)
-    fun resolveSuperUserId(): String {
+    actual fun resolveSuperUserId(): String {
         val userIdCache = runBlocking { TweakDataStore.keepShellUserIdFlow().firstOrNull() }
 
         if (userIdCache.isNullOrBlank()) {
@@ -140,6 +142,15 @@ object ShellExecutor {
             throw IOException("Failed to invoke Shizuku.newProcess via reflection", e)
         } catch (e: SecurityException) {
             throw IOException("Shizuku newProcess is not accessible", e)
+        }
+    }
+
+    actual fun getRuntimeWithRuntimeMode(redirectErrorStream: Boolean): Process {
+        return when (GlobalViewModel.runtimeModeState.value) {
+            RuntimeMode.Unknow -> error("this should not happen, please report this to the developer")
+            RuntimeMode.Root -> getSuperUserRuntime(redirectErrorStream)
+            RuntimeMode.Shizuku -> getShizukuRuntime()
+            null -> error("this should not happen, please report this to the developer")
         }
     }
 }

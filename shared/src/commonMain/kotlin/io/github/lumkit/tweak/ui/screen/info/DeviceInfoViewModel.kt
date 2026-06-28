@@ -15,7 +15,6 @@ import io.github.lumkit.tweak.common.utils.formatCurrent
 import io.github.lumkit.tweak.common.utils.formatMemorySize
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.formatVoltage
-import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
 import kotlinx.coroutines.async
@@ -161,7 +160,6 @@ object DeviceInfoViewModel : BaseViewModel() {
                 // 更新更多信息
                 updateMoreInfo()
 
-                logD("load time: ${Clock.System.now().toEpochMilliseconds() - tag}ms")
                 _loadingState.value = true
                 delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
             }
