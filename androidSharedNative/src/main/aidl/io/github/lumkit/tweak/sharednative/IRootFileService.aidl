@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.sharednative;
 
 import android.os.Bundle;
+import android.os.ParcelFileDescriptor;
 
 interface IRootFileService {
     Bundle exists(String path);
@@ -15,4 +16,5 @@ interface IRootFileService {
     Bundle copy(String sourcePath, String targetPath, boolean overwrite);
     Bundle move(String sourcePath, String targetPath, boolean overwrite);
     Bundle chmod(String path, String mode);
+    Bundle unzipToDir(in ParcelFileDescriptor pfd, String targetDir);
 }

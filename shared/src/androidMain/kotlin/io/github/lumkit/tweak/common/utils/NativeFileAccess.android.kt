@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import androidx.core.net.toUri
 import com.topjohnwu.superuser.Shell
 import com.topjohnwu.superuser.ipc.RootService
 import io.github.lumkit.tweak.application
@@ -209,7 +210,16 @@ private object RootNativeFileService : NativeFileService {
         }
     }
 
-    private suspend fun <T> execute(
+    override suspend fun unzipFromUri(uriString: String, targetDir: String): NativeFileResult<Unit> {
+        return executeUnit("unzipFromUri", uriString, targetDir) { service ->
+            val uri = uriString.toUri()
+            val pfd = application.contentResolver.openFileDescriptor(uri, "r")
+                ?: throw RuntimeException("Cannot open file descriptor from URI: $uriString")
+            service.unzipToDir(pfd, targetDir)
+        }
+    }
+
+    suspend fun <T> execute(
         operation: String,
         primaryPath: String,
         secondaryPath: String? = null,
@@ -248,7 +258,7 @@ private object RootNativeFileService : NativeFileService {
         }
     }
 
-    private suspend fun executeUnit(
+    suspend fun executeUnit(
         operation: String,
         primaryPath: String,
         secondaryPath: String? = null,
@@ -437,7 +447,16 @@ private object ShizukuNativeFileService : NativeFileService {
         }
     }
 
-    private suspend fun <T> execute(
+    override suspend fun unzipFromUri(uriString: String, targetDir: String): NativeFileResult<Unit> {
+        return executeUnit("unzipFromUri", uriString, targetDir) { service ->
+            val uri = uriString.toUri()
+            val pfd = application.contentResolver.openFileDescriptor(uri, "r")
+                ?: throw RuntimeException("Cannot open file descriptor from URI: $uriString")
+            service.unzipToDir(pfd, targetDir)
+        }
+    }
+
+    suspend fun <T> execute(
         operation: String,
         primaryPath: String,
         secondaryPath: String? = null,
@@ -476,7 +495,7 @@ private object ShizukuNativeFileService : NativeFileService {
         }
     }
 
-    private suspend fun executeUnit(
+    suspend fun executeUnit(
         operation: String,
         primaryPath: String,
         secondaryPath: String? = null,

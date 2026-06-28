@@ -35,6 +35,7 @@ import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.roundToInt
 
 @Composable
 @Preview
@@ -121,7 +122,7 @@ private fun AppRoute(
                 initialOffsetX = { it })
                     ) togetherWith (slideOutHorizontally(
                 animationSpec = tween(durationMillis = 400),
-                targetOffsetX = { -it / 2 }) + scaleOut(
+                targetOffsetX = { (-it * .31f).roundToInt() }) + scaleOut(
                 targetScale = .75f,
                 animationSpec = tween(durationMillis = 400)
             ) + fadeOut(animationSpec = tween(durationMillis = 400), targetAlpha = .75f))
@@ -130,7 +131,7 @@ private fun AppRoute(
             // Slide in from left when navigating back
             (slideInHorizontally(
                 animationSpec = tween(durationMillis = 400),
-                initialOffsetX = { -it / 2 }) +
+                initialOffsetX = { (-it * .31f).roundToInt() }) +
                     scaleIn(animationSpec = tween(durationMillis = 400), initialScale = .75f) +
                     fadeIn(animationSpec = tween(durationMillis = 400), initialAlpha = .75f)
                     ) togetherWith (slideOutHorizontally(
@@ -141,7 +142,7 @@ private fun AppRoute(
             // Slide in from left when navigating back
             (slideInHorizontally(
                 animationSpec = tween(durationMillis = 400),
-                initialOffsetX = { -it / 2 }) +
+                initialOffsetX = { (-it * .31f).roundToInt() }) +
                     scaleIn(animationSpec = tween(durationMillis = 400), initialScale = .75f) +
                     fadeIn(animationSpec = tween(durationMillis = 400), initialAlpha = .75f)
                     ) togetherWith (slideOutHorizontally(

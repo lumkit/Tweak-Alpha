@@ -64,4 +64,19 @@
     <string name="text_notification_permission">通知权限</string>
     <string name="text_notification_permission_denied">通知权限被拒绝，请进入应用详情手动打开权限</string>
     <string name="text_jump_to_app_info">跳转</string>
+    <string name="text_android_version">系统版本</string>
+    <string name="text_alive_slot">活动插槽</string>
+    <string name="text_update_status">Update_Engine_Client 状态</string>
+    <string name="text_select_rom">选择系统更新包</string>
+    <string name="text_select_rom_failed">文件不存在</string>
+    <string name="text_func">功能</string>
+    <string name="text_selected_rom">已选择</string>
+    <string name="text_install">安装更新</string>
+    <string name="text_unzipping_rom">解析ROM中</string>
+    <string name="text_installing_rom">系统更新中</string>
+    <string name="text_update_cancel">取消更新</string>
+    <string name="text_update_suspend">暂停更新</string>
+    <string name="text_update_resume">继续更新</string>
+    <string name="text_update_merge">合并更新</string>
+    <string name="text_update_reset">重置更新</string>
 </resources>

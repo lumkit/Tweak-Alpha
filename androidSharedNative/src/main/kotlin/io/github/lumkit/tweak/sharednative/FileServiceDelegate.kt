@@ -1,7 +1,10 @@
 package io.github.lumkit.tweak.sharednative
 
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
+import java.io.File
 import java.nio.charset.StandardCharsets
+import java.util.zip.ZipInputStream
 
 /**
  * 文件服务委托，封装所有文件操作的公共逻辑。
@@ -98,6 +101,50 @@ internal object FileServiceDelegate {
     @JvmStatic
     fun chmod(path: String, mode: String): Bundle = try {
         NativeFileBridge.chmod(path, mode)
+        NativeFileBundles.successUnit()
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
+    @JvmStatic
+    fun unzipToDir(pfd: ParcelFileDescriptor, targetDir: String): Bundle = try {
+        // 确保目标目录存在
+        NativeFileBridge.mkdirs(targetDir)
+
+        ParcelFileDescriptor.AutoCloseInputStream(pfd).use { input ->
+            ZipInputStream(input).use { zipStream ->
+                var entry = zipStream.nextEntry
+
+                while (entry != null) {
+                    val entryName = entry.name
+                    val targetPath = File(targetDir, entryName).absolutePath
+
+                    // 防止 Zip Slip 攻击
+                    if (!targetPath.startsWith(targetDir)) {
+                        throw SecurityException("Zip entry is outside target directory: $entryName")
+                    }
+
+                    if (entry.isDirectory) {
+                        NativeFileBridge.mkdirs(targetPath)
+                    } else {
+                        // 确保父目录存在
+                        val parentDir = File(targetPath).parent
+                        if (parentDir != null) {
+                            NativeFileBridge.mkdirs(parentDir)
+                        }
+
+                        // 流式写入文件，避免大文件 OOM
+                        val targetFile = File(targetPath)
+                        targetFile.outputStream().use { output ->
+                            zipStream.copyTo(output, bufferSize = 8192)
+                        }
+                    }
+
+                    zipStream.closeEntry()
+                    entry = zipStream.nextEntry
+                }
+            }
+        }
         NativeFileBundles.successUnit()
     } catch (throwable: Throwable) {
         NativeFileBundles.failure(throwable)

@@ -69,6 +69,7 @@ kotlin {
 //            implementation(libs.liquid.glass)
             implementation(projects.backdrop)
             implementation(libs.kyant.shapes)
+            implementation(libs.androidx.documentfile)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

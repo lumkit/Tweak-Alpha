@@ -146,6 +146,8 @@ sealed class UpdateStatus(val code: Int, val progress: Float) {
     }
 }
 
+expect fun UpdateStatus.asMsg(): String
+
 /**
  * update_engine 错误码封装。
  *
@@ -218,3 +220,5 @@ sealed class UpdateErrorCode(val code: Int) {
         }
     }
 }
+
+expect fun UpdateErrorCode.asMsg(): String

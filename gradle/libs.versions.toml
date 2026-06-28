@@ -6,6 +6,7 @@ android-targetSdk = "37"
 androidx-activity = "1.13.0"
 androidx-lifecycle = "2.11.0-beta01"
 composeMultiplatform = "1.11.1"
+documentfile = "1.1.0"
 kotlin = "2.4.0"
 libsu = "6.0.0"
 navigation3 = "1.1.1"
@@ -20,6 +21,7 @@ annotations = "26.1.0"
 shizuku = "13.1.5"
 
 [libraries]
+androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 compose-uiTooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "composeMultiplatform" }

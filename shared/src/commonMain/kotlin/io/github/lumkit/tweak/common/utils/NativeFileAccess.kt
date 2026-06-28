@@ -78,6 +78,15 @@ interface NativeFileService {
     ): NativeFileResult<Unit>
 
     suspend fun chmod(path: String, mode: String): NativeFileResult<Unit>
+
+    /**
+     * 从 content:// URI 解压 ZIP 文件到指定目录。
+     *
+     * @param uriString content:// 或 file:// URI 字符串
+     * @param targetDir 目标目录绝对路径，不存在时会自动创建
+     * @return 成功时返回 [Unit]
+     */
+    suspend fun unzipFromUri(uriString: String, targetDir: String): NativeFileResult<Unit>
 }
 
 interface NativeFileServiceProvider {

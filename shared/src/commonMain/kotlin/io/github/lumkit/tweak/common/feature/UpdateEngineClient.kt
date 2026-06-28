@@ -40,6 +40,12 @@ class UpdateEngineClient {
             return cachePath
         }
 
+        suspend fun unzipRomFromUri(romUri: String): String {
+            val cachePath = Const.Path.otaPackage
+            Files.unzipFromUri(romUri, cachePath)
+            return cachePath
+        }
+
         suspend fun installRom(dir: String) {
             val bin = dir joinPath "payload.bin"
             val property = dir joinPath "payload_properties.txt"

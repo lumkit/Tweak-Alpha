@@ -1,5 +1,7 @@
 package io.github.lumkit.tweak.common.utils
 
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.asNativeFileBackend
 import kotlinx.coroutines.flow.filterNotNull
@@ -179,7 +181,21 @@ object Files {
         return getService().chmod(path, mode)
     }
 
+    /**
+     * 从 content:// URI 解压 ZIP 文件到指定目录。
+     * 通过 ContentResolver 打开输入流，在特权进程中完成解压。
+     *
+     * @param uriString content:// 或 file:// URI 字符串
+     * @param targetDir 目标目录绝对路径，不存在时自动创建
+     * @return 成功时返回 [Unit]
+     */
+    suspend fun unzipFromUri(uriString: String, targetDir: String): NativeFileResult<Unit> {
+        return getService().unzipFromUri(uriString, targetDir)
+    }
+
 }
 
 
 expect infix fun String.joinPath(childPath: String): String
+
+expect fun Uri.documentFile(): DocumentFile?

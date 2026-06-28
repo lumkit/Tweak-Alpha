@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.sharednative
 import android.content.Intent
 import android.os.Bundle
 import android.os.IBinder
+import android.os.ParcelFileDescriptor
 import com.topjohnwu.superuser.ipc.RootService
 
 class RootFileService : RootService() {
@@ -54,6 +55,10 @@ class RootFileService : RootService() {
 
         override fun chmod(path: String, mode: String): Bundle {
             return FileServiceDelegate.chmod(path, mode)
+        }
+
+        override fun unzipToDir(pfd: ParcelFileDescriptor, targetDir: String): Bundle {
+            return FileServiceDelegate.unzipToDir(pfd, targetDir)
         }
     }
 

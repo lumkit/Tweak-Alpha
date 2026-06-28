@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.sharednative
 
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 
 /**
  * Shizuku UserService 实现。
@@ -54,5 +55,9 @@ class ShizukuFileService : IRootFileService.Stub() {
 
     override fun chmod(path: String, mode: String): Bundle {
         return FileServiceDelegate.chmod(path, mode)
+    }
+
+    override fun unzipToDir(pfd: ParcelFileDescriptor, targetDir: String): Bundle {
+        return FileServiceDelegate.unzipToDir(pfd, targetDir)
     }
 }

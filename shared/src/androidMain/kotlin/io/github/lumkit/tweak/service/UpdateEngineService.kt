@@ -9,12 +9,14 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.feature.UpdateEngineClient
 import io.github.lumkit.tweak.common.feature.UpdateEngineEvent
-import io.github.lumkit.tweak.common.feature.UpdateErrorCode
 import io.github.lumkit.tweak.common.feature.UpdateStatus
+import io.github.lumkit.tweak.common.feature.asMsg
 import io.github.lumkit.tweak.common.utils.Files
+import io.github.lumkit.tweak.common.utils.documentFile
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
@@ -105,21 +107,7 @@ class UpdateEngineService: Service() {
             }
             is UpdateEngineEvent.PayloadComplete -> {
                 logD("payloadComplete=$event", TAG)
-                val msg: String = when (val errorCode = event.errorCode) {
-                    UpdateErrorCode.Success -> getString(R.string.update_error_success)
-                    UpdateErrorCode.Error -> getString(R.string.update_error_generic)
-                    UpdateErrorCode.FilesystemCopierError -> getString(R.string.update_error_filesystem_copier)
-                    UpdateErrorCode.PostInstallRunnerError -> getString(R.string.update_error_post_install_runner)
-                    UpdateErrorCode.PayloadMismatchedTypeError -> getString(R.string.update_error_payload_mismatched_type)
-                    UpdateErrorCode.InstallDeviceOpenError -> getString(R.string.update_error_install_device_open)
-                    UpdateErrorCode.KernelDeviceOpenError -> getString(R.string.update_error_kernel_device_open)
-                    UpdateErrorCode.DownloadTransferError -> getString(R.string.update_error_download_transfer)
-                    UpdateErrorCode.PayloadHashMismatchError -> getString(R.string.update_error_payload_hash_mismatch)
-                    UpdateErrorCode.PayloadSizeMismatchError -> getString(R.string.update_error_payload_size_mismatch)
-                    UpdateErrorCode.DownloadPayloadVerificationError -> getString(R.string.update_error_download_payload_verification)
-                    UpdateErrorCode.DownloadStateInitializationError -> getString(R.string.update_error_download_state_initialization)
-                    is UpdateErrorCode.Unknown -> getString(R.string.update_error_unknown, errorCode.code)
-                }
+                val msg: String = event.errorCode.asMsg()
 
                 notifyMessage(
                     title = getString(R.string.text_update_rom_title),
@@ -134,20 +122,7 @@ class UpdateEngineService: Service() {
                 val percent = (status.progress.coerceIn(0f, 1f) * 100).roundToInt()
                 val indeterminate = status.progress <= 0f || status.progress >= 1f
 
-                val msg: String = when (status) {
-                    is UpdateStatus.Idle -> getString(R.string.update_status_idle)
-                    is UpdateStatus.CheckingForUpdate -> getString(R.string.update_status_checking_for_update)
-                    is UpdateStatus.UpdateAvailable -> getString(R.string.update_status_update_available)
-                    is UpdateStatus.Downloading -> getString(R.string.update_status_downloading, percent)
-                    is UpdateStatus.Verifying -> getString(R.string.update_status_verifying, percent)
-                    is UpdateStatus.Finalizing -> getString(R.string.update_status_finalizing)
-                    is UpdateStatus.UpdatedNeedReboot -> getString(R.string.update_status_updated_need_reboot)
-                    is UpdateStatus.ReportingErrorEvent -> getString(R.string.update_status_reporting_error_event)
-                    is UpdateStatus.AttemptingRollback -> getString(R.string.update_status_attempting_rollback)
-                    is UpdateStatus.Disabled -> getString(R.string.update_status_disabled)
-                    is UpdateStatus.CleanupPreviousUpdate -> getString(R.string.update_status_cleanup_previous_update)
-                    is UpdateStatus.Unknown -> getString(R.string.update_status_unknown, status.code)
-                }
+                val msg: String = status.asMsg()
                 if (status is UpdateStatus.UpdatedNeedReboot || status is UpdateStatus.Idle) {
                     notifyMessage(
                         title = getString(R.string.text_update_rom_title),
@@ -210,7 +185,7 @@ class UpdateEngineService: Service() {
                     }
 
                     val path = intent.getStringExtra(EXTRA_DATA_ROM_PATH) ?: ""
-                    val exists = Files.exists(path).getOrNull() ?: false
+                    val exists = path.toUri().documentFile()?.exists() ?: false
                     if (!exists) {
                         logE("rom is not exists", null,TAG)
                         notifyMessage(
@@ -229,7 +204,12 @@ class UpdateEngineService: Service() {
                          id = 2,
                          autoCancel = false,
                     )
-                    val dir = UpdateEngineClient.unzipRom(path)
+                    UpdateEngineViewModel.setUnzipping(true)
+                    val dir = try {
+                        UpdateEngineClient.unzipRomFromUri(path)
+                    } finally {
+                        UpdateEngineViewModel.setUnzipping(false)
+                    }
                     val meta = Files.list(dir).getOrNull() ?: emptyList()
 
                     if (meta.isEmpty()) {
