@@ -177,7 +177,7 @@ class UpdateEngineService: Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForegroundWithNotification()
+        tryStartForeground()
         logD("start update service", TAG)
 
         updateScope.launch {
@@ -307,6 +307,19 @@ class UpdateEngineService: Service() {
                 setShowBadge(false)
             }
             notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * 尝试提升为前台服务。
+     * 在系统重建 Service（START_STICKY）等场景下可能没有前台启动豁免，
+     * 此时 catch 异常后以普通后台 Service 继续运行。
+     */
+    private fun tryStartForeground() {
+        try {
+            startForegroundWithNotification()
+        } catch (e: Exception) {
+            logD("Cannot start foreground: ${e.message}, running as background service", TAG)
         }
     }
 
