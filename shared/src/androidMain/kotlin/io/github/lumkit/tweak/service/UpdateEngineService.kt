@@ -37,8 +37,6 @@ class UpdateEngineService: Service() {
 
         private const val CHANNEL_ID = "TweakAlphaUpdateEngineService"
         private const val NOTIFICATION_ID = 1000
-        private const val NOTIFICATION_ID_PROGRESS = 1001
-        private const val NOTIFICATION_ID_MESSAGE = 1002
 
         internal const val ACTION_UPDATE_ROM = "io.github.lumkit.tweak.service.UpdateEngineService.ACTION_UPDATE_ROM"
         internal const val ACTION_CANCEL_UPDATE = "io.github.lumkit.tweak.service.UpdateEngineService.ACTION_CANCEL_UPDATE"
@@ -174,27 +172,28 @@ class UpdateEngineService: Service() {
 
     override fun onBind(p0: Intent?): IBinder? = null
 
-    private var startCommandState = START_STICKY
+    private val startCommandState = START_STICKY
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForegroundWithNotification()
-
-        val mode = GlobalViewModel.runtimeModeState.value
-
-        if (mode != RuntimeMode.Root) {
-            startCommandState = START_NOT_STICKY
-            stopSelf()
-            return
-        }
-
         logD("start update service", TAG)
-        client.setOnReadLineListener(updateListener)
-        client.watch()
-        followJob = updateScope.launch {
-            logD("follow update status", TAG)
-            client.follow()
+
+        updateScope.launch {
+            GlobalViewModel.runtimeModeState.collect { mode ->
+                if (mode != RuntimeMode.Root) {
+                    logD("runtime mode is $mode, skip follow", TAG)
+                    return@collect
+                }
+
+                client.setOnReadLineListener(updateListener)
+                client.watch()
+                followJob = launch {
+                    logD("follow update status", TAG)
+                    client.follow()
+                }
+            }
         }
     }
 
@@ -360,7 +359,6 @@ class UpdateEngineService: Service() {
      * @param autoCancel 点击后是否自动取消
      */
     fun notifyMessage(title: String, text: String, autoCancel: Boolean = true, id: Int = 0) {
-        notificationManager.cancel(NOTIFICATION_ID_PROGRESS)
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_logo_round)
             .setContentTitle(title)

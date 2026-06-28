@@ -54,9 +54,7 @@ class BootBroadcastReceiver: BroadcastReceiver() {
         launch {
             // 如果是Root模式并且支持OTA则启动更新服务
             val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
-
             val support = UpdateEngineClient.support()
-
             logD("runtimeMode: $runtimeMode, support: $support", TAG)
 
             if (runtimeMode == RuntimeMode.Root && support) {
