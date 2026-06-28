@@ -46,6 +46,8 @@ object TweakDataStore {
     private val infoUpdateTimeSpan = intPreferencesKey("info_update_time_span")
     // 自动启动应用开关
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
+    // 是否申请过通知权限
+    private val hasRequestNotificationPermission = booleanPreferencesKey("has_request_notification_permission")
 
     /**
      * 电池信息显示类型，0 - 显示功率，1显示电流
@@ -166,6 +168,19 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[keepShellUserId] = userId
+            }
+        }
+    }
+
+    fun hasRequestNotificationPermission(): Flow<Boolean> = preferences.data.map {
+        it[hasRequestNotificationPermission] ?: false
+    }
+
+    suspend fun setHasRequestNotificationPermission() {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[hasRequestNotificationPermission] = true
+
             }
         }
     }

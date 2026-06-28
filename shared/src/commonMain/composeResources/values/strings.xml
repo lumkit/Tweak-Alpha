@@ -61,4 +61,7 @@
     <string name="text_notification">通知</string>
     <string name="text_update_notification">系统更新通知</string>
     <string name="text_update_notification_description">关闭后无法接收系统更新进度等状态</string>
+    <string name="text_notification_permission">通知权限</string>
+    <string name="text_notification_permission_denied">通知权限被拒绝，请进入应用详情手动打开权限</string>
+    <string name="text_jump_to_app_info">跳转</string>
 </resources>

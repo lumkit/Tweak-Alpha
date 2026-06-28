@@ -319,7 +319,7 @@ class UpdateEngineService: Service() {
         try {
             startForegroundWithNotification()
         } catch (e: Exception) {
-            logD("Cannot start foreground: ${e.message}, running as background service", TAG)
+            logE("Cannot start foreground: ${e.message}, running as background service", e, TAG)
         }
     }
 

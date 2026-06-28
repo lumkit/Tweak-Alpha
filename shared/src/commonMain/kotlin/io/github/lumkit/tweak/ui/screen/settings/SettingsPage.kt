@@ -1,5 +1,7 @@
 package io.github.lumkit.tweak.ui.screen.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,11 +27,16 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.layerBackdrop
+import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.component.Block
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.utils.TweakDataStore
+import io.github.lumkit.tweak.common.utils.hasNotificationPermission
 import io.github.lumkit.tweak.common.utils.isIgnoringBatteryOptimizations
+import io.github.lumkit.tweak.common.utils.jumpToAppInfo
+import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
+import io.github.lumkit.tweak.common.utils.requestNotificationPermission
 import io.github.lumkit.tweak.common.utils.restartApp
 import io.github.lumkit.tweak.common.utils.trySetIsIgnoringBatteryOptimizations
 import io.github.lumkit.tweak.model.GlobalViewModel
@@ -37,6 +44,7 @@ import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -44,6 +52,7 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.SnackbarResult
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -62,6 +71,9 @@ import tweak_alpha.shared.generated.resources.text_framework_mode_description
 import tweak_alpha.shared.generated.resources.text_framework_mode_root
 import tweak_alpha.shared.generated.resources.text_framework_mode_shizuku
 import tweak_alpha.shared.generated.resources.text_framework_mode_unknow
+import tweak_alpha.shared.generated.resources.text_jump_to_app_info
+import tweak_alpha.shared.generated.resources.text_notification_permission
+import tweak_alpha.shared.generated.resources.text_notification_permission_denied
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick_description
 import tweak_alpha.shared.generated.resources.text_settings
@@ -144,7 +156,7 @@ private fun SettingsPreferenceGroup(
         SmallTitle(title)
         Card(
             modifier = modifier.fillMaxWidth(),
-            pressFeedbackType = PressFeedbackType.Sink,
+            pressFeedbackType = PressFeedbackType.None,
             colors = CardDefaults.defaultColors(
                 color = MiuixTheme.colorScheme.surfaceContainer
             )
@@ -206,6 +218,13 @@ private fun ThemeContent() {
 private fun FrameworkContent(viewModel: SettingsViewModel) {
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.updateNotificationPermission(it)
+        scope.launch {
+            TweakDataStore.setHasRequestNotificationPermission()
+        }
+    }
+    val snackBarHostState = LocalSnackBarHostState.current
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -213,6 +232,9 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                 Lifecycle.Event.ON_RESUME -> {
                     // 更新电池优化状态
                     viewModel.updateIsIgnoringBatteryOptimizations(isIgnoringBatteryOptimizations())
+
+                    // 更新通知权限状态
+                    viewModel.updateNotificationPermission(hasNotificationPermission())
                 }
                 else -> Unit
             }
@@ -305,6 +327,37 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                     },
                 )
             }
+        }
+
+        // 通知权限
+        Block {
+            val hasNotificationPermission by viewModel.notificationPermission.collectAsStateWithLifecycle()
+            val hasRequest by TweakDataStore.hasRequestNotificationPermission().collectAsStateWithLifecycle(false)
+
+            SwitchPreference(
+                title = stringResource(Res.string.text_notification_permission),
+                checked = hasNotificationPermission,
+                onCheckedChange = {
+                    if (hasRequest && !hasNotificationPermission) {
+                        scope.launch {
+                            val result = snackBarHostState.showSnackbar(
+                                message = getString(Res.string.text_notification_permission_denied),
+                                actionLabel = getString(Res.string.text_jump_to_app_info)
+                            )
+                            logD("result: $result")
+                            when (result) {
+                                SnackbarResult.Dismissed -> Unit
+                                SnackbarResult.ActionPerformed -> {
+                                    jumpToAppInfo()
+                                }
+                            }
+                        }
+                    }
+                    if (!hasNotificationPermission()) {
+                        notificationLauncher.requestNotificationPermission()
+                    }
+                }
+            )
         }
     }
 }
