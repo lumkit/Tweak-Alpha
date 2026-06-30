@@ -63,24 +63,24 @@ class UpdateEngineClient {
             ReusableShells.execSync(cmd)
         }
 
-        suspend fun cancel() {
-            ReusableShells.execSync("update_engine_client --cancel")
+        suspend fun cancel(): String {
+            return ReusableShells.execSync("update_engine_client --cancel")
         }
 
-        suspend fun merge() {
-            ReusableShells.execSync("update_engine_client --merge")
+        suspend fun merge(): String {
+            return ReusableShells.execSync("update_engine_client --merge")
         }
 
-        suspend fun reset() {
-            ReusableShells.execSync("update_engine_client --reset_status")
+        suspend fun reset(): String {
+            return ReusableShells.execSync("update_engine_client --reset_status")
         }
 
-        suspend fun suspend() {
-            ReusableShells.execSync("update_engine_client --suspend")
+        suspend fun suspend(): String {
+            return ReusableShells.execSync("update_engine_client --suspend")
         }
 
-        suspend fun resume() {
-            ReusableShells.execSync("update_engine_client --resume")
+        suspend fun resume(): String {
+            return ReusableShells.execSync("update_engine_client --resume")
         }
     }
 
