@@ -38,6 +38,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
+import io.github.lumkit.tweak.LocalSnackBarHostState
+import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.feature.UpdateEngineClient
 import io.github.lumkit.tweak.common.feature.UpdateErrorCode
@@ -144,6 +146,7 @@ fun UpdateSystemScreen() {
     val backdrop = rememberLayerBackdropColor()
     val direction = LocalLayoutDirection.current
     val density = LocalDensity.current
+    val hostState = LocalSnackBarHostState.current
 
     val status by UpdateEngineViewModel.updateStatus.collectAsStateWithLifecycle()
     val selectedRom by UpdateEngineViewModel.selectedRom.collectAsStateWithLifecycle()
@@ -184,6 +187,59 @@ fun UpdateSystemScreen() {
                 },
             ),
         )
+    }
+
+    UpdateEngineViewModel.LoadStateLaunchEffect {
+        Watch("ACTION_CANCEL_UPDATE") {
+            when (it) {
+                is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
+                    it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->
+                        hostState.showSnackbar(msg)
+                    }
+                }
+                is BaseViewModel.LoadState.Loading -> Unit
+            }
+        }
+        Watch("ACTION_MERGE_UPDATE") {
+            when (it) {
+                is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
+                    it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->
+                        hostState.showSnackbar(msg)
+                    }
+                }
+                is BaseViewModel.LoadState.Loading -> Unit
+            }
+        }
+        Watch("ACTION_RESET_UPDATE") {
+            when (it) {
+                is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
+                    it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->
+                        hostState.showSnackbar(msg)
+                    }
+                }
+                is BaseViewModel.LoadState.Loading -> Unit
+            }
+        }
+        Watch("ACTION_SUSPEND_UPDATE") {
+            when (it) {
+                is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
+                    it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->
+                        hostState.showSnackbar(msg)
+                    }
+                }
+                is BaseViewModel.LoadState.Loading -> Unit
+            }
+        }
+        Watch("ACTION_RESUME_UPDATE") {
+            when (it) {
+                is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
+                    it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->
+                        hostState.showSnackbar(msg)
+                    }
+                }
+                is BaseViewModel.LoadState.Loading -> Unit
+            }
+        }
     }
 
     Scaffold(
@@ -329,7 +385,7 @@ private fun InfoCard() {
         modifier = Modifier.fillMaxWidth(),
         pressFeedbackType = PressFeedbackType.Sink,
         colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.background,
+            color = MiuixTheme.colorScheme.surfaceContainer,
         )
     ) {
         BasicComponent(

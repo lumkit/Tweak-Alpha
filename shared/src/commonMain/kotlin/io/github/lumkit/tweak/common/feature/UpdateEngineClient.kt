@@ -63,24 +63,29 @@ class UpdateEngineClient {
             ReusableShells.execSync(cmd)
         }
 
+        private val taskShell = ReusableShells.getInstance(
+            "update_engine_client_task",
+            redirectErrorStream = true,
+        )
+
         suspend fun cancel(): String {
-            return ReusableShells.execSync("update_engine_client --cancel")
+            return taskShell.commitCmdSync("update_engine_client --cancel")
         }
 
         suspend fun merge(): String {
-            return ReusableShells.execSync("update_engine_client --merge")
+            return taskShell.commitCmdSync("update_engine_client --merge")
         }
 
         suspend fun reset(): String {
-            return ReusableShells.execSync("update_engine_client --reset_status")
+            return taskShell.commitCmdSync("update_engine_client --reset_status")
         }
 
         suspend fun suspend(): String {
-            return ReusableShells.execSync("update_engine_client --suspend")
+            return taskShell.commitCmdSync("update_engine_client --suspend")
         }
 
         suspend fun resume(): String {
-            return ReusableShells.execSync("update_engine_client --resume")
+            return taskShell.commitCmdSync("update_engine_client --resume")
         }
     }
 
@@ -88,6 +93,7 @@ class UpdateEngineClient {
         "update_engine_client",
         redirectErrorStream = true,
     )
+
     private val updateEnginClientFilePath = "/system/bin/update_engine_client"
 
     fun interface OnReadLineListener {
@@ -145,4 +151,17 @@ class UpdateEngineClient {
 
     private fun Pair<String, String>.commandTook(): Long =
         second.trim().split("\\s+".toRegex())[2].toLongOrNull() ?: 0
+}
+
+fun String.asMsgText(): String = try {
+    logD("原始内容：$this", "update_engine_task")
+    this.substring(indexOf("'") + 1, lastIndexOf("'"))
+} catch (e: Exception) {
+    logE(e.stackTraceToString())
+    "unknown error"
+}
+
+private fun extractUpdateEngineMessage(log: String): String? {
+    val regex = Regex("""'\d+:\s*(.*?)\.'?$""")
+    return regex.find(log)?.groupValues?.get(1)?.plus(".")
 }

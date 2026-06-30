@@ -13,9 +13,8 @@ import io.ktor.util.collections.ConcurrentMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -136,8 +135,7 @@ abstract class BaseViewModel : ViewModel() {
         fun Watch(id: Any?, autoClear: Boolean = true, block: suspend (LoadState) -> Unit) {
             LaunchedEffect(this) {
                 snapshotFlow { state.value }
-                    .map { it[id] }
-                    .filterNotNull()
+                    .mapNotNull { it[id] }
                     .onEach {
                         logI("watch $id, state = $it", tag = "LoadStateWatcher")
                         block(it)

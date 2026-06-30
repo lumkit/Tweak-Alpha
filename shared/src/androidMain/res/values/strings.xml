@@ -42,4 +42,6 @@
     <string name="update_error_download_payload_verification">更新失败：更新包验证失败</string>
     <string name="update_error_download_state_initialization">更新失败：源分区数据校验不通过</string>
     <string name="update_error_unknown">更新失败：错误码 %d</string>
+
+    <string name="text_running_success">执行成功</string>
 </resources>

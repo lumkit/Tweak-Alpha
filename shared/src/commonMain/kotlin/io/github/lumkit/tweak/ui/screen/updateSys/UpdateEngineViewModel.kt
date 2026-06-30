@@ -12,8 +12,10 @@ import io.github.lumkit.tweak.common.feature.commitResetUpdate
 import io.github.lumkit.tweak.common.feature.commitResumeUpdate
 import io.github.lumkit.tweak.common.feature.commitSuspendUpdate
 import io.github.lumkit.tweak.common.utils.logD
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.coroutines.CoroutineContext
 
 object UpdateEngineViewModel: BaseViewModel() {
 
@@ -91,4 +93,12 @@ object UpdateEngineViewModel: BaseViewModel() {
     fun setSelectedRom(rom: Rom?) {
         _selectedRom.value = rom
     }
+
+    fun launchTask(
+        id: Any?,
+        context: CoroutineContext = Dispatchers.Main,
+        failed: suspend LoadStateCoroutineScope.(Throwable) -> Unit = { failure(it) },
+        complete: suspend () -> Unit = {},
+        block: suspend LoadStateCoroutineScope.() -> Unit,
+    ) = suspendLaunch(id, context, failed, complete, block)
 }

@@ -15,6 +15,7 @@ import io.github.lumkit.tweak.common.feature.UpdateEngineClient
 import io.github.lumkit.tweak.common.feature.UpdateEngineEvent
 import io.github.lumkit.tweak.common.feature.UpdateStatus
 import io.github.lumkit.tweak.common.feature.asMsg
+import io.github.lumkit.tweak.common.feature.asMsgText
 import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.documentFile
 import io.github.lumkit.tweak.common.utils.getOrNull
@@ -230,31 +231,71 @@ class UpdateEngineService: Service() {
 
             ACTION_CANCEL_UPDATE -> {
                 updateScope.launch {
-                    UpdateEngineClient.cancel()
+                    UpdateEngineViewModel.launchTask(
+                        id = "ACTION_CANCEL_UPDATE",
+                    ) {
+                        loading()
+                        UpdateEngineClient.cancel().trim().also {
+                            if (it.contains("'")) throw RuntimeException(it.asMsgText())
+                        }
+                        success(getString(R.string.text_running_success))
+                    }
                 }
             }
 
             ACTION_MERGE_UPDATE -> {
                 updateScope.launch {
-                    UpdateEngineClient.merge()
+                    UpdateEngineViewModel.launchTask(
+                        id = "ACTION_MERGE_UPDATE",
+                    ) {
+                        loading()
+                        UpdateEngineClient.merge().trim().also {
+                            if (it.contains("'")) throw RuntimeException(it.asMsgText())
+                        }
+                        success(getString(R.string.text_running_success))
+                    }
                 }
             }
 
             ACTION_RESET_UPDATE -> {
                 updateScope.launch {
-                    UpdateEngineClient.reset()
+                    UpdateEngineViewModel.launchTask(
+                        id = "ACTION_RESET_UPDATE",
+                    ) {
+                        loading()
+                        UpdateEngineClient.reset().trim().also {
+                            if (it.contains("'")) throw RuntimeException(it.asMsgText())
+                        }
+                        success(getString(R.string.text_running_success))
+                    }
                 }
             }
 
             ACTION_SUSPEND_UPDATE -> {
                 updateScope.launch {
-                    UpdateEngineClient.suspend()
+                    UpdateEngineViewModel.launchTask(
+                        id = "ACTION_SUSPEND_UPDATE",
+                    ) {
+                        loading()
+                        UpdateEngineClient.suspend().trim().also {
+                            if (it.contains("'")) throw RuntimeException(it.asMsgText())
+                        }
+                        success(getString(R.string.text_running_success))
+                    }
                 }
             }
 
             ACTION_RESUME_UPDATE -> {
                 updateScope.launch {
-                    UpdateEngineClient.resume()
+                    UpdateEngineViewModel.launchTask(
+                        id = "ACTION_RESUME_UPDATE",
+                    ) {
+                        loading()
+                        UpdateEngineClient.resume().trim().also {
+                            if (it.contains("'")) throw RuntimeException(it.asMsgText())
+                        }
+                        success(getString(R.string.text_running_success))
+                    }
                 }
             }
         }
