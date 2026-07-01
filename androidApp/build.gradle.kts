@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    id("tweak.android.application.flavors")
 }
 
 kotlin {
@@ -38,7 +39,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.lumkit.tweak.alpha"
+        applicationId = "io.github.lumkit.tweak"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
