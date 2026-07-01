@@ -2,6 +2,8 @@ package io.github.lumkit.tweak.ui.screen.updateSys
 
 import android.net.Uri
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.viewModelScope
+import io.github.lumkit.tweak.common.Const
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.feature.UpdateEngineEvent
 import io.github.lumkit.tweak.common.feature.UpdateStatus
@@ -11,11 +13,17 @@ import io.github.lumkit.tweak.common.feature.commitMergeUpdate
 import io.github.lumkit.tweak.common.feature.commitResetUpdate
 import io.github.lumkit.tweak.common.feature.commitResumeUpdate
 import io.github.lumkit.tweak.common.feature.commitSuspendUpdate
+import io.github.lumkit.tweak.common.utils.Files
+import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.common.utils.logE
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.Duration.Companion.milliseconds
 
 object UpdateEngineViewModel: BaseViewModel() {
 
@@ -55,11 +63,31 @@ object UpdateEngineViewModel: BaseViewModel() {
                 if (event.status is UpdateStatus.Idle) {
                     _updateError.value = null
                 }
+                if (event.status is UpdateStatus.UpdatedNeedReboot) {
+                    viewModelScope.launch {
+                        try {
+                            cleanWorkDir()
+                        } catch (e: Exception) {
+                            logE(e.stackTraceToString())
+                        }
+                    }
+                }
             }
             null -> Unit
         }
 
         logD("error code=${_updateError.value?.errorCode}, status=${_updateStatus.value}")
+    }
+
+    private suspend fun cleanWorkDir() {
+        // 5s后清理工作区
+        delay(5000.milliseconds)
+
+        val path = Const.Path.otaPackage
+        val list = Files.list(path).getOrNull()
+        list?.forEach {
+            Files.delete(it, true)
+        }
     }
 
     fun setUnzipping(unzipping: Boolean) {

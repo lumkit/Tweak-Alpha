@@ -2,7 +2,6 @@ package io.github.lumkit.tweak.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -11,6 +10,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import io.github.lumkit.tweak.application
+import io.github.lumkit.tweak.common.Const
+import io.github.lumkit.tweak.common.base.BaseService
 import io.github.lumkit.tweak.common.feature.UpdateEngineClient
 import io.github.lumkit.tweak.common.feature.UpdateEngineEvent
 import io.github.lumkit.tweak.common.feature.UpdateStatus
@@ -33,7 +34,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-class UpdateEngineService: Service() {
+class UpdateEngineService: BaseService() {
 
     companion object {
         private const val TAG = "UpdateEngineService"
@@ -148,8 +149,6 @@ class UpdateEngineService: Service() {
 
     override fun onBind(p0: Intent?): IBinder? = null
 
-    private val startCommandState = START_STICKY
-
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -198,6 +197,15 @@ class UpdateEngineService: Service() {
                         return@launch
                     }
 
+                    // 先清理工作区
+                    val otaPackage = Const.Path.otaPackage
+                    if (Files.exists(otaPackage).getOrNull() == true) {
+                        Files.list(otaPackage)
+                            .getOrNull()?.forEach {
+                                Files.delete(it, true)
+                            }
+                    }
+
                     // 先解压
                     notifyMessage(
                         title = getString(R.string.text_update_rom_title),
@@ -223,8 +231,8 @@ class UpdateEngineService: Service() {
                         notificationManager.cancel(NOTIFICATION_ID + 2)
                         return@launch
                     }
-                    // 开始安装
 
+                    // 开始安装
                     UpdateEngineClient.installRom(dir)
                 }
             }
@@ -300,7 +308,7 @@ class UpdateEngineService: Service() {
             }
         }
 
-        return startCommandState
+        return super.onStartCommand(intent, flags, startId)
     }
 
     override fun onDestroy() {
