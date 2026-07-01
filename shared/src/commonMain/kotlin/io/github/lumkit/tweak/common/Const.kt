@@ -6,3 +6,9 @@ expect object Const {
         val otaPackage: String
     }
 }
+
+object ConstCommon {
+    object Navigation {
+        const val ACTION_OPEN_SYSTEM_UPDATE = "ACTION_OPEN_SYSTEM_UPDATE"
+    }
+}

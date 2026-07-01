@@ -28,6 +28,8 @@ import io.github.lumkit.tweak.common.component.LiquidBottomTabs
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.feature.setupUpdateForegroundService
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
+import io.github.lumkit.tweak.model.NavigationViewModel
+import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.ui.screen.feature.FeaturePage
 import io.github.lumkit.tweak.ui.screen.info.InfoPage
 import io.github.lumkit.tweak.ui.screen.settings.SettingsPage
@@ -54,6 +56,7 @@ internal fun MainScreen(
     val backdrop = rememberLayerBackdropColor()
     val pagerState = rememberPagerState(initialPage = 1) { viewModel.pagerCount }
     val scope = rememberCoroutineScope()
+    val navigator = LocalNavigator.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         MainScreenContent(backdrop, pagerState)
@@ -65,6 +68,10 @@ internal fun MainScreen(
     }
 
     Setup()
+
+    LaunchedEffect(NavigationViewModel) {
+        NavigationViewModel.setupNavigator(navigator)
+    }
 }
 
 @Composable
