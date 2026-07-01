@@ -48,6 +48,8 @@ import io.github.lumkit.tweak.common.feature.asMsg
 import io.github.lumkit.tweak.common.utils.documentFile
 import io.github.lumkit.tweak.common.utils.formatMemorySize
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
+import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.ui.screen.feature.FeatureProvider
@@ -56,6 +58,8 @@ import io.github.lumkit.tweak.ui.screen.feature.model.Feature
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
 import io.github.lumkit.tweak.ui.theme.colorBusy
 import io.github.lumkit.tweak.ui.theme.colorSuccess
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -117,7 +121,7 @@ internal val UpdateSystemProvider = object : FeatureProvider {
             defaultState = FeatureState.ENABLED,
             rule = {
                 runCatching {
-                    UpdateEngineClient.support()
+                    UpdateEngineClient.support() && GlobalViewModel.runtimeModeState.filterNotNull().first() == RuntimeMode.Root
                 }.getOrNull() ?: false
             },
             ruleDescription = {

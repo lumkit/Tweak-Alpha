@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.common.base
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -138,7 +139,9 @@ abstract class BaseViewModel : ViewModel() {
                     .mapNotNull { it[id] }
                     .onEach {
                         logI("watch $id, state = $it", tag = "LoadStateWatcher")
-                        block(it)
+                        launch {
+                            block(it)
+                        }
                         if (autoClear) {
                             viewModel.clearLoadState(id)
                         }
@@ -149,6 +152,10 @@ abstract class BaseViewModel : ViewModel() {
 
     @Composable
     fun LoadStateLaunchEffect(builder: @Composable LoadStateWatcher.() -> Unit) {
-        builder(LoadStateWatcher(this, loadState.collectAsStateWithLifecycle()))
+        val state = loadState.collectAsStateWithLifecycle()
+        val watcher = remember {
+            LoadStateWatcher(this, state)
+        }
+        builder(watcher)
     }
 }

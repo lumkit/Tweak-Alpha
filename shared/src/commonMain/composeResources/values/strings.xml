@@ -57,7 +57,7 @@
     <string name="text_battery_ignore_optimization_white_list">电池优化忽略白名单</string>
     <string name="text_battery_ignore_optimization_white_list_description">设置后应用数据将更精准</string>
     <string name="text_system_not_supported">系统未支持</string>
-    <string name="text_feature_rule_description_update_sys">当前系统不支持此功能</string>
+    <string name="text_feature_rule_description_update_sys">当前运行环境下不支持此功能</string>
     <string name="text_notification">通知</string>
     <string name="text_update_notification">系统更新通知</string>
     <string name="text_update_notification_description">关闭后无法接收系统更新进度等状态</string>
