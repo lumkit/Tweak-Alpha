@@ -58,13 +58,38 @@ android {
             isShrinkResources = true
             isDebuggable = false
             isJniDebuggable = false
+            multiDexEnabled = false
 
             signingConfig = signingConfigs["tweakRelease"]
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "release-rules.pro"
             )
+        }
+
+        create("dict") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
+            isJniDebuggable = false
+            multiDexEnabled = false
+
+            signingConfig = signingConfigs["tweakRelease"]
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "prod-rules.pro"
+            )
+        }
+
+        debug {
+            isMinifyEnabled = false
+
+            signingConfig = signingConfigs["tweakRelease"]
         }
     }
     compileOptions {

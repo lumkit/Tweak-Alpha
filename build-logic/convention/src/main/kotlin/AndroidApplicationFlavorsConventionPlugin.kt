@@ -12,10 +12,11 @@ class AndroidApplicationFlavorsConventionPlugin : Plugin<Project> {
                     create("dev") {
                         dimension = "version"
                         applicationIdSuffix = ".alpha"
-                        versionNameSuffix = "-dev"
+                        versionNameSuffix = "-Alpha-Dev"
                     }
                     create("prod") {
                         dimension = "version"
+                        versionNameSuffix = "-Alpha"
                     }
                 }
             }
