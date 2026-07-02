@@ -16,7 +16,7 @@ enum class RuntimeMode(val user: Int) {
     /**
      * 未知模式，一般不予进入App
      */
-    Unknow(-1),
+    Unknow(Int.MAX_VALUE),
 
     /**
      * Root模式

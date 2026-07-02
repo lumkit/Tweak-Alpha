@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.nav_category
@@ -149,12 +151,17 @@ private fun RowScope.FeatureItem(
     scope: CoroutineScope,
     onClick: (route: Screen) -> Unit,
 ) {
-    val featureState = remember(runtimeMode, provider.feature) { provider.feature.availableState(runtimeMode) }
-    var enabled by remember(provider.feature) { mutableStateOf(true) }
-    val description = provider.feature.ruleDescription()
+    val feature by remember {
+        derivedStateOf {
+            provider.feature
+        }
+    }
+    val featureState = remember(runtimeMode, feature) { feature.availableState(runtimeMode) }
+    var enabled by remember(feature) { mutableStateOf(true) }
+    val description = feature.ruleDescription()
 
-    LaunchedEffect(provider.feature, featureState) {
-        val rule = provider.feature.rule()
+    LaunchedEffect(feature, featureState) {
+        val rule = feature.rule()
         val enable = featureState == FeatureState.ENABLED
         logD("FeatureItem: $rule, $enable")
 
@@ -167,9 +174,18 @@ private fun RowScope.FeatureItem(
         colors = CardDefaults.defaultColors(
             color = MiuixTheme.colorScheme.surfaceContainer
         ),
+        pressFeedbackType = if (!enabled) {
+            PressFeedbackType.None
+        } else {
+            when (featureState) {
+                FeatureState.ENABLED -> PressFeedbackType.Sink
+                FeatureState.DISABLED -> PressFeedbackType.None
+                FeatureState.HIDE -> PressFeedbackType.None
+            }
+        },
         onClick = {
             if (enabled) {
-                onClick(provider.feature.route)
+                onClick(feature.route)
             } else {
                 scope.launch {
                     description?.let { hostState.showSnackbar(it) }
@@ -188,14 +204,14 @@ private fun RowScope.FeatureItem(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    painter = painterResource(provider.feature.icon),
-                    contentDescription = stringResource(provider.feature.title),
+                    painter = painterResource(feature.icon),
+                    contentDescription = stringResource(feature.title),
                     modifier = Modifier.size(24.dp),
                     tint = MiuixTheme.colorScheme.primary,
                 )
 
                 Text(
-                    text = stringResource(provider.feature.title),
+                    text = stringResource(feature.title),
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurface,
                 )
