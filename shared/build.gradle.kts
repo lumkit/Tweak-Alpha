@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.room)
 }
 
 kotlin {
@@ -35,6 +37,7 @@ kotlin {
             implementation(projects.androidSharedNative)
             implementation(libs.shizuku.api)
             api(libs.shizuku.provider)
+            implementation(libs.androidx.room.sqlite.wrapper)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -70,6 +73,10 @@ kotlin {
             implementation(projects.backdrop)
             implementation(libs.kyant.shapes)
             implementation(libs.androidx.documentfile)
+
+            // room
+            implementation(libs.androidx.room.runtime)
+            implementation(libs.androidx.sqlite.bundled)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -77,6 +84,12 @@ kotlin {
     }
 }
 
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
+
+    add("kspAndroid", libs.androidx.room.compiler)
 }
