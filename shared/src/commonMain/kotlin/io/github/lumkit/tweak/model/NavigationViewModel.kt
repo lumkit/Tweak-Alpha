@@ -60,7 +60,7 @@ object NavigationViewModel: BaseViewModel() {
 
                     NavigationIntentTargetScreen.UpdateSystem -> {
                         val route = json.decodeFromString<Screen.UpdateSystem>(intent.screenJson)
-                        navigator.singleTopNavigate(route)
+                        navigator.singleTop(route)
                     }
 
                 }

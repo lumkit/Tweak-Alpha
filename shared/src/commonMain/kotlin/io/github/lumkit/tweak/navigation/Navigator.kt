@@ -24,15 +24,15 @@ class Navigator(val state: NavigationState){
         }
     }
 
-    fun singleTopNavigate(route: NavKey){
-        if (route in state.backStacks.keys){
-            // This is a top level route, just switch to it.
+    fun singleTop(route: NavKey) {
+        if (route in state.backStacks.keys) {
             state.topLevelRoute = route
         } else {
-            val navKeys = state.backStacks[state.topLevelRoute]
-            navKeys?.also {
-                it.removeIf { it::class == route::class }
-                it.add(route)
+            val navKeys = state.backStacks[state.topLevelRoute] ?: return
+            // 比较栈顶页面的类型，避免同类型页面重复添加
+            val lastRoute = navKeys.lastOrNull()
+            if (lastRoute == null || lastRoute::class != route::class) {
+                navKeys.add(route)
             }
         }
     }

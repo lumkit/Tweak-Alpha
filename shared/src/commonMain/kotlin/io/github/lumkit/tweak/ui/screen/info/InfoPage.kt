@@ -121,7 +121,11 @@ fun InfoPage() {
                     .padding(padding)
                     .fillMaxSize()
                     .overScrollVertical()
-                    .blur(blurDp)
+                    .then(if (blurDp > 0.dp) {
+                        Modifier.blur(blurDp)
+                    } else {
+                        Modifier
+                    })
                     .nestedScroll(scrollBehavior.nestedScrollConnection),
                 contentPadding = PaddingValues(
                     start = 16.dp,
@@ -154,31 +158,33 @@ fun InfoPage() {
             animationSpec = tween(durationMillis = 400)
         )
 
-        Box(
-            modifier = Modifier.fillMaxSize()
-                .then(
-                    if (!loadState) {
-                        Modifier.clickable(
-                            indication = null,
-                            interactionSource = null,
-                        ) {}
-                    } else {
-                        Modifier
-                    }
+        if (alpha > 0f) {
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .then(
+                        if (!loadState) {
+                            Modifier.clickable(
+                                indication = null,
+                                interactionSource = null,
+                            ) {}
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .alpha(alpha)
+                    .background(
+                        color = if (backdropEffectSupported) {
+                            Color.Transparent
+                        } else {
+                            MiuixTheme.colorScheme.onSurface
+                        }
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                InfiniteProgressIndicator(
+                    modifier = Modifier.size(24.dp)
                 )
-                .alpha(alpha)
-                .background(
-                    color = if (backdropEffectSupported) {
-                        Color.Transparent
-                    } else {
-                        MiuixTheme.colorScheme.onSurface
-                    }
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            InfiniteProgressIndicator(
-                modifier = Modifier.size(24.dp)
-            )
+            }
         }
     }
 }
