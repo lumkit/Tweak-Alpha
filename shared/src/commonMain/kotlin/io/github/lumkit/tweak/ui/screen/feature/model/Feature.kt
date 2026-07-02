@@ -41,5 +41,5 @@ fun Feature.availableState(
 private fun Capability.available(
     runtime: RuntimeMode?
 ): Boolean {
-    return (runtime?.user ?: -1) >= this.runtime.user
+    return (runtime?.user ?: Int.MAX_VALUE) <= this.runtime.user
 }

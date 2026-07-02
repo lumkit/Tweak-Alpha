@@ -3,8 +3,10 @@ package io.github.lumkit.tweak.ui.screen.feature
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureCategory
+import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordingProvider
 import io.github.lumkit.tweak.ui.screen.updateSys.UpdateSystemProvider
 import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.text_feature_performance
 import tweak_alpha.shared.generated.resources.text_feature_system
 
 object FeatureRegistry {
@@ -27,6 +29,17 @@ object FeatureRegistry {
                 title = Res.string.text_feature_system,
                 features = setOf(
                     UpdateSystemProvider,
+                )
+            )
+        )
+
+        // 设备性能
+        registerProvider(
+            FeatureCategory(
+            key = "performance",
+                title = Res.string.text_feature_performance,
+                features = setOf(
+                    FpsRecordingProvider,
                 )
             )
         )

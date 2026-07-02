@@ -24,16 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
@@ -58,7 +55,6 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.nav_category
@@ -102,7 +98,8 @@ fun FeaturePage() {
                 end = 16.dp,
                 top = it.calculateTopPadding() + 16.dp,
                 bottom = it.calculateBottomPadding() + NavigationBarHeight + 28.dp,
-            )
+            ),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(providers) { category ->
                 FeatureCategoryItem(category, runtimeMode, hostState, scope, navigator::navigate)
@@ -152,30 +149,21 @@ private fun RowScope.FeatureItem(
     scope: CoroutineScope,
     onClick: (route: Screen) -> Unit,
 ) {
-    val density = LocalDensity.current
-    val featureState = remember(runtimeMode) { provider.feature.availableState(runtimeMode) }
-    var enabled by remember { mutableStateOf(true) }
-    val pressFeedbackType = remember(featureState, enabled) {
-        if (!enabled) {
-            PressFeedbackType.None
-        } else {
-            when (featureState) {
-                FeatureState.ENABLED -> PressFeedbackType.Sink
-                FeatureState.DISABLED -> PressFeedbackType.None
-                FeatureState.HIDE -> PressFeedbackType.None
-            }
-        }
-    }
+    val featureState = remember(runtimeMode, provider.feature) { provider.feature.availableState(runtimeMode) }
+    var enabled by remember(provider.feature) { mutableStateOf(true) }
     val description = provider.feature.ruleDescription()
 
     LaunchedEffect(provider.feature, featureState) {
-        enabled = provider.feature.rule() && featureState == FeatureState.ENABLED
+        val rule = provider.feature.rule()
+        val enable = featureState == FeatureState.ENABLED
+        logD("FeatureItem: $rule, $enable")
+
+        enabled = rule && enable
     }
 
     Card(
         modifier = Modifier.fillMaxWidth()
             .weight(1f),
-        pressFeedbackType = pressFeedbackType,
         colors = CardDefaults.defaultColors(
             color = MiuixTheme.colorScheme.surfaceContainer
         ),
@@ -189,13 +177,9 @@ private fun RowScope.FeatureItem(
             }
         },
     ) {
-        var size by remember { mutableStateOf(DpSize.Zero) }
 
         Box(
-            modifier = Modifier.fillMaxWidth()
-                .onSizeChanged {
-                    size = with(density) { it.toSize().toDpSize() }
-                },
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
                 modifier = Modifier.padding(16.dp)
