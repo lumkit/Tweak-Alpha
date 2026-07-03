@@ -79,4 +79,19 @@
     <string name="text_update_resume">继续更新</string>
     <string name="text_update_merge">合并更新</string>
     <string name="text_update_reset">重置更新</string>
+    <string name="text_fps_recording">帧率记录</string>
+    <string name="text_fps_recording_description">记录App运行时设备的各种状态</string>
+    <string name="text_feature_performance">设备性能</string>
+    <string name="text_device_type_phone">手机</string>
+    <string name="text_device_type_tablet">平板</string>
+    <string name="text_device_type_tv">电视</string>
+    <string name="text_device_type_watch">智能手表</string>
+    <string name="text_device_type_autautomotive">车机</string>
+    <string name="text_device_type_emulator">模拟器</string>
+    <string name="text_device_type_unknown">未知</string>
+    <string name="text_platform_type">设备类型</string>
+    <string name="text_platform_model">设备型号</string>
+    <string name="text_platform_version">系统版本</string>
+    <string name="text_record_table">记录表</string>
+    <string name="text_record_table_description">暂无记录</string>
 </resources>

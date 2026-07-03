@@ -2,10 +2,12 @@ package io.github.lumkit.tweak.common.utils
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.PowerManager
 import android.os.Process
@@ -38,6 +40,9 @@ actual fun restartApp() {
 
 actual val SDK_INT: Int
     get() = Build.VERSION.SDK_INT
+
+actual val SDK_RELEASE: String
+    get() = Build.VERSION.RELEASE
 
 actual val BOARD: String
     get() = Build.BOARD
@@ -85,3 +90,86 @@ actual fun jumpToAppInfo() {
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     application.startActivity(intent)
 }
+
+fun Context.isTablet(): Boolean {
+    return resources.configuration.smallestScreenWidthDp >= 600
+}
+
+fun Context.isPhone(): Boolean {
+    return !isTablet()
+}
+
+fun isEmulator(): Boolean {
+    return Build.FINGERPRINT.startsWith("generic")
+            || Build.FINGERPRINT.startsWith("unknown")
+            || Build.MODEL.contains("google_sdk", true)
+            || Build.MODEL.contains("Emulator", true)
+            || Build.MODEL.contains("Android SDK built for", true)
+            || Build.MANUFACTURER.contains("Genymotion", true)
+            || Build.BRAND.startsWith("generic")
+            || Build.DEVICE.startsWith("generic")
+            || Build.PRODUCT.contains("sdk", true)
+            || Build.PRODUCT.contains("emulator", true)
+            || Build.HARDWARE.contains("goldfish", true)
+            || Build.HARDWARE.contains("ranchu", true)
+            || Build.HARDWARE.contains("cutf_cvm", true)
+}
+
+actual fun getDeviceType(): DeviceType {
+    // 模拟器优先判断
+    if (isEmulator()) {
+        return DeviceType.EMULATOR
+    }
+
+    val pm = application.packageManager
+
+    // Android TV / Google TV
+    if (pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+        pm.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
+    ) {
+        return DeviceType.TV
+    }
+
+    // Wear OS
+    if (pm.hasSystemFeature(PackageManager.FEATURE_WATCH)) {
+        return DeviceType.WATCH
+    }
+
+    // Android Automotive
+    if (pm.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
+        return DeviceType.AUTOMOTIVE
+    }
+
+    // UiMode 作为补充判断
+    val uiModeManager = application.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+    when (uiModeManager?.currentModeType) {
+        Configuration.UI_MODE_TYPE_TELEVISION -> return DeviceType.TV
+        Configuration.UI_MODE_TYPE_WATCH -> return DeviceType.WATCH
+        Configuration.UI_MODE_TYPE_CAR -> return DeviceType.AUTOMOTIVE
+    }
+
+    // Phone / Tablet
+    return if (application.resources.configuration.smallestScreenWidthDp >= 600) {
+        DeviceType.TABLET
+    } else {
+        DeviceType.PHONE
+    }
+}
+
+actual suspend fun getDeviceModel(): String {
+    val marketName = KernelProps.getSystemProp("ro.product.marketname")
+    return if (marketName.isBlank()) {
+        "$BRAND $MODEL"
+    } else {
+        if (marketName.contains(BRAND, true)) {
+            marketName
+        } else {
+            "$BRAND $marketName"
+        }
+    }
+}
+
+actual val BRAND: String
+    get() = Build.BRAND
+actual val MODEL: String
+    get() = Build.MODEL

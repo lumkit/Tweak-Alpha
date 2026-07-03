@@ -15,4 +15,7 @@ sealed class Screen: NavKey {
     @Serializable
     data object UpdateSystem: Screen()
 
+    @Serializable
+    data object FpsRecord: Screen()
+
 }

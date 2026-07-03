@@ -54,6 +54,10 @@ object TweakDataStore {
      */
     private val infoBatteryDisplayType = intPreferencesKey("info_battery_display_type")
 
+    // FPS 悬浮窗位置
+    private val fpsOverlayXKey = intPreferencesKey("fps_overlay_x")
+    private val fpsOverlayYKey = intPreferencesKey("fps_overlay_y")
+
     fun themeModeFlow(): Flow<ColorSchemeMode> = preferences.data.map {
         it[themeModeKey] ?: 0
     }.map {
@@ -181,6 +185,26 @@ object TweakDataStore {
             it.toMutablePreferences().also { preferences ->
                 preferences[hasRequestNotificationPermission] = true
 
+            }
+        }
+    }
+
+    fun fpsOverlayPositionFlow(): Flow<Pair<Int, Int>?> = preferences.data.map {
+        val x = it[fpsOverlayXKey]
+        val y = it[fpsOverlayYKey]
+        if (x != null && y != null) x to y else null
+    }
+
+    val fpsOverlayPosition: Pair<Int, Int>?
+        get() = runBlocking {
+            fpsOverlayPositionFlow().firstOrNull()
+        }
+
+    suspend fun setFpsOverlayPosition(x: Int, y: Int) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[fpsOverlayXKey] = x
+                preferences[fpsOverlayYKey] = y
             }
         }
     }

@@ -40,11 +40,7 @@ import kotlin.math.roundToInt
 @Composable
 @Preview
 fun App() {
-    val themeViewModel = viewModel { ThemeViewModel() }
-
-    TweakTheme(
-        viewModel = themeViewModel,
-    ) {
+    ContextContent {
         val backgroundColor = MiuixTheme.colorScheme.surface
 
         GlobalCompositionProvider {
@@ -65,6 +61,19 @@ fun App() {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ContextContent(
+    content: @Composable () -> Unit
+) {
+    val themeViewModel = viewModel { ThemeViewModel() }
+
+    TweakTheme(
+        viewModel = themeViewModel,
+    ) {
+        content()
     }
 }
 

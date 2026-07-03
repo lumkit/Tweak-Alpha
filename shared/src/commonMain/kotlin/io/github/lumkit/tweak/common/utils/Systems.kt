@@ -1,6 +1,16 @@
 package io.github.lumkit.tweak.common.utils
 
 import androidx.activity.compose.ManagedActivityResultLauncher
+import androidx.compose.runtime.Immutable
+import org.jetbrains.compose.resources.StringResource
+import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.text_device_type_autautomotive
+import tweak_alpha.shared.generated.resources.text_device_type_emulator
+import tweak_alpha.shared.generated.resources.text_device_type_phone
+import tweak_alpha.shared.generated.resources.text_device_type_tablet
+import tweak_alpha.shared.generated.resources.text_device_type_tv
+import tweak_alpha.shared.generated.resources.text_device_type_unknown
+import tweak_alpha.shared.generated.resources.text_device_type_watch
 
 expect fun isDebugBuild(): Boolean
 
@@ -8,7 +18,13 @@ expect fun restartApp()
 
 expect val SDK_INT: Int
 
+expect val SDK_RELEASE: String
+
 expect val BOARD: String
+
+expect val BRAND: String
+
+expect val MODEL: String
 
 /**
 * 获取应用是否忽略电池优化
@@ -39,3 +55,29 @@ expect fun areNotificationsEnabled(): Boolean
  * 跳转至App详情
  */
 expect fun jumpToAppInfo()
+
+@Immutable
+enum class DeviceType {
+    PHONE,
+    TABLET,
+    TV,
+    WATCH,
+    AUTOMOTIVE,
+    EMULATOR,
+    UNKNOWN
+}
+
+val DeviceType.displayNameResource: StringResource
+    get() = when (this) {
+        DeviceType.PHONE -> Res.string.text_device_type_phone
+        DeviceType.TABLET -> Res.string.text_device_type_tablet
+        DeviceType.TV -> Res.string.text_device_type_tv
+        DeviceType.WATCH -> Res.string.text_device_type_watch
+        DeviceType.AUTOMOTIVE -> Res.string.text_device_type_autautomotive
+        DeviceType.EMULATOR -> Res.string.text_device_type_emulator
+        DeviceType.UNKNOWN -> Res.string.text_device_type_unknown
+    }
+
+expect fun getDeviceType(): DeviceType
+
+expect suspend fun getDeviceModel(): String
