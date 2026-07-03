@@ -15,6 +15,7 @@ import io.github.lumkit.tweak.common.utils.formatCurrent
 import io.github.lumkit.tweak.common.utils.formatMemorySize
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.formatVoltage
+import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
 import kotlinx.coroutines.async
@@ -34,6 +35,11 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+
+/**
+ * 判断应用是否处于前台
+ */
+expect fun isAppInForeground(): Boolean
 
 object DeviceInfoViewModel : BaseViewModel() {
 
@@ -150,6 +156,12 @@ object DeviceInfoViewModel : BaseViewModel() {
             _gpuSupported.value = GpuUtils.canReadGpuInfo()
 
             while (isActive) {
+                // 后台时跳过采样，仅等待
+                if (!isAppInForeground()) {
+                    delay(1000.milliseconds)
+                    continue
+                }
+
                 // 更新CPU信息
                 val tag = Clock.System.now().toEpochMilliseconds()
                 updateCpuInfo()
@@ -159,6 +171,9 @@ object DeviceInfoViewModel : BaseViewModel() {
                 updateGpuInfo()
                 // 更新更多信息
                 updateMoreInfo()
+
+                val loadingTime = Clock.System.now().toEpochMilliseconds() - tag
+                logD("loadingTime: $loadingTime", "DeviceInfoViewModel")
 
                 _loadingState.value = true
                 delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
