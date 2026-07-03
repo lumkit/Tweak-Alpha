@@ -132,7 +132,7 @@ class FpsRecordService: BaseService() {
         val dm = resources.displayMetrics
         val screenWidth = dm.widthPixels
         val screenHeight = dm.heightPixels
-        val bottomMarginPx = (200 * dm.density + 0.5f).toInt()
+        val bottomMarginPx = (175 * dm.density + 0.5f).toInt()
         return screenWidth to (screenHeight - bottomMarginPx)
     }
 }
