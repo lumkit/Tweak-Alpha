@@ -180,9 +180,5 @@ actual val packageName: String
 
 actual fun startKeepAliveService(isForegroundService: Boolean) {
     val intent = Intent(application, KeepAliveService::class.java)
-    if (isForegroundService) {
-        application.startSmartService(intent)
-    } else {
-        application.startService(intent)
-    }
+    application.startService(intent)
 }
