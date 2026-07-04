@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.ui.screen.fpsRecord
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -29,7 +30,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.ColorFilter
@@ -41,7 +44,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
@@ -116,9 +118,8 @@ internal val FpsRecordingProvider = object : FeatureProvider {
 }
 
 @Composable
-private fun FpsRecordContent(
-    viewModel: FpsRecordViewModel = viewModel { FpsRecordViewModel() }
-) {
+private fun FpsRecordContent() {
+    val viewModel = FpsRecordViewModel
     val scrollBehavior = MiuixScrollBehavior()
     val navigator = LocalNavigator.current
     val backdrop = rememberLayerBackdropColor()
@@ -126,6 +127,7 @@ private fun FpsRecordContent(
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val density = LocalDensity.current
     var floatActionBarHeight by remember { mutableStateOf(0.dp) }
+    val recordingState by FpsRecordServiceViewModel.isRecordingState.collectAsStateWithLifecycle()
 
     // 悬浮窗权限申请：有权限直接显示，无权限跳转设置页，返回后自动检查
     val requestOverlay = rememberRequestOverlayPermission {
@@ -163,10 +165,16 @@ private fun FpsRecordContent(
                     modifier = Modifier.padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    val addAlpha by animateFloatAsState(targetValue = if (recordingState) .31f else 1f)
+                    val addRotation by animateFloatAsState(targetValue = if (recordingState) 45f else 0f)
+
                     IconButton(
                         onClick = {
                             requestOverlay()
-                        }
+                        },
+                        enabled = !recordingState,
+                        modifier = Modifier.alpha(addAlpha)
+                            .rotate(addRotation)
                     ) {
                         Icon(MiuixIcons.Add, contentDescription = null)
                     }

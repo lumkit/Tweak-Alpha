@@ -81,3 +81,7 @@ val DeviceType.displayNameResource: StringResource
 expect fun getDeviceType(): DeviceType
 
 expect suspend fun getDeviceModel(): String
+
+expect val packageName: String
+
+expect fun startKeepAliveService(isForegroundService: Boolean)

@@ -25,25 +25,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
 import io.github.lumkit.tweak.ContextContent
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.base.BaseService
-import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
 import io.github.lumkit.tweak.common.utils.SnapToEdgeTouchProvider
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordServiceViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -52,7 +46,6 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.milliseconds
 
 class FpsRecordService: BaseService() {
 
@@ -137,48 +130,10 @@ class FpsRecordService: BaseService() {
     }
 }
 
-class FpsRecordViewModel: BaseViewModel() {
-
-    private val _isExpandedState = MutableStateFlow(false)
-    val isExpandedState = _isExpandedState.asStateFlow()
-
-    private val _isRecordingState = MutableStateFlow(false)
-    val isRecordingState = _isRecordingState.asStateFlow()
-
-    private var resumeExpandedJob: Job? = null
-    fun onDragEnd() {
-        resumeExpandedJob?.cancel()
-        resumeExpandedJob = viewModelScope.launch {
-            _isExpandedState.value = true
-            delay(5000.milliseconds)
-            _isExpandedState.value = false
-        }
-    }
-
-    fun startRecord() = suspendLaunch(
-        id = "startRecord"
-    ) {
-        loading()
-
-
-        _isRecordingState.value = true
-        success()
-    }
-
-    fun stopRecord() = suspendLaunch(
-        id = "stopRecord"
-    ) {
-        loading()
-
-        _isRecordingState.value = false
-        success()
-    }
-}
-
 @Composable
-private fun ComposeOverlayHelper.FpsRecordContent(
-    viewModel: FpsRecordViewModel = viewModel{ FpsRecordViewModel() }
-) {
+private fun ComposeOverlayHelper.FpsRecordContent() {
+    val viewModel = FpsRecordServiceViewModel
+
     DisposableEffect(viewModel) {
         // 添加onDrag监听器
 
@@ -188,10 +143,7 @@ private fun ComposeOverlayHelper.FpsRecordContent(
         }
     }
 
-    val expandedState by viewModel.isExpandedState.collectAsStateWithLifecycle()
     val recordingState by viewModel.isRecordingState.collectAsStateWithLifecycle()
-
-
 
     ContextContent {
         Row(

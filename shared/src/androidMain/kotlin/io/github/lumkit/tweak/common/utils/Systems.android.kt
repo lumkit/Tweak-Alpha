@@ -18,6 +18,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import io.github.lumkit.tweak.application
+import io.github.lumkit.tweak.service.KeepAliveService
 import kotlin.system.exitProcess
 
 actual fun isDebugBuild(): Boolean {
@@ -173,3 +174,15 @@ actual val BRAND: String
     get() = Build.BRAND
 actual val MODEL: String
     get() = Build.MODEL
+
+actual val packageName: String
+    get() = application.packageName
+
+actual fun startKeepAliveService(isForegroundService: Boolean) {
+    val intent = Intent(application, KeepAliveService::class.java)
+    if (isForegroundService) {
+        application.startSmartService(intent)
+    } else {
+        application.startService(intent)
+    }
+}

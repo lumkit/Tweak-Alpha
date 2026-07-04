@@ -44,4 +44,5 @@
     <string name="update_error_unknown">更新失败：错误码 %d</string>
 
     <string name="text_running_success">执行成功</string>
+    <string name="accessibility_service_description">用于帧率记录等高级功能</string>
 </resources>

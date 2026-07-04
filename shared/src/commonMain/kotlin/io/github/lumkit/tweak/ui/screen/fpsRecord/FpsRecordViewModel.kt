@@ -18,18 +18,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import org.jetbrains.compose.resources.getString
 
-class FpsRecordViewModel(
-    private val repository: FpsRecordRepository = FpsRecordRepository()
-) : BaseViewModel() {
+object FpsRecordViewModel : BaseViewModel() {
 
-    companion object {
-        private const val ID_CREATE_SESSION = "create_session"
-        private const val ID_RECORD_METRIC = "record_metric"
-        private const val ID_RECORD_METRICS = "record_metrics"
-        private const val ID_LOAD_METRICS = "load_metrics"
-        private const val ID_SOFT_DELETE = "soft_delete_session"
-        private const val ID_DELETE = "delete_session"
-    }
+    private const val ID_CREATE_SESSION = "create_session"
+    private const val ID_RECORD_METRIC = "record_metric"
+    private const val ID_RECORD_METRICS = "record_metrics"
+    private const val ID_LOAD_METRICS = "load_metrics"
+    private const val ID_SOFT_DELETE = "soft_delete_session"
+    private const val ID_DELETE = "delete_session"
+
+    private val repository: FpsRecordRepository = FpsRecordRepository()
 
     @Immutable
     data class PlatformInfo(
