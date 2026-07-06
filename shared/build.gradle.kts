@@ -37,7 +37,6 @@ kotlin {
             implementation(projects.androidSharedNative)
             implementation(libs.shizuku.api)
             api(libs.shizuku.provider)
-            implementation(libs.androidx.room.sqlite.wrapper)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
