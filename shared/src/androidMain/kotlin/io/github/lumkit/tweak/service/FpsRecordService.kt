@@ -35,7 +35,6 @@ import io.github.lumkit.tweak.ContextContent
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.base.BaseService
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
-import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
 import io.github.lumkit.tweak.common.utils.FpsUtils
 import io.github.lumkit.tweak.common.utils.SnapToEdgeTouchProvider
 import io.github.lumkit.tweak.common.utils.TweakDataStore
@@ -147,7 +146,7 @@ private fun ComposeOverlayHelper.FpsRecordContent() {
 
     LaunchedEffect(Unit) {
         while (isActive) {
-            currentFps = "%d".format(FpsUtils.getCurrentFps(ForegroundAppMonitor.currentForegroundPackage).roundToInt())
+            currentFps = "%d".format(FpsUtils.getCurrentFps().roundToInt())
             delay(1000.milliseconds)
         }
     }

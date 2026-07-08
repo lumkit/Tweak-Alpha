@@ -241,7 +241,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
             val timestamp = Clock.System.now().toEpochMilliseconds()
 
             val fpsDeferred = async {
-                val fps = FpsUtils.getCurrentFps(ForegroundAppMonitor.currentForegroundPackage)
+                val fps = FpsUtils.getCurrentFps()
                 _currentFpsState.value = "%d".format(fps.roundToInt())
                 FpsSample(
                     fps = fps.toDouble(),
