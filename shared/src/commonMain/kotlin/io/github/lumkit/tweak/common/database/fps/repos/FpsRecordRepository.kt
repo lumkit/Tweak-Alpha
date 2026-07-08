@@ -3,13 +3,18 @@ package io.github.lumkit.tweak.common.database.fps.repos
 import io.github.lumkit.tweak.common.database.fps.FpsRecordDatabase
 import io.github.lumkit.tweak.common.database.fps.table.FpsMetricEntity
 import io.github.lumkit.tweak.common.database.fps.table.FpsNoteSessionEntity
+import io.github.lumkit.tweak.common.database.fps.table.FpsSessionNote
 import io.github.lumkit.tweak.common.utils.getDatabaseBuilder
 import kotlinx.coroutines.flow.Flow
 
 class FpsRecordRepository {
 
-    private val database by lazy {
-        getDatabaseBuilder<FpsRecordDatabase>("fps_record.db").build()
+    private val database get() = Companion.database
+
+    companion object {
+        private val database by lazy {
+            getDatabaseBuilder<FpsRecordDatabase>("fps_record.db").build()
+        }
     }
 
     private val dao get() = database.recordDao()
@@ -32,6 +37,14 @@ class FpsRecordRepository {
     /** 查询所有未删除的会话（响应式） */
     fun querySessions(): Flow<List<FpsNoteSessionEntity>> {
         return dao.querySessions()
+    }
+
+    fun querySessionNotes(): Flow<List<FpsSessionNote>> {
+        return dao.querySessionNotes()
+    }
+
+    suspend fun finishSession(sessionId: Long) {
+        dao.finishSession(sessionId)
     }
 
     /** 查询指定会话的采样记录 */

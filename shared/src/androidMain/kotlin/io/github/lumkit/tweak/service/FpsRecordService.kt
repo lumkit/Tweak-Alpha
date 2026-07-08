@@ -17,8 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,12 +35,17 @@ import io.github.lumkit.tweak.ContextContent
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.base.BaseService
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
+import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
+import io.github.lumkit.tweak.common.utils.FpsUtils
 import io.github.lumkit.tweak.common.utils.SnapToEdgeTouchProvider
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordServiceViewModel
+import io.github.lumkit.tweak.ui.theme.colorBusy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -46,6 +54,7 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
 class FpsRecordService: BaseService() {
 
@@ -133,17 +142,15 @@ class FpsRecordService: BaseService() {
 @Composable
 private fun ComposeOverlayHelper.FpsRecordContent() {
     val viewModel = FpsRecordServiceViewModel
+    val recordingState by viewModel.isRecordingState.collectAsStateWithLifecycle()
+    var currentFps by remember { mutableStateOf("") }
 
-    DisposableEffect(viewModel) {
-        // 添加onDrag监听器
-
-        onDispose {
-            // 移除onDrag编辑器
-
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            currentFps = "%d".format(FpsUtils.getCurrentFps(ForegroundAppMonitor.currentForegroundPackage).roundToInt())
+            delay(1000.milliseconds)
         }
     }
-
-    val recordingState by viewModel.isRecordingState.collectAsStateWithLifecycle()
 
     ContextContent {
         Row(
@@ -189,9 +196,15 @@ private fun ComposeOverlayHelper.FpsRecordContent() {
                         Box(
                             modifier = Modifier.fillMaxSize()
                                 .clip(CircleShape)
-                                .background(MiuixTheme.colorScheme.error)
-
-                        )
+                                .background(MiuixTheme.colorScheme.error),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = currentFps,
+                                style = MiuixTheme.textStyles.footnote2,
+                                color = MiuixTheme.colorScheme.background
+                            )
+                        }
                     }
                 }
             }
@@ -243,15 +256,28 @@ private fun PreferenceContent(helper: ComposeOverlayHelper) {
 
 @Composable
 private fun ClockContent() {
+    val timeText by FpsRecordServiceViewModel.elapsedTimeText.collectAsStateWithLifecycle()
+    val currentFps by FpsRecordServiceViewModel.currentFpsState.collectAsStateWithLifecycle()
+    val isSamplingPaused by FpsRecordServiceViewModel.isSamplingPaused.collectAsStateWithLifecycle()
+
     Row(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Spacer(modifier = Modifier.width(16.dp))
 
         Text(
-            text = "00:00",
-            style = MiuixTheme.textStyles.footnote1,
-            color = MiuixTheme.colorScheme.background
+            text = buildString {
+                append("FPS: $currentFps\n")
+                append(timeText)
+            },
+            style = MiuixTheme.textStyles.footnote2,
+            color = if (isSamplingPaused) {
+                colorBusy
+            } else {
+                MiuixTheme.colorScheme.background
+            }
         )
+
+        Spacer(modifier = Modifier.width(10.dp))
     }
 }

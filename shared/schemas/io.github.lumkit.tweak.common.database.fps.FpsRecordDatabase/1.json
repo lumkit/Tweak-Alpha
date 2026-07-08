@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "0875a45b08efdbcc9e3acb1a39b4c647",
+    "identityHash": "94f6214b55cc6354509ff27471ab48f9",
     "entities": [
       {
         "tableName": "fps_note_session",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `packageName` TEXT NOT NULL, `appName` TEXT NOT NULL, `iconPath` TEXT, `recordingTime` INTEGER NOT NULL, `deviceModel` TEXT NOT NULL, `socJson` TEXT, `platformName` TEXT NOT NULL, `note` TEXT, `delete` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `packageName` TEXT NOT NULL, `appName` TEXT NOT NULL, `iconPath` TEXT, `recordingTime` INTEGER NOT NULL, `deviceModel` TEXT NOT NULL, `socJson` TEXT, `platformName` TEXT NOT NULL, `note` TEXT, `isRecordEnd` INTEGER NOT NULL, `delete` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -60,6 +60,12 @@
             "affinity": "TEXT"
           },
           {
+            "fieldPath": "isRecordEnd",
+            "columnName": "isRecordEnd",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
             "fieldPath": "delete",
             "columnName": "delete",
             "affinity": "INTEGER",
@@ -75,7 +81,7 @@
       },
       {
         "tableName": "fps_metric",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `fps` REAL NOT NULL, `batteryTemperature` REAL NOT NULL, `batteryLevel` REAL NOT NULL, `batteryCurrent` INTEGER NOT NULL, `cpuLoad` REAL NOT NULL, `cpuCurrentFreq` INTEGER NOT NULL, `cpuCurrentCycles` INTEGER NOT NULL, `gpuLoad` REAL, `gpuCurrentFreq` INTEGER, `frameTime` INTEGER NOT NULL, `memoryFreq` INTEGER NOT NULL, `coreTemperature` REAL NOT NULL, `thread` TEXT, `recordingTime` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `fps` REAL NOT NULL, `batteryTemperature` REAL NOT NULL, `batteryLevel` REAL NOT NULL, `batteryCurrent` INTEGER NOT NULL, `batteryVoltage` INTEGER NOT NULL, `cpuLoad` TEXT NOT NULL, `cpuCurrentFreq` TEXT NOT NULL, `cpuCurrentCycles` TEXT NOT NULL, `gpuLoad` REAL, `gpuCurrentFreq` INTEGER, `frameTime` INTEGER NOT NULL, `memoryFreq` INTEGER, `coreTemperature` REAL NOT NULL, `thread` TEXT, `recordingTime` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -120,21 +126,27 @@
             "notNull": true
           },
           {
+            "fieldPath": "batteryVoltage",
+            "columnName": "batteryVoltage",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
             "fieldPath": "cpuLoad",
             "columnName": "cpuLoad",
-            "affinity": "REAL",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
             "fieldPath": "cpuCurrentFreq",
             "columnName": "cpuCurrentFreq",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
             "fieldPath": "cpuCurrentCycles",
             "columnName": "cpuCurrentCycles",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -156,8 +168,7 @@
           {
             "fieldPath": "memoryFreq",
             "columnName": "memoryFreq",
-            "affinity": "INTEGER",
-            "notNull": true
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "coreTemperature",
@@ -208,7 +219,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0875a45b08efdbcc9e3acb1a39b4c647')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '94f6214b55cc6354509ff27471ab48f9')"
     ]
   }
 }

@@ -28,6 +28,7 @@ import io.github.lumkit.tweak.navigation.Navigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.navigation.rememberNavigationState
 import io.github.lumkit.tweak.ui.screen.feature.FeatureRegistry
+import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordDetailScreen
 import io.github.lumkit.tweak.ui.screen.main.MainScreen
 import io.github.lumkit.tweak.ui.screen.splash.SplashScreen
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -117,6 +118,10 @@ private fun AppRoute(
                 entry(featureProvider.feature.route) {
                     featureProvider.Content()
                 }
+            }
+
+            entry<Screen.FpsRecordDetail> {
+                FpsRecordDetailScreen(it.id)
             }
         }
     }

@@ -94,4 +94,9 @@
     <string name="text_platform_version">系统版本</string>
     <string name="text_record_table">记录表</string>
     <string name="text_record_table_description">暂无记录</string>
+    <string name="text_record_fail_not_find_app_in_helper">录制失败：不支持的应用</string>
+    <string name="text_record_fail_time_is_too_short">录制失败：时间不足以帧率采样</string>
+    <string name="text_record_finished">录制结束</string>
+    <string name="text_recording_duration">时长：</string>
+    <string name="text_recording_avg">(平均)</string>
 </resources>

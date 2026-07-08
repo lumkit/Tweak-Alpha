@@ -7,7 +7,6 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -49,8 +48,6 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
 import io.github.lumkit.tweak.common.component.TopBar
-import io.github.lumkit.tweak.common.database.fps.table.FpsNoteSessionEntity
-import io.github.lumkit.tweak.common.utils.AppsHelper
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
 import io.github.lumkit.tweak.navigation.LocalNavigator
@@ -62,6 +59,7 @@ import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -75,6 +73,7 @@ import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -92,6 +91,8 @@ import tweak_alpha.shared.generated.resources.text_platform_type
 import tweak_alpha.shared.generated.resources.text_platform_version
 import tweak_alpha.shared.generated.resources.text_record_table
 import tweak_alpha.shared.generated.resources.text_record_table_description
+import tweak_alpha.shared.generated.resources.text_recording_avg
+import tweak_alpha.shared.generated.resources.text_recording_duration
 
 internal val FpsRecordingProvider = object : FeatureProvider {
     override val feature: Feature
@@ -124,7 +125,7 @@ private fun FpsRecordContent() {
     val navigator = LocalNavigator.current
     val backdrop = rememberLayerBackdropColor()
     val direction = LocalLayoutDirection.current
-    val sessions by viewModel.sessions.collectAsStateWithLifecycle()
+    val sessionNotes by viewModel.sessionNotes.collectAsStateWithLifecycle()
     val density = LocalDensity.current
     var floatActionBarHeight by remember { mutableStateOf(0.dp) }
     val recordingState by FpsRecordServiceViewModel.isRecordingState.collectAsStateWithLifecycle()
@@ -190,70 +191,39 @@ private fun FpsRecordContent() {
         },
         floatingToolbarPosition = ToolbarPosition.BottomEnd
     ) {
-        val apps by AppsHelper.apps.collectAsStateWithLifecycle()
+        LazyColumn(
+            modifier = Modifier.layerBackdrop(backdrop)
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .overScrollVertical()
+                .fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = it.calculateStartPadding(direction) + 16.dp,
+                top = it.calculateTopPadding() + 16.dp,
+                end = it.calculateEndPadding(direction) + 16.dp,
+                bottom = it.calculateBottomPadding() + 16.dp + floatActionBarHeight
+            ),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
 
-        Box {
-            LazyColumn(
-                modifier = Modifier.layerBackdrop(backdrop)
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .overScrollVertical()
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = it.calculateStartPadding(direction) + 16.dp,
-                    top = it.calculateTopPadding() + 16.dp,
-                    end = it.calculateEndPadding(direction) + 16.dp,
-                        bottom = it.calculateBottomPadding() + 16.dp + floatActionBarHeight
-                ),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            item {
+                InfoContent(viewModel)
+            }
 
-                item {
-                    InfoContent(viewModel)
+            item {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
+            }
 
-                item {
-                    Column {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        HorizontalDivider(modifier = Modifier.fillMaxWidth())
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-                }
+            item {
+                RecordHead(sessionNotes)
+            }
 
-                item {
-                    RecordHead(sessions)
-                }
-
-                items(sessions) { session ->
-                    RecordItem(session)
-                }
-
-
-                items(apps) {
-                    Card {
-                        Row(
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            AsyncImage(
-                                model = it.iconPath,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp)
-                            )
-
-                            Column {
-                                Text(
-                                    text = it.appName,
-                                    style = MiuixTheme.textStyles.body1,
-                                )
-                                Text(
-                                    text = it.packageName,
-                                    style = MiuixTheme.textStyles.footnote2,
-                                )
-                            }
-                        }
-                    }
+            items(sessionNotes) { noteVo ->
+                RecordItem(noteVo) { sessionId ->
+                    navigator.navigate(Screen.FpsRecordDetail(sessionId))
                 }
             }
         }
@@ -337,7 +307,7 @@ private fun RowScope.InfoItem(
 
 @Composable
 private fun RecordHead(
-    sessions: List<FpsNoteSessionEntity>,
+    sessions: List<FpsRecordViewModel.FpsSessionNoteVo>,
 ) {
     Column{
         SmallTitle(text = stringResource(Res.string.text_record_table))
@@ -368,6 +338,59 @@ private fun RecordHead(
 }
 
 @Composable
-private fun RecordItem(session: FpsNoteSessionEntity) {
+private fun RecordItem(
+    noteVo: FpsRecordViewModel.FpsSessionNoteVo,
+    onTap: (id: Long) -> Unit
+) {
+    Card {
+        BasicComponent(
+            modifier = Modifier.fillMaxWidth(),
+            startAction = {
+                AsyncImage(
+                    model = noteVo.appIconPath,
+                    contentDescription = null,
+                    error = null,
+                    modifier = Modifier.clip(Rectangle.copy(cornerRadius = 12.dp))
+                        .size(48.dp)
+                )
+            },
+            endActions = {
+                Icon(
+                    imageVector = MiuixIcons.ChevronForward,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
+                    modifier = Modifier.size(16.dp)
+                )
+            },
+            onClick = {
+                onTap(noteVo.sessionId)
+            }
+        ) {
+            Text(
+                text = noteVo.appName,
+                color = MiuixTheme.colorScheme.onSurface,
+                style = MiuixTheme.textStyles.body1,
+            )
 
+            Text(
+                modifier = Modifier.basicMarquee(),
+                text = buildString {
+                    append(noteVo.createTime)
+                    append("    ")
+                    append(stringResource(Res.string.text_recording_duration))
+                    append(noteVo.recordingDuration)
+                    append("\n")
+                    append(noteVo.avgFps)
+                    append(stringResource(Res.string.text_recording_avg))
+                    append("    ")
+                    append(noteVo.avgPower)
+                    append(stringResource(Res.string.text_recording_avg))
+                },
+                color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                style = MiuixTheme.textStyles.footnote2,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+            )
+        }
+    }
 }

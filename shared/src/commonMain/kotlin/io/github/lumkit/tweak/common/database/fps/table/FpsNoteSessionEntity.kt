@@ -47,6 +47,9 @@ data class FpsNoteSessionEntity(
     /** 用户备注信息（用于标记一次测试环境或问题描述） */
     val note: String? = null,
 
+    /** 是否已结束录制 */
+    val isRecordEnd: Boolean = false,
+
     /** 删除标记（软删除，true 表示已删除） */
     val delete: Boolean = false,
 )

@@ -2,6 +2,9 @@ package io.github.lumkit.tweak.common.utils
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.ActivityManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
@@ -9,16 +12,21 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.service.KeepAliveService
+import io.github.lumkit.tweak.shared.R
 import kotlin.system.exitProcess
 
 actual fun isDebugBuild(): Boolean {
@@ -181,4 +189,47 @@ actual val packageName: String
 actual fun startKeepAliveService(isForegroundService: Boolean) {
     val intent = Intent(application, KeepAliveService::class.java)
     application.startService(intent)
+}
+
+actual fun toastText(msg: String) {
+    Handler(Looper.getMainLooper()).post {
+        if (isProcessInForeground()) {
+            Toast.makeText(application, msg, Toast.LENGTH_SHORT).show()
+        } else {
+            notifyFromBackground(msg)
+        }
+    }
+}
+
+private fun isProcessInForeground(): Boolean {
+    val am = application.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    val importance = am.runningAppProcesses
+        ?.firstOrNull { it.pid == Process.myPid() }
+        ?.importance
+    return importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+}
+
+private fun notifyFromBackground(msg: String) {
+    if (!NotificationManagerCompat.from(application).areNotificationsEnabled()) {
+        Toast.makeText(application, msg, Toast.LENGTH_SHORT).show()
+        return
+    }
+    val channelId = "tweak_alpha_background_tip"
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val notificationManager = application.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            channelId,
+            "Tweak-Alpha Tips",
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        notificationManager.createNotificationChannel(channel)
+    }
+    val notification = NotificationCompat.Builder(application, channelId)
+        .setSmallIcon(R.mipmap.ic_logo_round)
+        .setContentTitle(application.applicationInfo.loadLabel(application.packageManager).toString())
+        .setContentText(msg)
+        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .setAutoCancel(true)
+        .build()
+    NotificationManagerCompat.from(application).notify(msg.hashCode(), notification)
 }

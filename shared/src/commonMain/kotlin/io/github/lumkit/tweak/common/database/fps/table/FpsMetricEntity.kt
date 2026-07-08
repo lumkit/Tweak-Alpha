@@ -38,17 +38,19 @@ data class FpsMetricEntity(
     /** 电池电量（%） */
     val batteryLevel: Double,
 
-    /** 电池电流（μA 或 mA） */
+    /** 电池电流 mA */
     val batteryCurrent: Int,
+    /** 电池电压 mV **/
+    val batteryVoltage: Int,
 
     /** CPU 使用率（%） */
-    val cpuLoad: Double,
+    val cpuLoad: String,
 
-    /** CPU 当前频率（Hz） */
-    val cpuCurrentFreq: Long,
+    /** CPU核心频率 */
+    val cpuCurrentFreq: String,
 
     /** CPU cycles（需 perf_event / simpleperf） */
-    val cpuCurrentCycles: Long,
+    val cpuCurrentCycles: String,
 
     /** GPU 使用率（%） */
     val gpuLoad: Double? = null,
@@ -60,7 +62,7 @@ data class FpsMetricEntity(
     val frameTime: Int,
 
     /** 内存相关指标（自定义） */
-    val memoryFreq: Long,
+    val memoryFreq: Long? = null,
 
     /** CPU / SoC 温度（℃） */
     val coreTemperature: Double,

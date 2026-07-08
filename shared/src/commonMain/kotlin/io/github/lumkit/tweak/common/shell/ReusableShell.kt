@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.common.shell
 
+import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -27,8 +28,9 @@ class ReusableShell(
     private val redirectErrorStream: Boolean = false,
 ) {
     companion object {
+        private const val TAG = "ReusableShell"
         private const val CHECK_ROOT_STATE =
-            "if [[ \$(id -u 2>&1) == '0' ]] || [[ \$(\$UID) == '0' ]] || [[ \$(whoami 2>&1) == 'root' ]] || [[ \$(set | grep 'USER_ID=0') == 'USER_ID=0' ]]; then\n" +
+            $$"if [[ $(id -u 2>&1) == '0' ]] || [[ $($UID) == '0' ]] || [[ $(whoami 2>&1) == 'root' ]] || [[ $(set | grep 'USER_ID=0') == 'USER_ID=0' ]]; then\n" +
                     "  echo 'success'\n" +
                     "else\n" +
                     "if [[ -d /cache ]]; then\n" +
@@ -125,17 +127,17 @@ class ReusableShell(
 
                     coroutineScope.launch(
                         CoroutineExceptionHandler { _, throwable ->
-                            logE( throwable.message ?: "Error reading error stream")
+                            logE( throwable.message ?: "Error reading error stream", throwable, TAG)
                         }
                     ) {
                         process.errorStream.bufferedReader().use {
                             while (isActive) {
-                                logE(it.readLine() ?: break)
+                                logE(it.readLine() ?: break, null, TAG)
                             }
                         }
                     }
                 } catch (e: Exception) {
-                    logE(e.message ?: "Unknown error")
+                    logE(e.message ?: "Unknown error", e, TAG)
                 } finally {
                     enterLockTime = 0L
                 }
@@ -149,7 +151,9 @@ class ReusableShell(
         ) {
             tryExit()
             logE(
-                "线程等待超时: ${System.currentTimeMillis() - enterLockTime > LOCK_TIMEOUT}ms"
+                "线程等待超时: ${System.currentTimeMillis() - enterLockTime > LOCK_TIMEOUT}ms",
+                null,
+                TAG
             )
         }
         startProcess()
@@ -193,12 +197,14 @@ class ReusableShell(
                     if (result.isNotEmpty()) {
                         result = result.substring(0, result.length - 1)
                     }
-                    result
+                    result.also {
+                        logD("result=$result", TAG)
+                    }
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            logE(e.stackTraceToString())
+            logE(e.stackTraceToString(), e, TAG)
             "error"
         } finally {
             enterLockTime = 0L

@@ -162,8 +162,8 @@ object DeviceInfoViewModel : BaseViewModel() {
                     continue
                 }
 
-                // 更新CPU信息
                 val tag = Clock.System.now().toEpochMilliseconds()
+                // 更新CPU信息
                 updateCpuInfo()
                 // 更新内存信息
                 updateMemoryInfo()

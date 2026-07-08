@@ -8,8 +8,14 @@ import android.graphics.PixelFormat
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import io.github.lumkit.tweak.common.shell.ReusableShells
+import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
 import io.github.lumkit.tweak.common.utils.logD
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * 无障碍服务，用于监听前台应用切换
@@ -18,18 +24,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class TweakAccessibilityService : AccessibilityService() {
 
     companion object {
-
         private const val TAG = "TweakAccessibilityService"
-        internal val _foregroundPackage = MutableStateFlow<String?>(null)
-        internal val _isRunning = MutableStateFlow(false)
-
     }
 
     private var keepAliveView: View? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var resolveForegroundJob: Job? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        _isRunning.value = true
+        ForegroundAppMonitor._isRunning.value = true
 
         serviceInfo = serviceInfo.apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
@@ -87,11 +91,54 @@ class TweakAccessibilityService : AccessibilityService() {
             // 过滤非 Activity 窗口（系统弹窗、悬浮窗等）
             if (!isActivity(pkg, className)) return
 
-            if (pkg != _foregroundPackage.value) {
-                _foregroundPackage.value = pkg
-                logD("foreground: $pkg ($className)", TAG)
+            resolveForegroundJob?.cancel()
+            resolveForegroundJob = serviceScope.launch {
+                val actualForegroundPackage = resolveForegroundPackageName() ?: pkg
+                if (actualForegroundPackage != ForegroundAppMonitor._foregroundPackage.value) {
+                    ForegroundAppMonitor._foregroundPackage.value = actualForegroundPackage
+                    logD(
+                        "foreground: $actualForegroundPackage (event=$pkg, class=$className)",
+                        TAG
+                    )
+                }
             }
         }
+    }
+
+    private suspend fun resolveForegroundPackageName(): String? {
+        val candidates = listOf(
+            "dumpsys activity activities",
+            "dumpsys window windows"
+        )
+        candidates.forEach { cmd ->
+            runCatching {
+                ReusableShells.execSync(cmd)
+                    .extractForegroundPackageName()
+            }.getOrNull()?.let { packageName ->
+                if (packageName.isNotBlank()) {
+                    return packageName
+                }
+            }
+        }
+        return null
+    }
+
+    private fun String.extractForegroundPackageName(): String? {
+        val interestingLines = lineSequence().filter {
+            it.contains("mResumedActivity") ||
+                    it.contains("topResumedActivity") ||
+                    it.contains("mCurrentFocus") ||
+                    it.contains("mFocusedApp")
+        }
+        val patterns = listOf(
+            Regex("([a-zA-Z0-9_]+(?:\\.[a-zA-Z0-9_]+)+)/[a-zA-Z0-9_.$]+")
+        )
+        interestingLines.forEach { line ->
+            patterns.forEach { pattern ->
+                pattern.find(line)?.groupValues?.getOrNull(1)?.let { return it }
+            }
+        }
+        return null
     }
 
     /**
@@ -113,9 +160,10 @@ class TweakAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        resolveForegroundJob?.cancel()
         removeKeepAliveOverlay()
-        _isRunning.value = false
-        _foregroundPackage.value = null
+        ForegroundAppMonitor._isRunning.value = false
+        ForegroundAppMonitor._foregroundPackage.value = null
         logD("onDestroy", TAG)
     }
 }

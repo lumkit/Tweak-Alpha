@@ -6,16 +6,22 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.database.fps.repos.FpsRecordRepository
 import io.github.lumkit.tweak.common.database.fps.table.FpsMetricEntity
 import io.github.lumkit.tweak.common.database.fps.table.FpsNoteSessionEntity
+import io.github.lumkit.tweak.common.database.fps.table.FpsSessionNote
 import io.github.lumkit.tweak.common.utils.SDK_INT
 import io.github.lumkit.tweak.common.utils.SDK_RELEASE
 import io.github.lumkit.tweak.common.utils.displayNameResource
+import io.github.lumkit.tweak.common.utils.formatDateTime
+import io.github.lumkit.tweak.common.utils.formatElapsedTime
+import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.getDeviceModel
 import io.github.lumkit.tweak.common.utils.getDeviceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.getString
 
 object FpsRecordViewModel : BaseViewModel() {
@@ -29,6 +35,7 @@ object FpsRecordViewModel : BaseViewModel() {
 
     private val repository: FpsRecordRepository = FpsRecordRepository()
 
+    @Serializable
     @Immutable
     data class PlatformInfo(
         val platformName: String,
@@ -36,11 +43,34 @@ object FpsRecordViewModel : BaseViewModel() {
         val platformVersionName: String,
     )
 
+    @Serializable
+    @Immutable
+    data class FpsSessionNoteVo(
+        val sessionId: Long,
+        val appName: String,
+        val appPackageName: String,
+        val appIconPath: String?,
+        val createTime: String,
+        val recordingDuration: String,
+        val avgFps: String,
+        val avgPower: String,
+    )
+
     private val _platformInfoState = MutableStateFlow<PlatformInfo?>(null)
     val platformInfoState = _platformInfoState.asStateFlow()
 
     /** 所有未删除的会话列表 */
     val sessions = repository.querySessions()
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            emptyList()
+        )
+
+    val sessionNotes = repository.querySessionNotes()
+        .map { notes ->
+            notes.map { it.toVo() }
+        }
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
@@ -114,6 +144,19 @@ object FpsRecordViewModel : BaseViewModel() {
             success()
         }
     }
+}
+
+private fun FpsSessionNote.toVo(): FpsRecordViewModel.FpsSessionNoteVo {
+    return FpsRecordViewModel.FpsSessionNoteVo(
+        sessionId = sessionId,
+        appName = appName,
+        appPackageName = appPackageName,
+        appIconPath = appIconPath,
+        createTime = formatDateTime(createTime),
+        avgFps = "%.2f FPS".format(avgFps),
+        avgPower = avgPower.formatPower(),
+        recordingDuration = recordingDuration.formatElapsedTime()
+    )
 }
 
 expect fun showRecordOverlay()

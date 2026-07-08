@@ -83,6 +83,31 @@ data class DeviceMemoryInfoModel(
  */
 object DeviceMemoryInfoUtils {
     private const val memInfoPath = "/proc/meminfo"
+    private const val devfreqRoot = "/sys/class/devfreq"
+
+    private val memoryFreqKeywords = listOf(
+        "ddr",
+        "dram",
+        "bimc",
+        "mif",
+        "llcc",
+        "memlat",
+        "cpu-bw",
+        "bus_dcvs",
+        "bus",
+    )
+
+    suspend fun getMemoryFreq(): Long? {
+        val candidates = Files.list(devfreqRoot).getOrNull().orEmpty()
+            .filter { path ->
+                val name = path.substringAfterLast('/').lowercase()
+                memoryFreqKeywords.any(name::contains)
+            }
+
+        return candidates.firstNotNullOfOrNull { path ->
+            readMemoryFreqFromPath(path)
+        }
+    }
 
     suspend fun getMemoryInfo(): DeviceMemoryInfoModel {
         val memInfoContent = Files.readText(memInfoPath).getOrNull().orEmpty()
@@ -209,6 +234,24 @@ object DeviceMemoryInfoUtils {
 
     private fun Map<String, Long>.rawValue(key: String): Long {
         return get(key) ?: 0L
+    }
+
+    private suspend fun readMemoryFreqFromPath(path: String): Long? {
+        val rawValue = Files.readText("$path/cur_freq").getOrNull()?.trim().orEmpty()
+        val frequency = rawValue
+            .split(Regex("\\s+"))
+            .firstOrNull()
+            ?.toLongOrNull()
+            ?: return null
+        return normalizeFrequencyToMhz(frequency)
+    }
+
+    private fun normalizeFrequencyToMhz(value: Long): Long {
+        return when {
+            value >= 1_000_000L -> value / 1_000_000L
+            value >= 1_000L -> value / 1_000L
+            else -> value
+        }
     }
 
     private data class ParsedMemInfoEntry(

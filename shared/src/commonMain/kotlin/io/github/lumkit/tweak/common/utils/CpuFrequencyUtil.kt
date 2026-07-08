@@ -11,6 +11,7 @@ class CpuFrequencyUtil {
     private var platform: String? = null
     private var clusterInfo: List<List<String>>? = null
     private var coreCount: Int = -1
+    private val cyclesPathCache = mutableMapOf<Int, String?>()
 
     suspend fun getAvailableFrequencies(cluster: Int): List<String> {
         val clusters = getClusterInfo()
@@ -47,6 +48,16 @@ class CpuFrequencyUtil {
 
     suspend fun getCurrentFrequency(cpu: String): String {
         return getCpuFreqValue(scalingCurFreq.replace("cpu0", cpu))
+    }
+
+    suspend fun getCurrentCycles(coreIndex: Int): Long {
+        val path = getCyclesPath(coreIndex) ?: return 0L
+        val content = Files.readText(path).getOrNull().orEmpty()
+        if (content.isBlank()) {
+            cyclesPathCache[coreIndex] = null
+            return 0L
+        }
+        return parseTimeInStateCycles(content)
     }
 
     suspend fun getCurrentMinFrequency(cluster: Int): String {
@@ -307,6 +318,53 @@ class CpuFrequencyUtil {
 
     private suspend fun pathExists(path: String): Boolean {
         return Files.exists(path).getOrNull() == true
+    }
+
+    private suspend fun getCyclesPath(coreIndex: Int): String? {
+        if (cyclesPathCache.containsKey(coreIndex)) {
+            return cyclesPathCache[coreIndex]
+        }
+        val path = cpuDir.replace("cpu0", "cpu$coreIndex") + "cpufreq/stats/time_in_state"
+        return path.takeIf { pathExists(it) }.also {
+            cyclesPathCache[coreIndex] = it
+        }
+    }
+
+    private fun parseTimeInStateCycles(content: String): Long {
+        var total = 0L
+        content.lineSequence().forEach { line ->
+            val parsed = parseTimeInStateLine(line) ?: return@forEach
+            total += parsed.first * parsed.second
+        }
+        return total
+    }
+
+    private fun parseTimeInStateLine(line: String): Pair<Long, Long>? {
+        var index = 0
+        val length = line.length
+        while (index < length && line[index].isWhitespace()) {
+            index++
+        }
+        val frequencyStart = index
+        while (index < length && !line[index].isWhitespace()) {
+            index++
+        }
+        if (frequencyStart == index) {
+            return null
+        }
+        val frequency = line.substring(frequencyStart, index).toLongOrNull() ?: return null
+        while (index < length && line[index].isWhitespace()) {
+            index++
+        }
+        val timeStart = index
+        while (index < length && !line[index].isWhitespace()) {
+            index++
+        }
+        if (timeStart == index) {
+            return null
+        }
+        val time = line.substring(timeStart, index).toLongOrNull() ?: return null
+        return frequency to time
     }
 
     private suspend fun mapFileValue(directoryPath: String): Map<String, String>? {
