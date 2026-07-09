@@ -55,7 +55,10 @@ import io.github.lumkit.tweak.common.component.LineChartData
 import io.github.lumkit.tweak.common.component.LineChartXAxisData
 import io.github.lumkit.tweak.common.component.SmoothLineChart
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.component.VerticalBarChart
+import io.github.lumkit.tweak.common.component.VerticalBarChartStyleType
 import io.github.lumkit.tweak.common.database.fps.table.FpsRecordDetailAggregate
+import io.github.lumkit.tweak.common.utils.CpuFrequencyUtil
 import io.github.lumkit.tweak.common.utils.formatElapsedTime
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
@@ -65,9 +68,12 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
@@ -75,6 +81,8 @@ import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.ConvertFile
+import top.yukonga.miuix.kmp.icon.extended.ListView
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
@@ -83,8 +91,12 @@ import tweak_alpha.shared.generated.resources.ic_soc
 import tweak_alpha.shared.generated.resources.ic_system_version
 import tweak_alpha.shared.generated.resources.text_avg
 import tweak_alpha.shared.generated.resources.text_battery_level
+import tweak_alpha.shared.generated.resources.text_cpu_load_total
+import tweak_alpha.shared.generated.resources.text_cpu_loads
+import tweak_alpha.shared.generated.resources.text_cpu_loads_source
 import tweak_alpha.shared.generated.resources.text_diff
 import tweak_alpha.shared.generated.resources.text_fps_recording
+import tweak_alpha.shared.generated.resources.text_frame_time
 import tweak_alpha.shared.generated.resources.text_go_back
 import tweak_alpha.shared.generated.resources.text_max_high
 import tweak_alpha.shared.generated.resources.text_min_low
@@ -179,6 +191,14 @@ fun FpsRecordDetailScreen(
                 FpsChart(
                     detail = detail,
                 )
+            }
+
+            item {
+                FrameTimeChart(detail = detail)
+            }
+
+            item {
+                CpuLoadsChart(detail = detail)
             }
         }
     }
@@ -347,7 +367,7 @@ private fun RecordAppInfo(
 
                 RecordAppInfoItem(
                     title = "≥45FPS",
-                    value = remember(fpsLow45) { "%.1f%%".format(fpsLow45) },
+                    value = remember(fpsLow45) { "%.1f%%".format(fpsLow45 * 100f) },
                     foot = "FPS"
                 )
                 RecordAppInfoItem(
@@ -618,5 +638,274 @@ private fun List<Double>.toSizedFloatList(size: Int): List<Float> {
         repeat(size) { index ->
             add(getOrElse(index) { last() })
         }
+    }
+}
+
+@Composable
+private fun FrameTimeChart(
+    detail: FpsRecordDetailAggregate?,
+) {
+    val primary = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
+
+    val frameData = remember(detail) {
+        detail?.frameTimeSamples?.map { it.toFloat() } ?: emptyList()
+    }
+    val xAxis = remember(detail) {
+        LineChartXAxisData(
+            dataSet = frameData.indices.map { (it.toLong() * 1000).formatElapsedTime() }
+        )
+    }
+    val chartData = remember(frameData) {
+        LineChartData(
+            name = "Frame Time",
+            suffix = "ms",
+            dataSet = frameData,
+            color = primary,
+            axisType = LineChartAxisType.Primary,
+        )
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        SmallTitle(text = stringResource(Res.string.text_frame_time))
+        Spacer(modifier = Modifier.height(4.dp))
+        if (frameData.isNotEmpty()) {
+            VerticalBarChart(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(start = 8.dp, end = 12.dp)
+                    .height(220.dp),
+                xAxis = xAxis,
+                data = chartData,
+                axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
+                tickTextColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
+                showGrid = true,
+                gridColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .08f),
+                textStyle = MiuixTheme.textStyles.footnote2.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp,
+                ),
+                showAffix = false,
+                barStyleType = VerticalBarChartStyleType.Stroke,
+            )
+        } else {
+            Spacer(
+                modifier = Modifier.fillMaxWidth()
+                    .height(220.dp)
+            )
+        }
+    }
+}
+
+@Suppress("MutableCollectionMutableState")
+@Composable
+private fun CpuLoadsChart(
+    detail: FpsRecordDetailAggregate?,
+) {
+    val primary = MiuixTheme.colorScheme.primary
+
+    var loadOptionsPopState by remember { mutableStateOf(false) }
+    val cpuFrequencyUtil = remember { CpuFrequencyUtil() }
+    var loadOption by rememberSaveable {
+        mutableStateOf(LinkedHashMap<Int, Boolean>())
+    }
+    var clusterInfo by rememberSaveable { mutableStateOf(emptyList<List<Int>>()) }
+    val xAxis = remember(detail) {
+        LineChartXAxisData(
+            dataSet = detail?.cpuLoadSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() }
+                ?: emptyList()
+        )
+    }
+    val clusterColors = remember {
+        listOf(
+            primary.copy(alpha = .5f),
+            Color(0x8CFF8A65),
+            Color(0x8C4FC3F7),
+            Color(0x8CBA68C8),
+            Color(0x8C81C784),
+            Color(0x8CFFD54F),
+            Color(0x8C64B5F6),
+            Color(0x8CA1887F),
+            Color(0x8C90A4AE),
+            Color(0x8C7986CB),
+            Color(0x8C4DB6AC),
+            Color(0x8CDCE775),
+            Color(0x8CFFB74D),
+            Color(0x8CE57373),
+            Color(0x8CF06292),
+            Color(0x8C9575CD),
+            Color(0x8CAED581),
+            Color(0x8C4DD0E1),
+            Color(0x8CFF8F00),
+            Color(0x8CB0BEC5),
+        )
+    }
+    val chartData = remember(detail, clusterInfo, loadOption, clusterColors) {
+        buildCpuLoadChartData(
+            detail = detail,
+            clusterInfo = clusterInfo,
+            loadOption = loadOption,
+            colors = clusterColors,
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        clusterInfo = cpuFrequencyUtil.getClusterInfo().map { it.map { it.toInt() } }
+        if (loadOption.isEmpty()) {
+            loadOption = LinkedHashMap<Int, Boolean>().apply {
+                put(-1, true)
+                repeat(clusterInfo.size) { clusterIndex ->
+                    put(clusterIndex, true)
+                }
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row {
+            SmallTitle(text = stringResource(Res.string.text_cpu_loads))
+            Spacer(modifier = Modifier.weight(1f))
+            Box {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clip(Rectangle.copy(cornerRadius = 4.dp))
+                        .clickable {
+                            loadOptionsPopState = true
+                        }.padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = stringResource(Res.string.text_cpu_loads_source),
+                        style = MiuixTheme.textStyles.footnote2.copy(
+                            fontSize = 10.sp,
+                            lineHeight = 10.sp,
+                        ),
+                        color = MiuixTheme.colorScheme.onSurface.copy(.31f)
+                    )
+
+                    Icon(
+                        imageVector = MiuixIcons.ListView,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = primary.copy(.75f)
+                    )
+                }
+
+                OverlayListPopup(
+                    show = loadOptionsPopState,
+                    alignment = PopupPositionProvider.Align.End,
+                    onDismissRequest = { loadOptionsPopState = false } // 关闭弹窗菜单
+                ) {
+                    ListPopupColumn {
+                        loadOption.forEach { (index, enabled) ->
+                            DropdownImpl(
+                                text = when (index) {
+                                    -1 -> stringResource(Res.string.text_cpu_load_total)
+                                    else -> clusterInfo.getOrNull(index)
+                                        ?.toCpuClusterLabel()
+                                        ?: "Cpu $index"
+                                },
+                                optionSize = loadOption.size,
+                                isSelected = enabled,
+                                index = index,
+                                onSelectedIndexChange = {
+                                    loadOption = loadOption.toggleCpuLoadOption(index)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        if (chartData.isNotEmpty() && xAxis.dataSet.isNotEmpty()) {
+            SmoothLineChart(
+                modifier = Modifier.fillMaxWidth()
+                    .height(250.dp),
+                xAxis = xAxis,
+                data = chartData,
+                axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
+                tickTextColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
+                lineWidth = 1.dp,
+                showGrid = true,
+                gridColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .08f),
+                textStyle = MiuixTheme.textStyles.footnote2.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp,
+                ),
+                showAffix = false,
+            )
+        } else {
+            Spacer(
+                modifier = Modifier.fillMaxWidth()
+                    .height(250.dp)
+            )
+        }
+
+        ChartColorIndicator(chartData, modifier = Modifier.padding(bottom = 16.dp))
+    }
+}
+
+private fun buildCpuLoadChartData(
+    detail: FpsRecordDetailAggregate?,
+    clusterInfo: List<List<Int>>,
+    loadOption: Map<Int, Boolean>,
+    colors: List<Color>,
+): List<LineChartData> {
+    val cpuLoadSamples = detail?.cpuLoadSamples ?: return emptyList()
+    if (cpuLoadSamples.isEmpty()) {
+        return emptyList()
+    }
+
+    val result = mutableListOf<LineChartData>()
+    if (loadOption[-1] == true) {
+        result += LineChartData(
+            name = "Total",
+            suffix = "%",
+            dataSet = cpuLoadSamples.map { (it[-1] ?: 0.0).toFloat() },
+            color = colors.getOrElse(0) { Color.Gray },
+            axisType = LineChartAxisType.Primary,
+        )
+    }
+
+    clusterInfo.forEachIndexed { clusterIndex, cores ->
+        if (loadOption[clusterIndex] != true) return@forEachIndexed
+        val color = colors.getOrElse(clusterIndex + 1) { colors.lastOrNull() ?: Color.Gray }
+        result += LineChartData(
+            name = cores.toCpuClusterLabel(),
+            suffix = "%",
+            dataSet = cpuLoadSamples.map { sample ->
+                cores.mapNotNull { core -> sample[core] }
+                    .average()
+                    .takeIf { !it.isNaN() }
+                    ?.toFloat()
+                    ?: 0f
+            },
+            color = color,
+            axisType = LineChartAxisType.Primary,
+        )
+    }
+    return result
+}
+
+private fun List<Int>.toCpuClusterLabel(): String {
+    if (isEmpty()) return "CPU"
+    if (size == 1) return "CPU ${minOrNull() ?: -1}"
+    val start = minOrNull() ?: return "CPU"
+    val end = maxOrNull() ?: return "CPU $start"
+    return "CPU $start-$end"
+}
+
+private fun Map<Int, Boolean>.toggleCpuLoadOption(index: Int): LinkedHashMap<Int, Boolean> {
+    val current = this[index] ?: false
+    if (current && values.count { it } <= 1) {
+        return LinkedHashMap(this)
+    }
+    return LinkedHashMap(this).apply {
+        this[index] = !current
     }
 }

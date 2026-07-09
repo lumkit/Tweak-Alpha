@@ -8,6 +8,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -21,6 +22,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.ln
@@ -32,6 +34,12 @@ import kotlin.math.roundToInt
 enum class LineChartAxisType {
     Primary,
     Secondary,
+}
+
+@Immutable
+enum class VerticalBarChartStyleType {
+    Fill,
+    Stroke,
 }
 
 @Immutable
@@ -128,6 +136,78 @@ fun SmoothLineChart(
                 yAxisTickCount = yAxisTickCount.coerceIn(1, 5),
                 textStyle = textStyle,
                 showAffix = showAffix,
+            )
+        }
+    }
+}
+
+@Composable
+fun VerticalBarChart(
+    xAxis: LineChartXAxisData,
+    data: LineChartData,
+    modifier: Modifier = Modifier,
+    axisLineWidth: Dp = 1.dp,
+    axisColor: Color = Color(0xFF6F6F6F),
+    tickTextColor: Color = Color(0xFF8F8F8F),
+    showGrid: Boolean = true,
+    gridColor: Color = Color(0x225F5F5F),
+    gridLineWidth: Dp = 1.dp,
+    xAxisTickCount: Int = 5,
+    yAxisTickCount: Int = 10,
+    textStyle: TextStyle = TextStyle.Default,
+    showAffix: Boolean = true,
+    barStyleType: VerticalBarChartStyleType = VerticalBarChartStyleType.Fill,
+    barBorderColor: Color = Color.Unspecified,
+    barBorderWidth: Dp = 1.dp,
+) {
+    require(data.name.isNotBlank()) { "Bar chart data name must not be blank." }
+    require(xAxis.dataSet.isNotEmpty()) { "X axis data must not be empty." }
+    require(data.axisType == LineChartAxisType.Primary) {
+        "VerticalBarChart only supports Primary axis data."
+    }
+    require(data.dataSet.size == xAxis.dataSet.size) {
+        "dataSet length must match xAxis length."
+    }
+
+    val textMeasurer = rememberTextMeasurer()
+    val resolvedBarBorderColor = if (barBorderColor == Color.Unspecified) {
+        MiuixTheme.colorScheme.primary.copy(alpha = .5f)
+    } else {
+        barBorderColor
+    }
+
+    BoxWithConstraints(modifier = modifier) {
+        val maxBars = remember(maxWidth) {
+            max(2, floor(maxWidth.value).toInt())
+        }
+        val sampledInput = remember(xAxis, data, maxBars) {
+            val sampled = sampleLineChartData(
+                xAxis = xAxis,
+                data = listOf(data),
+                maxSamples = maxBars,
+            )
+            sampled.first to sampled.second.first()
+        }
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawVerticalBarChart(
+                xAxis = sampledInput.first,
+                data = sampledInput.second,
+                textMeasurer = textMeasurer,
+                density = this,
+                axisLineWidth = axisLineWidth,
+                axisColor = axisColor,
+                tickTextColor = tickTextColor,
+                showGrid = showGrid,
+                gridColor = gridColor,
+                gridLineWidth = gridLineWidth,
+                xAxisTickCount = xAxisTickCount.coerceIn(1, 5),
+                yAxisTickCount = yAxisTickCount.coerceIn(1, 10),
+                textStyle = textStyle,
+                showAffix = showAffix,
+                barStyleType = barStyleType,
+                barBorderColor = resolvedBarBorderColor,
+                barBorderWidth = barBorderWidth,
             )
         }
     }
@@ -323,7 +403,6 @@ private fun DrawScope.drawSmoothLineChart(
     drawAxisTickLabels(
         ticks = primaryTicks.tickValues,
         maxValue = primaryTicks.maxValue,
-        plotLeft = plotLeft,
         plotTop = plotTop,
         plotHeight = plotHeight,
         formatter = leftFormatter,
@@ -337,7 +416,6 @@ private fun DrawScope.drawSmoothLineChart(
         drawAxisTickLabels(
             ticks = secondaryTicks.tickValues,
             maxValue = secondaryTicks.maxValue,
-            plotLeft = plotLeft,
             plotTop = plotTop,
             plotHeight = plotHeight,
             formatter = rightFormatter,
@@ -386,6 +464,219 @@ private fun DrawScope.drawSmoothLineChart(
             )
         }
     }
+}
+
+private fun DrawScope.drawVerticalBarChart(
+    xAxis: SampledXAxisData,
+    data: SampledLineChartData,
+    textMeasurer: TextMeasurer,
+    density: Density,
+    axisLineWidth: Dp,
+    axisColor: Color,
+    tickTextColor: Color,
+    showGrid: Boolean,
+    gridColor: Color,
+    gridLineWidth: Dp,
+    xAxisTickCount: Int,
+    yAxisTickCount: Int,
+    textStyle: TextStyle,
+    showAffix: Boolean,
+    barStyleType: VerticalBarChartStyleType,
+    barBorderColor: Color,
+    barBorderWidth: Dp,
+) {
+    val ticks = buildAxisTicks(listOf(data), yAxisTickCount)
+    val xTickIndexes = buildXAxisTickIndexes(xAxis.dataSet.size, xAxisTickCount)
+    val formatter: (Float) -> String = { value ->
+        formatAxisValue(value, data.prefix, data.suffix, showAffix = showAffix)
+    }
+
+    val leftLabelWidth = (ticks.tickValues + 0f).maxOfOrNull { tick ->
+        textMeasurer.measure(
+            text = formatter(tick),
+            style = textStyle,
+        ).size.width
+    } ?: 0
+    val xLabelHeight = xTickIndexes.maxOfOrNull { index ->
+        textMeasurer.measure(
+            text = xAxis.dataSet[index],
+            style = textStyle,
+        ).size.height
+    } ?: 0
+
+    val labelSpacingPx = with(density) { 8.dp.toPx() }
+    val leftPadding = leftLabelWidth + labelSpacingPx * 2
+    val rightPadding = labelSpacingPx
+    val topPadding = labelSpacingPx
+    val bottomPadding = xLabelHeight + labelSpacingPx * 2
+
+    val plotLeft = leftPadding
+    val plotRight = size.width - rightPadding
+    val plotTop = topPadding
+    val plotBottom = size.height - bottomPadding
+    val plotWidth = (plotRight - plotLeft).coerceAtLeast(1f)
+    val plotHeight = (plotBottom - plotTop).coerceAtLeast(1f)
+    val axisStroke = with(density) { axisLineWidth.toPx() }
+    val gridStroke = with(density) { gridLineWidth.toPx() }
+    val borderStroke = with(density) { barBorderWidth.toPx() }
+
+    if (plotWidth <= 1f || plotHeight <= 1f) return
+
+    if (showGrid) {
+        val dashPathEffect = PathEffect.dashPathEffect(
+            intervals = floatArrayOf(8f, 8f),
+            phase = 0f,
+        )
+        drawBarVerticalGrid(
+            xTickIndexes = xTickIndexes,
+            plotLeft = plotLeft,
+            plotTop = plotTop,
+            plotBottom = plotBottom,
+            plotWidth = plotWidth,
+            itemCount = xAxis.dataSet.size,
+            color = gridColor,
+            strokeWidth = gridStroke,
+            pathEffect = dashPathEffect,
+        )
+        drawHorizontalGrid(
+            ticks = ticks.tickValues,
+            maxValue = ticks.maxValue,
+            plotLeft = plotLeft,
+            plotRight = plotRight,
+            plotTop = plotTop,
+            plotHeight = plotHeight,
+            color = gridColor,
+            strokeWidth = gridStroke,
+            pathEffect = dashPathEffect,
+        )
+    }
+
+    drawLine(
+        color = axisColor,
+        start = Offset(plotLeft, plotBottom),
+        end = Offset(plotRight, plotBottom),
+        strokeWidth = axisStroke,
+        cap = StrokeCap.Round,
+    )
+    drawLine(
+        color = axisColor,
+        start = Offset(plotLeft, plotTop),
+        end = Offset(plotLeft, plotBottom),
+        strokeWidth = axisStroke,
+        cap = StrokeCap.Round,
+    )
+
+    drawAxisTickLabels(
+        ticks = ticks.tickValues,
+        maxValue = ticks.maxValue,
+        plotTop = plotTop,
+        plotHeight = plotHeight,
+        formatter = formatter,
+        textMeasurer = textMeasurer,
+        textStyle = textStyle,
+        textColor = tickTextColor,
+        anchorX = plotLeft - labelSpacingPx,
+        alignRight = true,
+    )
+    drawBarXAxisLabels(
+        indexes = xTickIndexes,
+        labels = xAxis.dataSet,
+        plotLeft = plotLeft,
+        plotBottom = plotBottom,
+        plotWidth = plotWidth,
+        itemCount = xAxis.dataSet.size,
+        textMeasurer = textMeasurer,
+        textStyle = textStyle,
+        textColor = tickTextColor,
+        topPadding = labelSpacingPx,
+    )
+
+    val slotWidth = plotWidth / xAxis.dataSet.size.coerceAtLeast(1)
+    data.dataSet.forEachIndexed { index, value ->
+        val barHeight = value.toChartY(ticks.maxValue, plotHeight)
+        val left = plotLeft + index * slotWidth
+        val right = (left + slotWidth).coerceAtMost(plotRight)
+        val top = plotBottom - barHeight
+        when (barStyleType) {
+            VerticalBarChartStyleType.Fill -> {
+                drawSegmentedBar(
+                    left = left,
+                    right = right,
+                    top = top,
+                    bottom = plotBottom,
+                    fillColor = data.color,
+                    strokeColor = barBorderColor,
+                    strokeWidth = borderStroke,
+                    fill = true,
+                )
+            }
+
+            VerticalBarChartStyleType.Stroke -> {
+                drawSegmentedBar(
+                    left = left,
+                    right = right,
+                    top = top,
+                    bottom = plotBottom,
+                    fillColor = Color.Transparent,
+                    strokeColor = barBorderColor,
+                    strokeWidth = borderStroke,
+                    fill = false,
+                )
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawSegmentedBar(
+    left: Float,
+    right: Float,
+    top: Float,
+    bottom: Float,
+    fillColor: Color,
+    strokeColor: Color,
+    strokeWidth: Float,
+    fill: Boolean,
+    divisions: Int = 6,
+) {
+    val safeRight = right.coerceAtLeast(left + 1f)
+    val safeTop = top.coerceAtMost(bottom)
+    val width = safeRight - left
+    if (width <= 0f) return
+
+    if (fill) {
+        drawRect(
+            color = fillColor,
+            topLeft = Offset(left, safeTop),
+            size = Size(width = width, height = (bottom - safeTop).coerceAtLeast(0f)),
+        )
+    }
+
+    if (strokeWidth <= 0f) return
+
+    val step = width / divisions
+    // Only keep the outer contour and the segmented top edge.
+    drawLine(
+        color = strokeColor,
+        start = Offset(left, bottom),
+        end = Offset(left, safeTop),
+        strokeWidth = strokeWidth,
+    )
+    for (index in 1..divisions) {
+        val previousX = (left + (index - 1) * step).coerceAtMost(safeRight)
+        val x = (left + index * step).coerceAtMost(safeRight)
+        drawLine(
+            color = strokeColor,
+            start = Offset(previousX, safeTop),
+            end = Offset(x, safeTop),
+            strokeWidth = strokeWidth,
+        )
+    }
+    drawLine(
+        color = strokeColor,
+        start = Offset(safeRight, bottom),
+        end = Offset(safeRight, safeTop),
+        strokeWidth = strokeWidth,
+    )
 }
 
 private fun DrawScope.drawVerticalGrid(
@@ -440,10 +731,37 @@ private fun DrawScope.drawHorizontalGrid(
     }
 }
 
+private fun DrawScope.drawBarVerticalGrid(
+    xTickIndexes: List<Int>,
+    plotLeft: Float,
+    plotTop: Float,
+    plotBottom: Float,
+    plotWidth: Float,
+    itemCount: Int,
+    color: Color,
+    strokeWidth: Float,
+    pathEffect: PathEffect,
+) {
+    if (itemCount <= 0) return
+    val slotWidth = plotWidth / itemCount
+    xTickIndexes.forEach { index ->
+        val x = plotLeft + (index + .5f) * slotWidth
+        if (x <= plotLeft || x >= plotLeft + plotWidth) {
+            return@forEach
+        }
+        drawLine(
+            color = color,
+            start = Offset(x, plotTop),
+            end = Offset(x, plotBottom),
+            strokeWidth = strokeWidth,
+            pathEffect = pathEffect,
+        )
+    }
+}
+
 private fun DrawScope.drawAxisTickLabels(
     ticks: List<Float>,
     maxValue: Float,
-    plotLeft: Float,
     plotTop: Float,
     plotHeight: Float,
     formatter: (Float) -> String,
@@ -511,6 +829,37 @@ private fun DrawScope.drawXAxisLabels(
     }
 }
 
+private fun DrawScope.drawBarXAxisLabels(
+    indexes: List<Int>,
+    labels: List<String>,
+    plotLeft: Float,
+    plotBottom: Float,
+    plotWidth: Float,
+    itemCount: Int,
+    textMeasurer: TextMeasurer,
+    textStyle: TextStyle,
+    textColor: Color,
+    topPadding: Float,
+) {
+    if (itemCount <= 0) return
+    val slotWidth = plotWidth / itemCount
+    indexes.forEach { index ->
+        val layout = textMeasurer.measure(
+            text = labels[index],
+            style = textStyle,
+        )
+        val x = plotLeft + (index + .5f) * slotWidth
+        drawText(
+            textLayoutResult = layout,
+            color = textColor,
+            topLeft = Offset(
+                x = (x - layout.size.width / 2f).coerceAtLeast(0f),
+                y = plotBottom + topPadding,
+            ),
+        )
+    }
+}
+
 private fun buildAxisTicks(
     data: List<SampledLineChartData>,
     maxTickCount: Int,
@@ -559,6 +908,7 @@ private fun niceTickStep(maxValue: Float, maxTickCount: Int): Float {
     return niceFraction * magnitude
 }
 
+@Suppress("DefaultLocale")
 private fun formatAxisValue(
     value: Float,
     prefix: String,
