@@ -28,6 +28,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -63,6 +64,8 @@ import io.github.lumkit.tweak.common.utils.formatElapsedTime
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
@@ -91,9 +94,12 @@ import tweak_alpha.shared.generated.resources.ic_soc
 import tweak_alpha.shared.generated.resources.ic_system_version
 import tweak_alpha.shared.generated.resources.text_avg
 import tweak_alpha.shared.generated.resources.text_battery_level
+import tweak_alpha.shared.generated.resources.text_cpu_cycles
+import tweak_alpha.shared.generated.resources.text_cpu_frequency
 import tweak_alpha.shared.generated.resources.text_cpu_load_total
 import tweak_alpha.shared.generated.resources.text_cpu_loads
 import tweak_alpha.shared.generated.resources.text_cpu_loads_source
+import tweak_alpha.shared.generated.resources.text_cpu_temperature
 import tweak_alpha.shared.generated.resources.text_diff
 import tweak_alpha.shared.generated.resources.text_fps_recording
 import tweak_alpha.shared.generated.resources.text_frame_time
@@ -199,6 +205,14 @@ fun FpsRecordDetailScreen(
 
             item {
                 CpuLoadsChart(detail = detail)
+            }
+
+            item {
+                CpuFreqChart(detail = detail)
+            }
+
+            item {
+                CpuCyclesChart(detail = detail)
             }
         }
     }
@@ -442,20 +456,24 @@ private fun FpsChart(
     val secondaryOneColor = Color(0x8CFF8A65)
     val secondaryTwoColor = Color(0x8C4FC3F7)
     val secondaryThreeColor = Color(0x8CBA68C8)
-    val xAxis = remember(detail) {
-        LineChartXAxisData(
-            dataSet = detail?.fpsSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() } ?: emptyList()
-        )
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), detail) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = detail?.fpsSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() } ?: emptyList()
+            )
+        }
     }
-    val chartData = remember(detail, fpsChartMode, primaryColor) {
-        buildChartData(
-            detail = detail,
-            mode = fpsChartMode,
-            primaryColor = primaryColor,
-            secondaryOneColor = secondaryOneColor,
-            secondaryTwoColor = secondaryTwoColor,
-            secondaryThreeColor = secondaryThreeColor,
-        )
+    val chartData by produceState(initialValue = emptyList<LineChartData>(), detail, fpsChartMode, primaryColor) {
+        value = withContext(Dispatchers.Default) {
+            buildChartData(
+                detail = detail,
+                mode = fpsChartMode,
+                primaryColor = primaryColor,
+                secondaryOneColor = secondaryOneColor,
+                secondaryTwoColor = secondaryTwoColor,
+                secondaryThreeColor = secondaryThreeColor,
+            )
+        }
     }
 
 
@@ -499,7 +517,10 @@ private fun FpsChart(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        if (chartData.isNotEmpty() && xAxis.dataSet.isNotEmpty()) {
+        if (chartData.isNotEmpty()
+            && xAxis.dataSet.isNotEmpty()
+            && chartData.all { it.dataSet.size == xAxis.dataSet.size }
+        ) {
             SmoothLineChart(
                 modifier = Modifier.fillMaxWidth()
                     .height(250.dp),
@@ -647,22 +668,34 @@ private fun FrameTimeChart(
 ) {
     val primary = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
 
-    val frameData = remember(detail) {
-        detail?.frameTimeSamples?.map { it.toFloat() } ?: emptyList()
+    val frameData by produceState(initialValue = emptyList(), detail) {
+        value = withContext(Dispatchers.Default) {
+            detail?.frameTimeSamples?.map { it.toFloat() } ?: emptyList()
+        }
     }
-    val xAxis = remember(detail) {
-        LineChartXAxisData(
-            dataSet = frameData.indices.map { (it.toLong() * 1000).formatElapsedTime() }
-        )
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), detail) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = detail?.frameTimeSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() } ?: emptyList()
+            )
+        }
     }
-    val chartData = remember(frameData) {
-        LineChartData(
-            name = "Frame Time",
-            suffix = "ms",
-            dataSet = frameData,
-            color = primary,
-            axisType = LineChartAxisType.Primary,
-        )
+    val chartData by produceState(initialValue = LineChartData(
+        name = "Frame Time",
+        suffix = "ms",
+        dataSet = emptyList(),
+        color = primary,
+        axisType = LineChartAxisType.Primary,
+    ), frameData, primary) {
+        value = withContext(Dispatchers.Default) {
+            LineChartData(
+                name = "Frame Time",
+                suffix = "ms",
+                dataSet = frameData,
+                color = primary,
+                axisType = LineChartAxisType.Primary,
+            )
+        }
     }
 
     Card(
@@ -670,7 +703,7 @@ private fun FrameTimeChart(
     ) {
         SmallTitle(text = stringResource(Res.string.text_frame_time))
         Spacer(modifier = Modifier.height(4.dp))
-        if (frameData.isNotEmpty()) {
+        if (frameData.isNotEmpty() && xAxis.dataSet.size == chartData.dataSet.size) {
             VerticalBarChart(
                 modifier = Modifier.fillMaxWidth()
                     .padding(start = 8.dp, end = 12.dp)
@@ -710,11 +743,13 @@ private fun CpuLoadsChart(
         mutableStateOf(LinkedHashMap<Int, Boolean>())
     }
     var clusterInfo by rememberSaveable { mutableStateOf(emptyList<List<Int>>()) }
-    val xAxis = remember(detail) {
-        LineChartXAxisData(
-            dataSet = detail?.cpuLoadSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() }
-                ?: emptyList()
-        )
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), detail) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = detail?.cpuLoadSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() }
+                    ?: emptyList()
+            )
+        }
     }
     val clusterColors = remember {
         listOf(
@@ -740,13 +775,21 @@ private fun CpuLoadsChart(
             Color(0x8CB0BEC5),
         )
     }
-    val chartData = remember(detail, clusterInfo, loadOption, clusterColors) {
-        buildCpuLoadChartData(
-            detail = detail,
-            clusterInfo = clusterInfo,
-            loadOption = loadOption,
-            colors = clusterColors,
-        )
+    val chartData by produceState(
+        initialValue = emptyList(),
+        detail,
+        clusterInfo,
+        loadOption,
+        clusterColors,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildCpuLoadChartData(
+                detail = detail,
+                clusterInfo = clusterInfo,
+                loadOption = loadOption,
+                colors = clusterColors,
+            )
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -822,7 +865,283 @@ private fun CpuLoadsChart(
         }
 
         Spacer(modifier = Modifier.height(4.dp))
-        if (chartData.isNotEmpty() && xAxis.dataSet.isNotEmpty()) {
+        if (chartData.isNotEmpty()
+            && xAxis.dataSet.isNotEmpty()
+            && chartData.all { it.dataSet.size == xAxis.dataSet.size }
+        ) {
+            SmoothLineChart(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(end = 12.dp)
+                    .height(250.dp),
+                xAxis = xAxis,
+                data = chartData,
+                axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
+                tickTextColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
+                lineWidth = 1.dp,
+                showGrid = true,
+                gridColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .08f),
+                textStyle = MiuixTheme.textStyles.footnote2.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp,
+                ),
+                showAffix = false,
+            )
+        } else {
+            Spacer(
+                modifier = Modifier.fillMaxWidth()
+                    .height(250.dp)
+            )
+        }
+
+        ChartColorIndicator(chartData, modifier = Modifier.padding(bottom = 16.dp))
+    }
+}
+
+@Suppress("MutableCollectionMutableState")
+@Composable
+private fun CpuFreqChart(
+    detail: FpsRecordDetailAggregate?,
+) {
+    val primary = MiuixTheme.colorScheme.primary
+
+    var sourceOptionsPopState by remember { mutableStateOf(false) }
+    val cpuFrequencyUtil = remember { CpuFrequencyUtil() }
+    var sourceOption by rememberSaveable {
+        mutableStateOf(LinkedHashMap<Int, Boolean>())
+    }
+    var clusterInfo by rememberSaveable { mutableStateOf(emptyList<List<Int>>()) }
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), detail) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = detail?.cpuFreqSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() }
+                    ?: emptyList()
+            )
+        }
+    }
+    val clusterColors = remember {
+        listOf(
+            primary.copy(alpha = .5f),
+            Color(0x8CFF8A65),
+            Color(0x8C4FC3F7),
+            Color(0x8CBA68C8),
+            Color(0x8C81C784),
+            Color(0x8CFFD54F),
+            Color(0x8C64B5F6),
+            Color(0x8CA1887F),
+            Color(0x8C90A4AE),
+            Color(0x8C7986CB),
+            Color(0x8C4DB6AC),
+            Color(0x8CDCE775),
+            Color(0x8CFFB74D),
+            Color(0x8CE57373),
+            Color(0x8CF06292),
+            Color(0x8C9575CD),
+            Color(0x8CAED581),
+            Color(0x8C4DD0E1),
+            Color(0x8CFF8F00),
+            Color(0x8CB0BEC5),
+        )
+    }
+    val chartData by produceState(
+        initialValue = emptyList<LineChartData>(),
+        detail,
+        clusterInfo,
+        sourceOption,
+        clusterColors,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildCpuFreqChartData(
+                detail = detail,
+                clusterInfo = clusterInfo,
+                sourceOption = sourceOption,
+                colors = clusterColors,
+            )
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        clusterInfo = cpuFrequencyUtil.getClusterInfo().map { it.map { it.toInt() } }
+        if (sourceOption.isEmpty()) {
+            sourceOption = LinkedHashMap<Int, Boolean>().apply {
+                repeat(clusterInfo.size) { clusterIndex ->
+                    put(clusterIndex, true)
+                }
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row {
+            SmallTitle(text = stringResource(Res.string.text_cpu_frequency))
+            Spacer(modifier = Modifier.weight(1f))
+            Box {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clip(Rectangle.copy(cornerRadius = 4.dp))
+                        .clickable {
+                            sourceOptionsPopState = true
+                        }.padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = stringResource(Res.string.text_cpu_loads_source),
+                        style = MiuixTheme.textStyles.footnote2.copy(
+                            fontSize = 10.sp,
+                            lineHeight = 10.sp,
+                        ),
+                        color = MiuixTheme.colorScheme.onSurface.copy(.31f)
+                    )
+
+                    Icon(
+                        imageVector = MiuixIcons.ListView,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = primary.copy(.75f)
+                    )
+                }
+
+                OverlayListPopup(
+                    show = sourceOptionsPopState,
+                    alignment = PopupPositionProvider.Align.End,
+                    onDismissRequest = { sourceOptionsPopState = false }
+                ) {
+                    ListPopupColumn {
+                        sourceOption.forEach { (index, enabled) ->
+                            DropdownImpl(
+                                text = clusterInfo.getOrNull(index)
+                                    ?.toCpuClusterLabel()
+                                    ?: "Cpu $index",
+                                optionSize = sourceOption.size,
+                                isSelected = enabled,
+                                index = index,
+                                onSelectedIndexChange = {
+                                    sourceOption = sourceOption.toggleCpuLoadOption(index)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        if (chartData.isNotEmpty()
+            && xAxis.dataSet.isNotEmpty()
+            && chartData.all { it.dataSet.size == xAxis.dataSet.size }
+        ) {
+            SmoothLineChart(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(end = 12.dp)
+                    .height(250.dp),
+                xAxis = xAxis,
+                data = chartData,
+                axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
+                tickTextColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
+                lineWidth = 1.dp,
+                showGrid = true,
+                gridColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .08f),
+                textStyle = MiuixTheme.textStyles.footnote2.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp,
+                ),
+                showAffix = false,
+            )
+        } else {
+            Spacer(
+                modifier = Modifier.fillMaxWidth()
+                    .height(250.dp)
+            )
+        }
+
+        ChartColorIndicator(chartData, modifier = Modifier.padding(bottom = 16.dp))
+    }
+}
+
+@Composable
+private fun CpuCyclesChart(
+    detail: FpsRecordDetailAggregate?,
+) {
+    val primary = MiuixTheme.colorScheme.primary
+    val cpuTemperatureLabel = stringResource(Res.string.text_cpu_temperature)
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), detail) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = detail?.cpuCyclesSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() }
+                    ?: emptyList()
+            )
+        }
+    }
+    val clusterColors = remember {
+        listOf(
+            primary.copy(alpha = .5f),
+            Color(0x8CFF8A65),
+            Color(0x8C4FC3F7),
+            Color(0x8CBA68C8),
+            Color(0x8C81C784),
+            Color(0x8CFFD54F),
+            Color(0x8C64B5F6),
+            Color(0x8CA1887F),
+            Color(0x8C90A4AE),
+            Color(0x8C7986CB),
+            Color(0x8C4DB6AC),
+            Color(0x8CDCE775),
+            Color(0x8CFFB74D),
+            Color(0x8CE57373),
+            Color(0x8CF06292),
+            Color(0x8C9575CD),
+            Color(0x8CAED581),
+            Color(0x8C4DD0E1),
+            Color(0x8CFF8F00),
+            Color(0x8CB0BEC5),
+        )
+    }
+    val cpuFrequencyUtil = remember { CpuFrequencyUtil() }
+    var clusterInfo by rememberSaveable { mutableStateOf(emptyList<List<Int>>()) }
+    val chartData by produceState(
+        initialValue = emptyList<LineChartData>(),
+        detail,
+        clusterInfo,
+        clusterColors,
+        cpuTemperatureLabel,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildCpuCyclesChartData(
+                detail = detail,
+                clusterInfo = clusterInfo,
+                colors = clusterColors,
+                cpuTemperatureLabel = cpuTemperatureLabel,
+            )
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        clusterInfo = cpuFrequencyUtil.getClusterInfo().map { it.map { it.toInt() } }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SmallTitle(text = stringResource(Res.string.text_cpu_cycles))
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = cpuTemperatureLabel,
+                style = MiuixTheme.textStyles.footnote2,
+                color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                modifier = Modifier.padding(end = 16.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        if (chartData.isNotEmpty()
+            && xAxis.dataSet.isNotEmpty()
+            && chartData.all { it.dataSet.size == xAxis.dataSet.size }
+        ) {
             SmoothLineChart(
                 modifier = Modifier.fillMaxWidth()
                     .height(250.dp),
@@ -892,6 +1211,78 @@ private fun buildCpuLoadChartData(
     return result
 }
 
+private fun buildCpuFreqChartData(
+    detail: FpsRecordDetailAggregate?,
+    clusterInfo: List<List<Int>>,
+    sourceOption: Map<Int, Boolean>,
+    colors: List<Color>,
+): List<LineChartData> {
+    val cpuFreqSamples = detail?.cpuFreqSamples ?: return emptyList()
+    if (cpuFreqSamples.isEmpty()) {
+        return emptyList()
+    }
+
+    val result = mutableListOf<LineChartData>()
+    clusterInfo.forEachIndexed { clusterIndex, cores ->
+        if (sourceOption[clusterIndex] != true) return@forEachIndexed
+        val color = colors.getOrElse(clusterIndex) { colors.lastOrNull() ?: Color.Gray }
+        result += LineChartData(
+            name = cores.toCpuClusterLabel(),
+            suffix = "",
+            dataSet = cpuFreqSamples.map { sample ->
+                cores.mapNotNull { core -> sample[core]?.toDouble()?.div(1000.0) }
+                    .average()
+                    .takeIf { !it.isNaN() }
+                    ?.toFloat()
+                    ?: 0f
+            },
+            color = color,
+            axisType = LineChartAxisType.Primary,
+        )
+    }
+    return result
+}
+
+private fun buildCpuCyclesChartData(
+    detail: FpsRecordDetailAggregate?,
+    clusterInfo: List<List<Int>>,
+    colors: List<Color>,
+    cpuTemperatureLabel: String,
+): List<LineChartData> {
+    val cpuCyclesSamples = detail?.cpuCyclesSamples ?: return emptyList()
+    if (cpuCyclesSamples.isEmpty()) {
+        return emptyList()
+    }
+
+    val result = mutableListOf<LineChartData>()
+    clusterInfo.forEachIndexed { clusterIndex, cores ->
+        val color = colors.getOrElse(clusterIndex) { colors.lastOrNull() ?: Color.Gray }
+        result += LineChartData(
+            name = "${cores.toCpuClusterLabel()} (M)",
+            suffix = "",
+            dataSet = cpuCyclesSamples.map { sample ->
+                val avg = cores.mapNotNull { core -> sample[core]?.toDouble() }
+                    .average()
+                    .takeIf { !it.isNaN() }
+                    ?: 0.0
+                (avg / 1_000_000.0).toFloat()
+            },
+            color = color,
+            axisType = LineChartAxisType.Primary,
+        )
+    }
+    if (detail.cpuTemperatureSamples.isNotEmpty()) {
+        result += LineChartData(
+            name = cpuTemperatureLabel,
+            suffix = "",
+            dataSet = detail.cpuTemperatureSamples.map { it.toFloat() },
+            color = Color(0x8CE57373),
+            axisType = LineChartAxisType.Secondary,
+        )
+    }
+    return result
+}
+
 private fun List<Int>.toCpuClusterLabel(): String {
     if (isEmpty()) return "CPU"
     if (size == 1) return "CPU ${minOrNull() ?: -1}"
@@ -909,3 +1300,4 @@ private fun Map<Int, Boolean>.toggleCpuLoadOption(index: Int): LinkedHashMap<Int
         this[index] = !current
     }
 }
+

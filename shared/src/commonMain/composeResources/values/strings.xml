@@ -110,6 +110,9 @@
     <string name="text_battery_level">电池电量</string>
     <string name="text_frame_time">帧生成耗时 (毫秒)</string>
     <string name="text_cpu_loads">CPU负载 (%)</string>
+    <string name="text_cpu_frequency">CPU频率 (MHz)</string>
+    <string name="text_cpu_cycles">CPU Cycles (M)</string>
+    <string name="text_cpu_temperature">CPU温度 (℃)</string>
     <string name="text_cpu_loads_source">数据源</string>
     <string name="text_cpu_load_total">总负载</string>
 </resources>

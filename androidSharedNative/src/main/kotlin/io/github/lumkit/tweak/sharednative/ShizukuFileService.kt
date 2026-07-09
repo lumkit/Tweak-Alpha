@@ -57,6 +57,10 @@ class ShizukuFileService : IRootFileService.Stub() {
         return FileServiceDelegate.chmod(path, mode)
     }
 
+    override fun readCpuCycles(coreIndex: Int): Bundle {
+        return FileServiceDelegate.readCpuCycles(coreIndex)
+    }
+
     override fun unzipToDir(pfd: ParcelFileDescriptor, targetDir: String): Bundle {
         return FileServiceDelegate.unzipToDir(pfd, targetDir)
     }

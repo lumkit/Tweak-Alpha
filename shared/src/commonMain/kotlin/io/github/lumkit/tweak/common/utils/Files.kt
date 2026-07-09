@@ -181,6 +181,10 @@ object Files {
         return getService().chmod(path, mode)
     }
 
+    suspend fun readCpuCycles(coreIndex: Int): NativeFileResult<Long> {
+        return getService().readCpuCycles(coreIndex)
+    }
+
     /**
      * 从 content:// URI 解压 ZIP 文件到指定目录。
      * 通过 ContentResolver 打开输入流，在特权进程中完成解压。

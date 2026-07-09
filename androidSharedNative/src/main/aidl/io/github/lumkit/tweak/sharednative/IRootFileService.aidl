@@ -16,5 +16,6 @@ interface IRootFileService {
     Bundle copy(String sourcePath, String targetPath, boolean overwrite);
     Bundle move(String sourcePath, String targetPath, boolean overwrite);
     Bundle chmod(String path, String mode);
+    Bundle readCpuCycles(int coreIndex);
     Bundle unzipToDir(in ParcelFileDescriptor pfd, String targetDir);
 }

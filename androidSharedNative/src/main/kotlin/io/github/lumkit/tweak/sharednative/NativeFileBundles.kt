@@ -6,6 +6,7 @@ object NativeFileBundles {
     const val KEY_SUCCESS = "success"
     const val KEY_MESSAGE = "message"
     const val KEY_BOOLEAN = "boolean"
+    const val KEY_LONG = "long"
     const val KEY_BYTES = "bytes"
     const val KEY_STRING = "string"
     const val KEY_STRING_LIST = "string_list"
@@ -26,6 +27,11 @@ object NativeFileBundles {
     @JvmStatic
     fun successBoolean(value: Boolean): Bundle = successUnit().apply {
         putBoolean(KEY_BOOLEAN, value)
+    }
+
+    @JvmStatic
+    fun successLong(value: Long): Bundle = successUnit().apply {
+        putLong(KEY_LONG, value)
     }
 
     @JvmStatic

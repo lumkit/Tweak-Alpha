@@ -12,6 +12,7 @@ class CpuFrequencyUtil {
     private var clusterInfo: List<List<String>>? = null
     private var coreCount: Int = -1
     private val cyclesPathCache = mutableMapOf<Int, String?>()
+    private val lastCyclesByCore = mutableMapOf<Int, Long>()
 
     suspend fun getAvailableFrequencies(cluster: Int): List<String> {
         val clusters = getClusterInfo()
@@ -51,13 +52,15 @@ class CpuFrequencyUtil {
     }
 
     suspend fun getCurrentCycles(coreIndex: Int): Long {
-        val path = getCyclesPath(coreIndex) ?: return 0L
-        val content = Files.readText(path).getOrNull().orEmpty()
-        if (content.isBlank()) {
-            cyclesPathCache[coreIndex] = null
-            return 0L
+        val serviceCycles = runCatching { Files.readCpuCycles(coreIndex) }.getOrNull()?.getOrNull()
+        if (serviceCycles != null && serviceCycles >= 0L) {
+            return calculateCyclesDelta(coreIndex, serviceCycles)
         }
-        return parseTimeInStateCycles(content)
+        return calculateCyclesDelta(coreIndex, getLegacyCycles(coreIndex))
+    }
+
+    fun resetCyclesCache() {
+        lastCyclesByCore.clear()
     }
 
     suspend fun getCurrentMinFrequency(cluster: Int): String {
@@ -314,6 +317,25 @@ class CpuFrequencyUtil {
             return null
         }
         return "cpu${clusters[cluster].firstOrNull() ?: return null}"
+    }
+
+    private suspend fun getLegacyCycles(coreIndex: Int): Long {
+        val path = getCyclesPath(coreIndex) ?: return 0L
+        val content = Files.readText(path).getOrNull().orEmpty()
+        if (content.isBlank()) {
+            cyclesPathCache[coreIndex] = null
+            return 0L
+        }
+        return parseTimeInStateCycles(content)
+    }
+
+    private fun calculateCyclesDelta(coreIndex: Int, currentValue: Long): Long {
+        val previousValue = lastCyclesByCore.put(coreIndex, currentValue) ?: return 0L
+        return if (currentValue >= previousValue) {
+            currentValue - previousValue
+        } else {
+            0L
+        }
     }
 
     private suspend fun pathExists(path: String): Boolean {

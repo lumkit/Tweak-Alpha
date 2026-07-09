@@ -210,6 +210,15 @@ private object RootNativeFileService : NativeFileService {
         }
     }
 
+    override suspend fun readCpuCycles(coreIndex: Int): NativeFileResult<Long> {
+        return execute(
+            operation = "readCpuCycles",
+            primaryPath = "cpu$coreIndex",
+            transform = { bundle -> bundle.getLong(NativeFileBundles.KEY_LONG) },
+            block = { service -> service.readCpuCycles(coreIndex) },
+        )
+    }
+
     override suspend fun unzipFromUri(uriString: String, targetDir: String): NativeFileResult<Unit> {
         return executeUnit("unzipFromUri", uriString, targetDir) { service ->
             val uri = uriString.toUri()
@@ -445,6 +454,15 @@ private object ShizukuNativeFileService : NativeFileService {
         return executeUnit("chmod", path) { service ->
             service.chmod(path, mode)
         }
+    }
+
+    override suspend fun readCpuCycles(coreIndex: Int): NativeFileResult<Long> {
+        return execute(
+            operation = "readCpuCycles",
+            primaryPath = "cpu$coreIndex",
+            transform = { bundle -> bundle.getLong(NativeFileBundles.KEY_LONG) },
+            block = { service -> service.readCpuCycles(coreIndex) },
+        )
     }
 
     override suspend fun unzipFromUri(uriString: String, targetDir: String): NativeFileResult<Unit> {

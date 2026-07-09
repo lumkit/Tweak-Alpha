@@ -79,6 +79,8 @@ interface NativeFileService {
 
     suspend fun chmod(path: String, mode: String): NativeFileResult<Unit>
 
+    suspend fun readCpuCycles(coreIndex: Int): NativeFileResult<Long>
+
     /**
      * 从 content:// URI 解压 ZIP 文件到指定目录。
      *

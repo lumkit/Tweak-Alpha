@@ -107,6 +107,13 @@ internal object FileServiceDelegate {
     }
 
     @JvmStatic
+    fun readCpuCycles(coreIndex: Int): Bundle = try {
+        NativeFileBundles.successLong(CpuCyclesBridge.readCpuCycles(coreIndex))
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
+    @JvmStatic
     fun unzipToDir(pfd: ParcelFileDescriptor, targetDir: String): Bundle = try {
         // 确保目标目录存在
         NativeFileBridge.mkdirs(targetDir)

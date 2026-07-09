@@ -95,12 +95,13 @@ fun SmoothLineChart(
     textStyle: TextStyle = TextStyle.Default,
     showAffix: Boolean = true,
 ) {
-    require(data.isNotEmpty()) { "Line chart data must not be empty." }
-    require(xAxis.dataSet.isNotEmpty()) { "X axis data must not be empty." }
+    if (data.isEmpty() || xAxis.dataSet.isEmpty()) {
+        return
+    }
     data.forEach {
         require(it.name.isNotBlank()) { "Line chart data name must not be blank." }
-        require(it.dataSet.size == xAxis.dataSet.size) {
-            "Each dataSet length must match xAxis length."
+        if (it.dataSet.size != xAxis.dataSet.size) {
+            return
         }
     }
 
@@ -161,12 +162,14 @@ fun VerticalBarChart(
     barBorderWidth: Dp = 1.dp,
 ) {
     require(data.name.isNotBlank()) { "Bar chart data name must not be blank." }
-    require(xAxis.dataSet.isNotEmpty()) { "X axis data must not be empty." }
+    if (xAxis.dataSet.isEmpty() || data.dataSet.isEmpty()) {
+        return
+    }
     require(data.axisType == LineChartAxisType.Primary) {
         "VerticalBarChart only supports Primary axis data."
     }
-    require(data.dataSet.size == xAxis.dataSet.size) {
-        "dataSet length must match xAxis length."
+    if (data.dataSet.size != xAxis.dataSet.size) {
+        return
     }
 
     val textMeasurer = rememberTextMeasurer()

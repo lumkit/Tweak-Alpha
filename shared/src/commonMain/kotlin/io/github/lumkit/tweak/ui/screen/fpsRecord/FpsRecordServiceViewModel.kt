@@ -101,6 +101,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
             it.packageName == currentForegroundPackage && it.packageName != packageName
         } ?: throw RuntimeException(getString(Res.string.text_record_fail_not_find_app_in_helper))
 
+        cpuFrequencyUtil.resetCyclesCache()
         val sessionStartTime = Clock.System.now().toEpochMilliseconds()
 
         val session = FpsNoteSessionEntity(
@@ -162,6 +163,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
                 if (currentForegroundPackage != sessionPackageName) {
                     _isSamplingPaused.value = true
                     lastActiveAt = sampleStartAt
+                    cpuFrequencyUtil.resetCyclesCache()
                     continue
                 }
                 _isSamplingPaused.value = false

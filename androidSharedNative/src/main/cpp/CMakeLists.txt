@@ -8,6 +8,7 @@ add_library(
         native_main.cpp
         native_file.cpp
         native_gpu.cpp
+        native_cycles.cpp
         native_sysprop.cpp
         native_storage.cpp
 )
