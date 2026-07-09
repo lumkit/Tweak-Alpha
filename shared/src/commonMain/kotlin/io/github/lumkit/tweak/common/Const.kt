@@ -9,6 +9,6 @@ expect object Const {
 
 object ConstCommon {
     object Navigation {
-        const val ACTION_OPEN_SYSTEM_UPDATE = "ACTION_OPEN_SYSTEM_UPDATE"
+        const val ACTION_DEEPLINK_SELF = "ACTION_DEEPLINK_SELF"
     }
 }

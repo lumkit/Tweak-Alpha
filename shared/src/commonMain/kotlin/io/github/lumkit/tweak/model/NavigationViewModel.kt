@@ -63,6 +63,10 @@ object NavigationViewModel: BaseViewModel() {
                         navigator.singleTop(route)
                     }
 
+                    NavigationIntentTargetScreen.FpsRecord -> {
+                        val route = json.decodeFromString<Screen.FpsRecord>(intent.screenJson)
+                        navigator.singleTop(route)
+                    }
                 }
             }
         }

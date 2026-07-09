@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
      * 处理导航意图
      */
     private fun handleIntentForNavIntent(intent: Intent?) {
-        if (intent?.action == ConstCommon.Navigation.ACTION_OPEN_SYSTEM_UPDATE) {
+        if (intent?.action == ConstCommon.Navigation.ACTION_DEEPLINK_SELF) {
             val navIntent = json.decodeFromString<NavigationIntent>(intent.getStringExtra("nav_intent") ?: "{}")
             NavigationViewModel.navigate(navIntent)
         }

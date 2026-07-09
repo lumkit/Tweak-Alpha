@@ -436,7 +436,7 @@ class UpdateEngineService: BaseService() {
         val intentJson = json.encodeToString(navIntent)
 
         val intent = Intent(this, MainActivity::class.java).apply {
-            action = ConstCommon.Navigation.ACTION_OPEN_SYSTEM_UPDATE
+            action = ConstCommon.Navigation.ACTION_DEEPLINK_SELF
             putExtra("nav_intent", intentJson)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP

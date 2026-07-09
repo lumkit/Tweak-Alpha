@@ -16,13 +16,18 @@ import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.getDeviceModel
 import io.github.lumkit.tweak.common.utils.getDeviceType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.getString
+import kotlin.time.Duration.Companion.milliseconds
 
 object FpsRecordViewModel : BaseViewModel() {
 
@@ -59,14 +64,6 @@ object FpsRecordViewModel : BaseViewModel() {
     private val _platformInfoState = MutableStateFlow<PlatformInfo?>(null)
     val platformInfoState = _platformInfoState.asStateFlow()
 
-    /** 所有未删除的会话列表 */
-    val sessions = repository.querySessions()
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5_000),
-            emptyList()
-        )
-
     val sessionNotes = repository.querySessionNotes()
         .map { notes ->
             notes.map { it.toVo() }
@@ -81,6 +78,34 @@ object FpsRecordViewModel : BaseViewModel() {
     private val _metrics = MutableStateFlow<List<FpsMetricEntity>>(emptyList())
     val metrics = _metrics.asStateFlow()
 
+    private val selectableSessionIds = sessionNotes
+        .map { notes ->
+            notes.map { it.sessionId }
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            emptyList()
+        )
+
+    private val _selectedSessionIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedSessionIds = combine(_selectedSessionIds, selectableSessionIds) { selected, selectable ->
+        val selectableSet = selectable.toSet()
+        selected.filter { it in selectableSet }.sorted()
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyList()
+    )
+
+    val hasSelectedAllSessions = combine(selectedSessionIds, selectableSessionIds) { selected, selectable ->
+        selectable.isNotEmpty() && selected.size == selectable.size
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        false
+    )
+
     init {
         suspendLaunch(id = "init_platform_info") {
             loading()
@@ -91,6 +116,15 @@ object FpsRecordViewModel : BaseViewModel() {
                 platformVersionName = "Android ${SDK_RELEASE}($SDK_INT)"
             )
             success()
+        }
+
+        viewModelScope.launch {
+            selectableSessionIds.collect { selectable ->
+                val selectableSet = selectable.toSet()
+                _selectedSessionIds.update { selected ->
+                    selected.filter { it in selectableSet }.toSet()
+                }
+            }
         }
     }
 
@@ -143,6 +177,46 @@ object FpsRecordViewModel : BaseViewModel() {
             repository.deleteSession(sessionId)
             success()
         }
+    }
+
+    fun toggleSelectedSession(id: Long) {
+        if (id !in selectableSessionIds.value) {
+            return
+        }
+        _selectedSessionIds.update { selected ->
+            if (id in selected) selected - id else selected + id
+        }
+    }
+
+    fun toggleSelectedAllSession() {
+        val selectable = selectableSessionIds.value.toSet()
+        if (selectable.isEmpty()) {
+            clearSelectedSessions()
+            return
+        }
+        _selectedSessionIds.update { selected ->
+            val current = selected.intersect(selectable)
+            if (current.size == selectable.size) {
+                emptySet()
+            } else {
+                selectable
+            }
+        }
+    }
+
+    fun clearSelectedSessions() {
+        _selectedSessionIds.value = emptySet()
+    }
+
+    fun softDeleteSessions() = suspendLaunch(
+        "softDeleteSessions"
+    ) {
+        loading()
+        _selectedSessionIds.value.forEach {
+            delay(50.milliseconds)
+            repository.softDeleteSession(it)
+        }
+        success()
     }
 }
 

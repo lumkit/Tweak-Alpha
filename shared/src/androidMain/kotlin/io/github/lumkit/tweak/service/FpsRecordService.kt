@@ -26,19 +26,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
 import io.github.lumkit.tweak.ContextContent
+import io.github.lumkit.tweak.MainActivity
 import io.github.lumkit.tweak.application
+import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.common.base.BaseService
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
 import io.github.lumkit.tweak.common.utils.FpsUtils
 import io.github.lumkit.tweak.common.utils.SnapToEdgeTouchProvider
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.model.NavigationIntent
+import io.github.lumkit.tweak.model.NavigationIntentTargetScreen
+import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordServiceViewModel
 import io.github.lumkit.tweak.ui.theme.colorBusy
 import kotlinx.coroutines.CoroutineScope
@@ -46,6 +52,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -138,6 +145,13 @@ class FpsRecordService: BaseService() {
     }
 }
 
+private val json by lazy {
+    Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+}
+
 @Composable
 private fun ComposeOverlayHelper.FpsRecordContent() {
     val viewModel = FpsRecordServiceViewModel
@@ -219,6 +233,8 @@ private fun ComposeOverlayHelper.FpsRecordContent() {
 
 @Composable
 private fun PreferenceContent(helper: ComposeOverlayHelper) {
+    val context = LocalContext.current
+
     Row(
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -231,7 +247,21 @@ private fun PreferenceContent(helper: ComposeOverlayHelper) {
                 .size(22.dp)
                 .padding(2.dp)
                 .clickable {
-                    // TODO 启动某一Route
+                    val navIntent = NavigationIntent(
+                        targetScreen = NavigationIntentTargetScreen.FpsRecord,
+                        screenJson = json.encodeToString(Screen.FpsRecord)
+                    )
+
+                    val intentJson = json.encodeToString(navIntent)
+
+                    val intent = Intent(context, MainActivity::class.java).apply {
+                        action = ConstCommon.Navigation.ACTION_DEEPLINK_SELF
+                        putExtra("nav_intent", intentJson)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+
+                    context.startActivity(intent)
                 },
             tint = MiuixTheme.colorScheme.background.copy(.75f),
         )
