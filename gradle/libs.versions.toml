@@ -4,15 +4,15 @@ android-compileSdk = "37"
 android-minSdk = "24"
 android-targetSdk = "37"
 androidx-activity = "1.13.0"
-androidx-lifecycle = "2.11.0-beta01"
+androidx-lifecycle = "2.11.0-rc01"
 composeMultiplatform = "1.11.1"
 documentfile = "1.1.0"
 kotlin = "2.4.0"
 libsu = "6.0.0"
 navigation3 = "1.1.1"
-lifecycle-viewmodel-navigation3 = "2.11.0-beta01"
+lifecycle-viewmodel-navigation3 = "2.11.0-rc01"
 kotlinx-serialization = "1.11.0"
-miuix = "0.9.2"
+miuix = "0.9.3"
 androidx-datastore = "1.2.1"
 coil3 = "3.5.0"
 liquid-glass = "2.0.0"
@@ -20,11 +20,12 @@ kyantShapes = "1.2.0"
 annotations = "26.1.0"
 shizuku = "13.1.5"
 room = "2.8.4"
-sqlite = "2.6.2"
+sqlite = "2.7.0"
 ksp = "2.3.9"
 
 [libraries]
 android-gradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
+
 kotlin-gradlePlugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }

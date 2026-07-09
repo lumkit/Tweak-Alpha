@@ -106,4 +106,6 @@
     <string name="text_smoothness_state">流畅度</string>
     <string name="text_temperature">温度</string>
     <string name="text_power">功率</string>
+    <string name="text_soc_load">SoC负载</string>
+    <string name="text_battery_level">电池电量</string>
 </resources>

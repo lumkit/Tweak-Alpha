@@ -323,7 +323,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
     private suspend fun sampleGpu(): GpuSample {
         val gpuFreq = GpuUtils.getGpuFreq().toLongOrNull()
         val canReadGpuInfo = gpuFreq != null
-        val gpuLoad = GpuUtils.getGpuLoad().toDouble() / 1000.0
+        val gpuLoad = GpuUtils.getGpuLoad().toDouble()
         return GpuSample(
             load = gpuLoad.takeIf { canReadGpuInfo },
             freq = gpuFreq.takeIf { canReadGpuInfo },

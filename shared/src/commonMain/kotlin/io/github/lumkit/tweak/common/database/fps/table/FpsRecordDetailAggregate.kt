@@ -1,6 +1,5 @@
 package io.github.lumkit.tweak.common.database.fps.table
 
-import io.github.lumkit.tweak.common.utils.AppCpuLoad
 import io.github.lumkit.tweak.model.AndroidSoc
 import kotlinx.serialization.Serializable
 
@@ -27,7 +26,7 @@ data class FpsRecordDetailAggregate(
     val avgPower: Double,
     val fpsSamples: List<Double>,
     val batteryTemperatureSamples: List<Double>,
-    val cpuLoadSamples: List<CpuLoadRecord>,
+    val cpuLoadSamples: List<Map<Int, Double>>,
     val gpuLoadSamples: List<Double>,
     val frameTimeSamples: List<Int>,
     val cpuFreqSamples: List<Map<Int, Long>>,
@@ -38,10 +37,4 @@ data class FpsRecordDetailAggregate(
     val powerSamples: List<Double>,
     val batteryLevelSamples: List<Double>,
     val threadLoadSamples: List<Map<String, Double>>,
-)
-
-@Serializable
-data class CpuLoadRecord(
-    val app: AppCpuLoad = AppCpuLoad(),
-    val device: Map<Int, Double> = emptyMap(),
 )

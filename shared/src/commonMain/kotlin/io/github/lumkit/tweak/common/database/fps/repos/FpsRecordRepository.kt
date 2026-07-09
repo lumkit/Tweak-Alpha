@@ -1,7 +1,6 @@
 package io.github.lumkit.tweak.common.database.fps.repos
 
 import io.github.lumkit.tweak.common.database.fps.FpsRecordDatabase
-import io.github.lumkit.tweak.common.database.fps.table.CpuLoadRecord
 import io.github.lumkit.tweak.common.database.fps.table.FpsMetricEntity
 import io.github.lumkit.tweak.common.database.fps.table.FpsNoteSessionEntity
 import io.github.lumkit.tweak.common.database.fps.table.FpsRecordDetailAggregate
@@ -87,7 +86,7 @@ class FpsRecordRepository {
         val fpsSamples = metrics.map { it.fps }
         val batteryTemperatureSamples = metrics.map { it.batteryTemperature }
         val cpuLoadSamples = metrics.map { metric ->
-            decodeOrNull<CpuLoadRecord>(metric.cpuLoad) ?: CpuLoadRecord()
+            decodeOrNull<Map<Int, Double>>(metric.cpuLoad) ?: emptyMap()
         }
         val gpuLoadSamples = metrics.mapNotNull { it.gpuLoad }
         val frameTimeSamples = metrics.map { it.frameTime }
