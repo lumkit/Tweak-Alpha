@@ -56,6 +56,7 @@ import io.github.lumkit.tweak.common.component.LineChartXAxisData
 import io.github.lumkit.tweak.common.component.SmoothLineChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.database.fps.table.FpsRecordDetailAggregate
+import io.github.lumkit.tweak.common.utils.formatElapsedTime
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
@@ -350,7 +351,7 @@ private fun RecordAppInfo(
                 )
                 RecordAppInfoItem(
                     title = "5% Low",
-                    value = remember(fpsLow5) { "%.1f%%".format(fpsLow5) },
+                    value = remember(fpsLow5) { "%.1f".format(fpsLow5) },
                     foot = "FPS"
                 )
                 RecordAppInfoItem(
@@ -416,13 +417,13 @@ private fun FpsChart(
     detail: FpsRecordDetailAggregate?,
 ) {
     var fpsChartMode by rememberSaveable { mutableStateOf(FpsChartMode.Temperature) }
-    val primaryColor = MiuixTheme.colorScheme.primary
-    val secondaryOneColor = Color(0xFFFF8A65)
-    val secondaryTwoColor = Color(0xFF4FC3F7)
-    val secondaryThreeColor = Color(0xFFBA68C8)
+    val primaryColor = MiuixTheme.colorScheme.primary.copy(.5f)
+    val secondaryOneColor = Color(0x8CFF8A65)
+    val secondaryTwoColor = Color(0x8C4FC3F7)
+    val secondaryThreeColor = Color(0x8CBA68C8)
     val xAxis = remember(detail) {
         LineChartXAxisData(
-            dataSet = detail?.fpsSamples?.indices?.map { "${it + 1}s" } ?: emptyList()
+            dataSet = detail?.fpsSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() } ?: emptyList()
         )
     }
     val chartData = remember(detail, fpsChartMode, primaryColor) {
@@ -472,7 +473,7 @@ private fun FpsChart(
         if (chartData.isNotEmpty() && xAxis.dataSet.isNotEmpty()) {
             SmoothLineChart(
                 modifier = Modifier.fillMaxWidth()
-                    .height(280.dp),
+                    .height(250.dp),
                 xAxis = xAxis,
                 data = chartData,
                 axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
@@ -489,7 +490,7 @@ private fun FpsChart(
         } else {
             Spacer(
                 modifier = Modifier.fillMaxWidth()
-                    .height(280.dp)
+                    .height(250.dp)
             )
         }
 
