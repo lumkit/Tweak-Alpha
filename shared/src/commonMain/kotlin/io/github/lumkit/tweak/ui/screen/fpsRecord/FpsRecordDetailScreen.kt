@@ -74,6 +74,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.ConvertFile
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
@@ -455,7 +456,8 @@ private fun FpsChart(
                         }
                         fpsChartMode = entries[nextIndex]
                     }.padding(4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = stringResource(fpsChartMode.stringResource),
@@ -464,6 +466,13 @@ private fun FpsChart(
                         lineHeight = 10.sp,
                     ),
                     color = MiuixTheme.colorScheme.onSurface.copy(.31f)
+                )
+
+                Icon(
+                    imageVector = MiuixIcons.ConvertFile,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MiuixTheme.colorScheme.primary.copy(.75f)
                 )
             }
         }
