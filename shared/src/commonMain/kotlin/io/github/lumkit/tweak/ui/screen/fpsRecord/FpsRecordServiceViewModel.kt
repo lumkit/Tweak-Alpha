@@ -146,6 +146,10 @@ object FpsRecordServiceViewModel : BaseViewModel() {
                     stopRecord()
                     break
                 }
+
+                val fps = FpsUtils.getCurrentFps()
+                _currentFpsState.value = "%d".format(fps.roundToInt())
+
                 val currentForegroundPackage = ForegroundAppMonitor.currentForegroundPackage
                 if (currentForegroundPackage != sessionPackageName) {
                     _isSamplingPaused.value = true
@@ -160,6 +164,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
                     sessionId = sessionId,
                     recordingTime = currentRecordedDuration,
                     packageName = sessionPackageName,
+                    fps = fps,
                 )
 
                 val sampleEndAt = Clock.System.now().toEpochMilliseconds()
@@ -236,13 +241,12 @@ object FpsRecordServiceViewModel : BaseViewModel() {
         sessionId: Long,
         recordingTime: Long,
         packageName: String,
+        fps: Float,
     ): FpsMetricEntity = withContext(Dispatchers.IO) {
         coroutineScope {
             val timestamp = Clock.System.now().toEpochMilliseconds()
 
             val fpsDeferred = async {
-                val fps = FpsUtils.getCurrentFps()
-                _currentFpsState.value = "%d".format(fps.roundToInt())
                 FpsSample(
                     fps = fps.toDouble(),
                     frameTime = if (fps > 0f) (1000f / fps).toInt() else 0,
