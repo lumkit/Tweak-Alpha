@@ -1340,7 +1340,7 @@ private fun PowerChart(
                 append(stringResource(Res.string.text_max_high))
                 append(": ${detail?.powerSamples?.max()?.roundToInt()?.formatPower()}")
                 append("    ")
-                append(stringResource(Res.string.text_max_high))
+                append(stringResource(Res.string.text_min_low))
                 append(": ${detail?.powerSamples?.min()?.roundToInt()?.formatPower()}")
                 append("    ")
                 append(stringResource(Res.string.text_avg))

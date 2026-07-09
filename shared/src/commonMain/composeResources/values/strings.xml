@@ -121,4 +121,11 @@
     <string name="text_dialog_delete_fps_record_notes">确定要删除选中的帧率记录吗？删除后无法恢复，点击确认按钮以继续</string>
     <string name="text_dialog_delete_fps_record_notes_loading">删除记录中...</string>
     <string name="text_dialog_confirm">确认</string>
+    <string name="text_about">关于</string>
+    <string name="text_app_version">版本信息</string>
+    <string name="text_github">GitHub</string>
+    <string name="text_github_web">https://github.com/lumkit/Tweak-Alpha</string>
+    <string name="text_open_sources">开源协议</string>
+    <string name="text_join_qq">讨论组</string>
+    <string name="text_qq_url">mqqapi://card/show_pslcard?src_type=internal&amp;version=1&amp;uin=768798964&amp;card_type=group&amp;source=qrcode</string>
 </resources>

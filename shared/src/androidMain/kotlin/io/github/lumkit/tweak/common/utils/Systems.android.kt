@@ -251,3 +251,28 @@ private fun notifyFromBackground(msg: String) {
         .build()
     NotificationManagerCompat.from(application).notify(msg.hashCode(), notification)
 }
+
+actual val BUILD_VERSION_CODE: Long
+    get() {
+        val packageInfo = application.packageManager.getPackageInfo(packageName, 0)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfo.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            packageInfo.versionCode.toLong()
+        }
+    }
+actual val BUILD_VERSION_NAME: String
+    get() = application.packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
+
+actual fun openUrl(url: String) {
+    val intent = Intent(Intent.ACTION_VIEW)
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    intent.data = url.toUri()
+
+    try {
+        application.startActivity(intent)
+    } catch (e: Exception) {
+        logD(e.stackTraceToString())
+    }
+}

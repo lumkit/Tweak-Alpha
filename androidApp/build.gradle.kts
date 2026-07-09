@@ -42,8 +42,8 @@ android {
         applicationId = "io.github.lumkit.tweak"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1000
-        versionName = "1.0.0"
+        versionCode = 1001
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

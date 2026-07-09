@@ -30,6 +30,7 @@ import io.github.lumkit.tweak.navigation.rememberNavigationState
 import io.github.lumkit.tweak.ui.screen.feature.FeatureRegistry
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordDetailScreen
 import io.github.lumkit.tweak.ui.screen.main.MainScreen
+import io.github.lumkit.tweak.ui.screen.settings.OpenSourceScreen
 import io.github.lumkit.tweak.ui.screen.splash.SplashScreen
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SnackbarHost
@@ -122,6 +123,10 @@ private fun AppRoute(
 
             entry<Screen.FpsRecordDetail> {
                 FpsRecordDetailScreen(it.id)
+            }
+
+            entry<Screen.OpenSources> {
+                OpenSourceScreen()
             }
         }
     }

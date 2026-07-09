@@ -91,3 +91,8 @@ expect val packageName: String
 expect fun startKeepAliveService(isForegroundService: Boolean)
 
 expect fun toastText(msg: String)
+
+expect val BUILD_VERSION_CODE: Long
+expect val BUILD_VERSION_NAME: String
+
+expect fun openUrl(url: String)

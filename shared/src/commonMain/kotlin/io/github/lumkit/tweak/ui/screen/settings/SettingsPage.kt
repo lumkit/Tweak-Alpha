@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.ui.screen.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -29,22 +31,29 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.component.Block
+import io.github.lumkit.tweak.common.component.Logo
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.utils.BUILD_VERSION_CODE
+import io.github.lumkit.tweak.common.utils.BUILD_VERSION_NAME
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.hasNotificationPermission
 import io.github.lumkit.tweak.common.utils.isIgnoringBatteryOptimizations
 import io.github.lumkit.tweak.common.utils.jumpToAppInfo
 import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.common.utils.openUrl
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.requestNotificationPermission
 import io.github.lumkit.tweak.common.utils.restartApp
 import io.github.lumkit.tweak.common.utils.trySetIsIgnoringBatteryOptimizations
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
+import io.github.lumkit.tweak.navigation.LocalNavigator
+import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -53,6 +62,7 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SnackbarResult
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -61,6 +71,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.ic_logo_qq
+import tweak_alpha.shared.generated.resources.text_about
+import tweak_alpha.shared.generated.resources.text_app_version
 import tweak_alpha.shared.generated.resources.text_auto_start
 import tweak_alpha.shared.generated.resources.text_auto_start_description
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list
@@ -71,11 +84,16 @@ import tweak_alpha.shared.generated.resources.text_framework_mode_description
 import tweak_alpha.shared.generated.resources.text_framework_mode_root
 import tweak_alpha.shared.generated.resources.text_framework_mode_shizuku
 import tweak_alpha.shared.generated.resources.text_framework_mode_unknow
+import tweak_alpha.shared.generated.resources.text_github
+import tweak_alpha.shared.generated.resources.text_github_web
+import tweak_alpha.shared.generated.resources.text_join_qq
 import tweak_alpha.shared.generated.resources.text_jump_to_app_info
 import tweak_alpha.shared.generated.resources.text_notification_permission
 import tweak_alpha.shared.generated.resources.text_notification_permission_denied
+import tweak_alpha.shared.generated.resources.text_open_sources
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick_description
+import tweak_alpha.shared.generated.resources.text_qq_url
 import tweak_alpha.shared.generated.resources.text_settings
 import tweak_alpha.shared.generated.resources.text_theme
 import tweak_alpha.shared.generated.resources.text_theme_dark
@@ -139,6 +157,10 @@ fun SettingsPage(
 
             item {
                 FrameworkContent(viewModel)
+            }
+
+            item {
+                AboutContent()
             }
         }
     }
@@ -356,6 +378,71 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                     if (!hasNotificationPermission()) {
                         notificationLauncher.requestNotificationPermission()
                     }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutContent() {
+    val navigator = LocalNavigator.current
+
+    SettingsPreferenceGroup(
+        modifier = Modifier.fillMaxWidth(),
+        title = stringResource(Res.string.text_about),
+    ) {
+        // 版本信息
+        val summary = remember { "v${BUILD_VERSION_NAME}($BUILD_VERSION_CODE)" }
+        Block {
+            ArrowPreference(
+                title = stringResource(Res.string.text_app_version),
+                summary = summary,
+                startAction = {
+                    Logo(modifier = Modifier.size(28.dp))
+                },
+                onClick = {
+
+                }
+            )
+        }
+
+        // 开源地址
+        Block {
+            val url = stringResource(Res.string.text_github_web)
+            ArrowPreference(
+                title = stringResource(Res.string.text_github),
+                summary = url,
+                onClick = {
+                    openUrl(url)
+                }
+            )
+        }
+
+        // 开源许可
+        Block {
+            ArrowPreference(
+                title = stringResource(Res.string.text_open_sources),
+                onClick = {
+                    navigator.navigate(Screen.OpenSources)
+                }
+            )
+        }
+
+        // 加QQ群
+        Block {
+            val qqUrl = stringResource(Res.string.text_qq_url)
+            ArrowPreference(
+                title = stringResource(Res.string.text_join_qq),
+                startAction = {
+                    Image(
+                        painter = painterResource(Res.drawable.ic_logo_qq),
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp)
+                    )
+                },
+                onClick = {
+                    openUrl(qqUrl)
                 }
             )
         }
