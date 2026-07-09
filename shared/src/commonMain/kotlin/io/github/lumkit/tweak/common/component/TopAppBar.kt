@@ -24,6 +24,7 @@ fun TopBar(
     title: String,
     modifier: Modifier = Modifier,
     largeTitle: String = title,
+    subTitle: String = "",
     scrollBehavior: ScrollBehavior,
     backdrop: Backdrop,
     navigationIcon: @Composable (() -> Unit) = {},
@@ -35,6 +36,7 @@ fun TopBar(
     TopAppBar(
         title = title,
         largeTitle = largeTitle,
+        subtitle = subTitle,
         scrollBehavior = scrollBehavior,
         color = if (advancedBackdropEffectSupported) {
             Color.Transparent

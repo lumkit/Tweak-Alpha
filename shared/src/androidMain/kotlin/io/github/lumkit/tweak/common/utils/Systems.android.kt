@@ -17,6 +17,8 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import android.util.DisplayMetrics
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.annotation.RequiresApi
@@ -182,6 +184,22 @@ actual val BRAND: String
     get() = Build.BRAND
 actual val MODEL: String
     get() = Build.MODEL
+
+actual fun getDeviceScreenWidth(): Int {
+    return getDeviceScreenMetrics().widthPixels
+}
+
+actual fun getDeviceScreenHeight(): Int {
+    return getDeviceScreenMetrics().heightPixels
+}
+
+@Suppress("DEPRECATION")
+private fun getDeviceScreenMetrics(): DisplayMetrics {
+    val windowManager = application.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    return DisplayMetrics().also { metrics ->
+        windowManager.defaultDisplay.getRealMetrics(metrics)
+    }
+}
 
 actual val packageName: String
     get() = application.packageName

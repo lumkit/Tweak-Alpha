@@ -35,6 +35,9 @@ interface FpsRecordDao {
     @Query("SELECT * FROM fps_note_session WHERE `delete` = 0 AND isRecordEnd = 1 ORDER BY recordingTime DESC")
     fun querySessions(): Flow<List<FpsNoteSessionEntity>>
 
+    @Query("SELECT * FROM fps_note_session WHERE id = :sessionId LIMIT 1")
+    suspend fun querySessionById(sessionId: Long): FpsNoteSessionEntity?
+
     @Query(
         """
         SELECT

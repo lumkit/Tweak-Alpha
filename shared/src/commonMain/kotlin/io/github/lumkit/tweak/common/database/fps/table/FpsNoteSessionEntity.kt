@@ -32,7 +32,10 @@ data class FpsNoteSessionEntity(
     /** 应用图标路径（本地缓存路径，可为空） */
     val iconPath: String? = null,
 
-    /** 本次录制的时间长度（ms 或自定义单位，建议明确单位） */
+    /** App版本信息 **/
+    val appVersion: String,
+
+    /** 本次录制的时间戳 */
     val recordingTime: Long,
 
     /** 设备型号（如 Pixel 8 / Xiaomi 14） */
@@ -41,8 +44,17 @@ data class FpsNoteSessionEntity(
     /** SoC 信息 JSON（例如 CPU/GPU/芯片型号等结构化信息） */
     val socJson: String? = null,
 
-    /** 平台名称（如 Android / HarmonyOS 等） */
+    /** 平台类型名称（如手机、平板） */
     val platformName: String,
+
+    /** 版本名称（如Android 16） **/
+    val platformVersionName: String,
+
+    /** 设备屏幕宽度 **/
+    val deviceScreenWidth: Int,
+
+    /** 设备屏幕高度 **/
+    val deviceScreenHeight: Int,
 
     /** 用户备注信息（用于标记一次测试环境或问题描述） */
     val note: String? = null,

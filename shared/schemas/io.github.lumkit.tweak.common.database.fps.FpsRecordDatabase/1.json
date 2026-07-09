@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "94f6214b55cc6354509ff27471ab48f9",
+    "identityHash": "d63bd9eba274a830c5b03f9b26ffd942",
     "entities": [
       {
         "tableName": "fps_note_session",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `packageName` TEXT NOT NULL, `appName` TEXT NOT NULL, `iconPath` TEXT, `recordingTime` INTEGER NOT NULL, `deviceModel` TEXT NOT NULL, `socJson` TEXT, `platformName` TEXT NOT NULL, `note` TEXT, `isRecordEnd` INTEGER NOT NULL, `delete` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `packageName` TEXT NOT NULL, `appName` TEXT NOT NULL, `iconPath` TEXT, `appVersion` TEXT NOT NULL, `recordingTime` INTEGER NOT NULL, `deviceModel` TEXT NOT NULL, `socJson` TEXT, `platformName` TEXT NOT NULL, `platformVersionName` TEXT NOT NULL, `deviceScreenWidth` INTEGER NOT NULL, `deviceScreenHeight` INTEGER NOT NULL, `note` TEXT, `isRecordEnd` INTEGER NOT NULL, `delete` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -32,6 +32,12 @@
             "affinity": "TEXT"
           },
           {
+            "fieldPath": "appVersion",
+            "columnName": "appVersion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
             "fieldPath": "recordingTime",
             "columnName": "recordingTime",
             "affinity": "INTEGER",
@@ -52,6 +58,24 @@
             "fieldPath": "platformName",
             "columnName": "platformName",
             "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "platformVersionName",
+            "columnName": "platformVersionName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deviceScreenWidth",
+            "columnName": "deviceScreenWidth",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deviceScreenHeight",
+            "columnName": "deviceScreenHeight",
+            "affinity": "INTEGER",
             "notNull": true
           },
           {
@@ -219,7 +243,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '94f6214b55cc6354509ff27471ab48f9')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd63bd9eba274a830c5b03f9b26ffd942')"
     ]
   }
 }

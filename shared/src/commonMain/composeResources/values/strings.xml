@@ -99,4 +99,11 @@
     <string name="text_record_finished">录制结束</string>
     <string name="text_recording_duration">时长：</string>
     <string name="text_recording_avg">(平均)</string>
+    <string name="text_max_high">最高</string>
+    <string name="text_min_low">最低</string>
+    <string name="text_avg">平均</string>
+    <string name="text_diff">差值</string>
+    <string name="text_smoothness_state">流畅度</string>
+    <string name="text_temperature">温度</string>
+    <string name="text_power">功率</string>
 </resources>

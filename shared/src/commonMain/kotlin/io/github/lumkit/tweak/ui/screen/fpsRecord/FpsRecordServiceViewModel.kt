@@ -16,9 +16,13 @@ import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
 import io.github.lumkit.tweak.common.utils.FpsUtils
 import io.github.lumkit.tweak.common.utils.GpuUtils
+import io.github.lumkit.tweak.common.utils.SDK_INT
+import io.github.lumkit.tweak.common.utils.SDK_RELEASE
 import io.github.lumkit.tweak.common.utils.displayNameResource
 import io.github.lumkit.tweak.common.utils.formatElapsedTimeInternal
 import io.github.lumkit.tweak.common.utils.getDeviceModel
+import io.github.lumkit.tweak.common.utils.getDeviceScreenHeight
+import io.github.lumkit.tweak.common.utils.getDeviceScreenWidth
 import io.github.lumkit.tweak.common.utils.getDeviceType
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.packageName
@@ -104,9 +108,13 @@ object FpsRecordServiceViewModel : BaseViewModel() {
             recordingTime = sessionStartTime,
             appName = currentAppInfo.appName,
             iconPath = currentAppInfo.iconPath,
+            appVersion = "${currentAppInfo.versionName}(${currentAppInfo.versionCode})",
             deviceModel = getDeviceModel(),
             socJson = json.encodeToString(CpuCodenameUtils.getSocByCpuMode()),
             platformName = getString(getDeviceType().displayNameResource),
+            platformVersionName = "Android $SDK_RELEASE($SDK_INT)",
+            deviceScreenWidth = getDeviceScreenWidth(),
+            deviceScreenHeight = getDeviceScreenHeight(),
             note = null,
         )
         val sessionId = repository.insertSession(
