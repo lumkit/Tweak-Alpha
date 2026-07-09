@@ -111,6 +111,8 @@
     <string name="text_frame_time">帧生成耗时 (毫秒)</string>
     <string name="text_cpu_loads">CPU负载 (%)</string>
     <string name="text_cpu_frequency">CPU频率 (MHz)</string>
+    <string name="text_memory_frequency">内存频率 (MHz | Mbps)</string>
+    <string name="text_power_chart">功耗 (W)</string>
     <string name="text_cpu_cycles">CPU Cycles (M)</string>
     <string name="text_cpu_temperature">CPU温度 (℃)</string>
     <string name="text_cpu_loads_source">数据源</string>

@@ -105,11 +105,13 @@ import tweak_alpha.shared.generated.resources.text_fps_recording
 import tweak_alpha.shared.generated.resources.text_frame_time
 import tweak_alpha.shared.generated.resources.text_go_back
 import tweak_alpha.shared.generated.resources.text_max_high
+import tweak_alpha.shared.generated.resources.text_memory_frequency
 import tweak_alpha.shared.generated.resources.text_min_low
 import tweak_alpha.shared.generated.resources.text_platform_model
 import tweak_alpha.shared.generated.resources.text_platform_type
 import tweak_alpha.shared.generated.resources.text_platform_version
 import tweak_alpha.shared.generated.resources.text_power
+import tweak_alpha.shared.generated.resources.text_power_chart
 import tweak_alpha.shared.generated.resources.text_soc_load
 import tweak_alpha.shared.generated.resources.text_temperature
 import kotlin.math.roundToInt
@@ -131,6 +133,7 @@ fun FpsRecordDetailScreen(
     val direction = LocalLayoutDirection.current
 
     val detail by viewModel.detail.collectAsStateWithLifecycle()
+    val hideDDR by remember(detail) { mutableStateOf(detail?.ddrFreqSamples?.all { it == 0L } == true) }
 
     Scaffold(
         topBar = {
@@ -213,6 +216,20 @@ fun FpsRecordDetailScreen(
 
             item {
                 CpuCyclesChart(detail = detail)
+            }
+
+            if (!hideDDR) {
+                item {
+                    MemoryFreqChart(detail = detail)
+                }
+            }
+
+            item {
+                PowerChart(detail = detail)
+            }
+
+            item {
+                CpuTemperatureChart(detail = detail)
             }
         }
     }
@@ -1169,6 +1186,267 @@ private fun CpuCyclesChart(
     }
 }
 
+@Composable
+private fun MemoryFreqChart(
+    detail: FpsRecordDetailAggregate?,
+) {
+    val primary = MiuixTheme.colorScheme.primary
+    val title = stringResource(Res.string.text_memory_frequency)
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), detail) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = detail?.ddrFreqSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() }
+                    ?: emptyList()
+            )
+        }
+    }
+    val chartData by produceState(
+        initialValue = emptyList(),
+        detail,
+        title,
+        primary,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildMemoryFreqChartData(
+                detail = detail,
+                label = title,
+                color = primary.copy(alpha = .5f),
+            )
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        SmallTitle(text = title)
+        Spacer(modifier = Modifier.height(4.dp))
+        if (chartData.isNotEmpty()
+            && xAxis.dataSet.isNotEmpty()
+            && chartData.all { it.dataSet.size == xAxis.dataSet.size }
+        ) {
+            SmoothLineChart(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(bottom = 16.dp)
+                    .height(250.dp),
+                xAxis = xAxis,
+                data = chartData,
+                axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
+                tickTextColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
+                lineWidth = 1.dp,
+                showGrid = true,
+                gridColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .08f),
+                textStyle = MiuixTheme.textStyles.footnote2.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp,
+                ),
+                showAffix = false,
+            )
+        } else {
+            Spacer(
+                modifier = Modifier.fillMaxWidth()
+                    .height(250.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PowerChart(
+    detail: FpsRecordDetailAggregate?,
+) {
+    val primary = MiuixTheme.colorScheme.primary
+    val secondary = Color(0x8CFF8A65)
+    val title = stringResource(Res.string.text_power_chart)
+    val batteryLabel = "${stringResource(Res.string.text_battery_level)} (%)"
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), detail) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = detail?.powerSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() }
+                    ?: emptyList()
+            )
+        }
+    }
+    val chartData by produceState(
+        initialValue = emptyList<LineChartData>(),
+        detail,
+        title,
+        batteryLabel,
+        primary,
+        secondary,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildPowerChartData(
+                detail = detail,
+                title = title,
+                batteryLabel = batteryLabel,
+                primaryColor = primary.copy(alpha = .5f),
+                secondaryColor = secondary,
+            )
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SmallTitle(text = title)
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = batteryLabel,
+                style = MiuixTheme.textStyles.footnote2,
+                color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                modifier = Modifier.padding(end = 16.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        if (chartData.isNotEmpty()
+            && xAxis.dataSet.isNotEmpty()
+            && chartData.all { it.dataSet.size == xAxis.dataSet.size }
+        ) {
+            SmoothLineChart(
+                modifier = Modifier.fillMaxWidth()
+                    .height(250.dp),
+                xAxis = xAxis,
+                data = chartData,
+                axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
+                tickTextColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
+                lineWidth = 1.dp,
+                showGrid = true,
+                gridColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .08f),
+                textStyle = MiuixTheme.textStyles.footnote2.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp,
+                ),
+                showAffix = false,
+            )
+        } else {
+            Spacer(
+                modifier = Modifier.fillMaxWidth()
+                    .height(250.dp)
+            )
+        }
+
+        ChartColorIndicator(chartData)
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            modifier = Modifier.fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            text = buildString {
+                append(stringResource(Res.string.text_max_high))
+                append(": ${detail?.powerSamples?.max()?.roundToInt()?.formatPower()}")
+                append("    ")
+                append(stringResource(Res.string.text_max_high))
+                append(": ${detail?.powerSamples?.min()?.roundToInt()?.formatPower()}")
+                append("    ")
+                append(stringResource(Res.string.text_avg))
+                append(": ${detail?.avgPower?.roundToInt()?.formatPower()}")
+            },
+            style = MiuixTheme.textStyles.footnote2,
+            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun CpuTemperatureChart(
+    detail: FpsRecordDetailAggregate?,
+) {
+    val primary = MiuixTheme.colorScheme.primary
+    val title = stringResource(Res.string.text_cpu_temperature)
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), detail) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = detail?.cpuTemperatureSamples?.indices?.map { (it.toLong() * 1000).formatElapsedTime() }
+                    ?: emptyList()
+            )
+        }
+    }
+    val chartData by produceState(
+        initialValue = emptyList(),
+        detail,
+        title,
+        primary,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildCpuTemperatureChartData(
+                detail = detail,
+                title = title,
+                color = primary.copy(alpha = .5f),
+            )
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        SmallTitle(text = title)
+        Spacer(modifier = Modifier.height(4.dp))
+        if (chartData.isNotEmpty()
+            && xAxis.dataSet.isNotEmpty()
+            && chartData.all { it.dataSet.size == xAxis.dataSet.size }
+        ) {
+            SmoothLineChart(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(end = 12.dp)
+                    .height(250.dp),
+                xAxis = xAxis,
+                data = chartData,
+                axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
+                tickTextColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
+                lineWidth = 1.dp,
+                showGrid = true,
+                gridColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .08f),
+                textStyle = MiuixTheme.textStyles.footnote2.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp,
+                ),
+                showAffix = false,
+            )
+        } else {
+            Spacer(
+                modifier = Modifier.fillMaxWidth()
+                    .height(250.dp)
+            )
+        }
+
+        ChartColorIndicator(chartData)
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            modifier = Modifier.fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            text = buildString {
+                append(stringResource(Res.string.text_max_high))
+                append(": ${detail?.cpuTemperatureSamples?.max()?.roundToInt() ?: 0}℃")
+                append("    ")
+                append(stringResource(Res.string.text_min_low))
+                append(": ${detail?.cpuTemperatureSamples?.min()?.roundToInt() ?: 0}℃")
+                append("    ")
+                append(stringResource(Res.string.text_avg))
+                append(
+                    ": ${
+                        detail?.cpuTemperatureSamples?.takeIf { it.isNotEmpty() }?.average()?.roundToInt() ?: 0
+                    }℃"
+                )
+            },
+            style = MiuixTheme.textStyles.footnote2,
+            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
 private fun buildCpuLoadChartData(
     detail: FpsRecordDetailAggregate?,
     clusterInfo: List<List<Int>>,
@@ -1281,6 +1559,78 @@ private fun buildCpuCyclesChartData(
         )
     }
     return result
+}
+
+private fun buildMemoryFreqChartData(
+    detail: FpsRecordDetailAggregate?,
+    label: String,
+    color: Color,
+): List<LineChartData> {
+    val ddrFreqSamples = detail?.ddrFreqSamples ?: return emptyList()
+    if (ddrFreqSamples.isEmpty()) {
+        return emptyList()
+    }
+
+    return listOf(
+        LineChartData(
+            name = label,
+            suffix = "",
+            dataSet = ddrFreqSamples.map { it.toFloat() },
+            color = color,
+            axisType = LineChartAxisType.Primary,
+        )
+    )
+}
+
+private fun buildPowerChartData(
+    detail: FpsRecordDetailAggregate?,
+    title: String,
+    batteryLabel: String,
+    primaryColor: Color,
+    secondaryColor: Color,
+): List<LineChartData> {
+    val powerSamples = detail?.powerSamples ?: return emptyList()
+    if (powerSamples.isEmpty()) {
+        return emptyList()
+    }
+
+    return listOf(
+        LineChartData(
+            name = title,
+            suffix = "",
+            dataSet = powerSamples.map { (it / 1000.0).toFloat() },
+            color = primaryColor,
+            axisType = LineChartAxisType.Primary,
+        ),
+        LineChartData(
+            name = batteryLabel,
+            suffix = "",
+            dataSet = detail.batteryLevelSamples.toSizedFloatList(powerSamples.size),
+            color = secondaryColor,
+            axisType = LineChartAxisType.Secondary,
+        )
+    )
+}
+
+private fun buildCpuTemperatureChartData(
+    detail: FpsRecordDetailAggregate?,
+    title: String,
+    color: Color,
+): List<LineChartData> {
+    val cpuTemperatureSamples = detail?.cpuTemperatureSamples ?: return emptyList()
+    if (cpuTemperatureSamples.isEmpty()) {
+        return emptyList()
+    }
+
+    return listOf(
+        LineChartData(
+            name = title,
+            suffix = "",
+            dataSet = cpuTemperatureSamples.map { it.toFloat() },
+            color = color,
+            axisType = LineChartAxisType.Primary,
+        )
+    )
 }
 
 private fun List<Int>.toCpuClusterLabel(): String {
