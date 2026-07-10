@@ -1,7 +1,14 @@
 package io.github.lumkit.tweak.service
 
 import android.content.Intent
+import android.graphics.Point
+import android.hardware.display.DisplayManager
+import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.view.Display
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -62,7 +69,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
-class FpsRecordService: BaseService() {
+class FpsRecordService : BaseService() {
 
     override fun onBind(p0: Intent?): IBinder? = null
 
@@ -101,9 +108,38 @@ class FpsRecordService: BaseService() {
         }
     }
 
+    private val displayManager by lazy {
+        getSystemService(DisplayManager::class.java)
+    }
+
+    private val mainHandler by lazy {
+        Handler(Looper.getMainLooper())
+    }
+
+    private var lastScreenState: OverlayScreenState? = null
+
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+
+        override fun onDisplayRemoved(displayId: Int) = Unit
+
+        override fun onDisplayChanged(displayId: Int) {
+            if (!overlayHelper.isShowing) {
+                lastScreenState = currentScreenState()
+                return
+            }
+            val newState = currentScreenState()
+            if (newState != lastScreenState) {
+                lastScreenState = newState
+                handleOverlayScreenChanged()
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
-
+        lastScreenState = currentScreenState()
+        displayManager?.registerDisplayListener(displayListener, mainHandler)
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO)
@@ -120,6 +156,7 @@ class FpsRecordService: BaseService() {
                     overlayHelper.show(x = startX, y = startY) {
                         FpsRecordContent()
                     }
+                    lastScreenState = currentScreenState()
                 } else {
                     overlayHelper.dismiss()
                 }
@@ -135,6 +172,11 @@ class FpsRecordService: BaseService() {
         return super.onStartCommand(intent, flags, startId)
     }
 
+    override fun onDestroy() {
+        displayManager?.unregisterDisplayListener(displayListener)
+        super.onDestroy()
+    }
+
     /** 默认位置：屏幕右侧、距底部 150dp */
     private fun getDefaultOverlayPosition(): Pair<Int, Int> {
         val dm = resources.displayMetrics
@@ -143,6 +185,47 @@ class FpsRecordService: BaseService() {
         val bottomMarginPx = (175 * dm.density + 0.5f).toInt()
         return screenWidth to (screenHeight - bottomMarginPx)
     }
+
+    private fun handleOverlayScreenChanged() {
+        val (currentX, currentY) = overlayHelper.getPosition() ?: getDefaultOverlayPosition()
+        val screen = getRealScreenSize()
+        val boundedX = currentX.coerceIn(0, screen.x.coerceAtLeast(0))
+        val boundedY = currentY.coerceIn(0, screen.y.coerceAtLeast(0))
+        overlayHelper.updatePosition(boundedX, boundedY)
+        overlayHelper.requestReSnap()
+    }
+
+    private fun currentScreenState(): OverlayScreenState {
+        val screen = getRealScreenSize()
+        val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            displayManager?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: 0
+        } else {
+            @Suppress("DEPRECATION")
+            (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation
+        }
+        return OverlayScreenState(
+            width = screen.x,
+            height = screen.y,
+            rotation = rotation
+        )
+    }
+
+    private fun getRealScreenSize(): Point {
+        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            Point(bounds.width(), bounds.height())
+        } else {
+            @Suppress("DEPRECATION")
+            Point().also { windowManager.defaultDisplay.getRealSize(it) }
+        }
+    }
+
+    private data class OverlayScreenState(
+        val width: Int,
+        val height: Int,
+        val rotation: Int,
+    )
 }
 
 private val json by lazy {
