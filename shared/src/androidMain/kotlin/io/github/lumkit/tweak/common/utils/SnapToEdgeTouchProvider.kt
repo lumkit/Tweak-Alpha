@@ -32,12 +32,17 @@ class SnapToEdgeTouchProvider(
 
     /** 松手吸边结束后回调，参数为最终位置 (x, y) */
     var onPositionSettled: ((x: Int, y: Int) -> Unit)? = null
+    /** 用户开始与悬浮窗交互时回调 */
+    var onInteractionStart: (() -> Unit)? = null
+    /** 用户结束与悬浮窗交互时回调 */
+    var onInteractionEnd: (() -> Unit)? = null
 
     private var initialX = 0
     private var initialY = 0
     private var initialTouchX = 0f
     private var initialTouchY = 0f
     private var isDragging = false
+    private var isTouching = false
     private var animator: ValueAnimator? = null
 
     override fun onInterceptTouchEvent(
@@ -48,6 +53,7 @@ class SnapToEdgeTouchProvider(
     ): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                notifyInteractionStart()
                 animator?.cancel()
                 isDragging = false
                 initialX = params.x
@@ -70,6 +76,7 @@ class SnapToEdgeTouchProvider(
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 isDragging = false
+                notifyInteractionEnd()
             }
         }
         return isDragging
@@ -100,6 +107,7 @@ class SnapToEdgeTouchProvider(
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 isDragging = false
+                notifyInteractionEnd()
                 snapToEdge(view, params, windowManager, screen)
                 return true
             }
@@ -158,6 +166,22 @@ class SnapToEdgeTouchProvider(
             }
             start()
         }
+    }
+
+    private fun notifyInteractionStart() {
+        if (isTouching) {
+            return
+        }
+        isTouching = true
+        onInteractionStart?.invoke()
+    }
+
+    private fun notifyInteractionEnd() {
+        if (!isTouching) {
+            return
+        }
+        isTouching = false
+        onInteractionEnd?.invoke()
     }
 
     /**

@@ -51,6 +51,7 @@ import kotlin.time.Duration.Companion.milliseconds
 object FpsRecordServiceViewModel : BaseViewModel() {
 
     private const val TAG = "FpsRecordServiceViewModel"
+    private const val IMMERSIVE_IDLE_TIMEOUT_MILLIS = 5000L
 
     private val repository: FpsRecordRepository = FpsRecordRepository()
 
@@ -60,8 +61,10 @@ object FpsRecordServiceViewModel : BaseViewModel() {
     private val _elapsedTimeText = MutableStateFlow("00:00")
     val elapsedTimeText = _elapsedTimeText.asStateFlow()
 
-    private val _currentFpsState = MutableStateFlow("--")
-    val currentFpsState = _currentFpsState.asStateFlow()
+    private val _isImmersiveMode = MutableStateFlow(false)
+    val isImmersiveMode = _isImmersiveMode.asStateFlow()
+
+    private var currentFps = 0f
 
     private val _isSamplingPaused = MutableStateFlow(false)
     val isSamplingPaused = _isSamplingPaused.asStateFlow()
@@ -72,6 +75,8 @@ object FpsRecordServiceViewModel : BaseViewModel() {
     private var currentRecordedDuration: Long = 0L
     private var sampleJob: Job? = null
     private var elapsedTimeJob: Job? = null
+    private var immersiveModeJob: Job? = null
+    private var isOverlayInteracting = false
 
     private val json by lazy {
         Json {
@@ -128,8 +133,8 @@ object FpsRecordServiceViewModel : BaseViewModel() {
         currentSessionStartTime = sessionStartTime
         currentSessionPackageName = currentAppInfo.packageName
         currentRecordedDuration = 0L
-        _isRecordingState.value = true
-        _isSamplingPaused.value = false
+        setRecordingState(true)
+        setSamplingPaused(false)
         _elapsedTimeText.value = formatElapsedTimeInternal(0)
         sampleJob?.cancel()
         elapsedTimeJob?.cancel()
@@ -146,7 +151,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
                 nextSampleAt += 1000L
                 val sessionPackageName = currentSessionPackageName
                 if (sessionPackageName.isNullOrEmpty()) {
-                    _isSamplingPaused.value = true
+                    setSamplingPaused(true)
                     lastActiveAt = sampleStartAt
                     continue
                 }
@@ -157,16 +162,16 @@ object FpsRecordServiceViewModel : BaseViewModel() {
                 }
 
                 val fps = FpsUtils.getCurrentFps()
-                _currentFpsState.value = "%d".format(fps.roundToInt())
+                currentFps = fps
 
                 val currentForegroundPackage = ForegroundAppMonitor.currentForegroundPackage
                 if (currentForegroundPackage != sessionPackageName) {
-                    _isSamplingPaused.value = true
+                    setSamplingPaused(true)
                     lastActiveAt = sampleStartAt
                     cpuFrequencyUtil.resetCyclesCache()
                     continue
                 }
-                _isSamplingPaused.value = false
+                setSamplingPaused(false)
                 currentRecordedDuration += (sampleStartAt - lastActiveAt).coerceAtLeast(0L)
                 lastActiveAt = sampleStartAt
 
@@ -189,7 +194,10 @@ object FpsRecordServiceViewModel : BaseViewModel() {
         }
         elapsedTimeJob = viewModelScope.launch {
             while (isActive && _isRecordingState.value && currentSessionId == sessionId) {
-                _elapsedTimeText.value = formatElapsedTimeInternal(currentRecordedDuration)
+                _elapsedTimeText.value = "FPS: %d\n%s".format(
+                    currentFps.roundToInt(),
+                    formatElapsedTimeInternal(currentRecordedDuration)
+                )
                 delay(200.milliseconds)
             }
         }
@@ -214,7 +222,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
         elapsedTimeJob?.cancel()
         elapsedTimeJob = null
 
-        _isRecordingState.value = false
+        setRecordingState(false)
 
         if (sessionId != null && sessionStartTime != null) {
             val duration = currentRecordedDuration
@@ -235,9 +243,25 @@ object FpsRecordServiceViewModel : BaseViewModel() {
         currentSessionStartTime = null
         currentSessionPackageName = null
         currentRecordedDuration = 0L
-        _isSamplingPaused.value = false
+        setSamplingPaused(false)
         _elapsedTimeText.value = formatElapsedTimeInternal(0)
         success()
+    }
+
+    fun onOverlayInteractionStart() {
+        if (!_isRecordingState.value || isOverlayInteracting) {
+            return
+        }
+        isOverlayInteracting = true
+        updateOverlayImmersiveMode()
+    }
+
+    fun onOverlayInteractionEnd() {
+        if (!_isRecordingState.value || !isOverlayInteracting) {
+            return
+        }
+        isOverlayInteracting = false
+        updateOverlayImmersiveMode()
     }
 
     private val cpuFrequencyUtil by lazy {
@@ -245,6 +269,45 @@ object FpsRecordServiceViewModel : BaseViewModel() {
     }
     private val cpuLoadUtils by lazy {
         CpuLoadUtils()
+    }
+
+    private fun setRecordingState(isRecording: Boolean) {
+        if (_isRecordingState.value == isRecording) {
+            return
+        }
+        _isRecordingState.value = isRecording
+        if (!isRecording) {
+            isOverlayInteracting = false
+        }
+        updateOverlayImmersiveMode()
+    }
+
+    private fun setSamplingPaused(paused: Boolean) {
+        if (_isSamplingPaused.value == paused) {
+            return
+        }
+        _isSamplingPaused.value = paused
+        updateOverlayImmersiveMode()
+    }
+
+    private fun updateOverlayImmersiveMode() {
+        immersiveModeJob?.cancel()
+        immersiveModeJob = null
+        _isImmersiveMode.value = false
+
+        val canEnterImmersiveMode = _isRecordingState.value &&
+                !_isSamplingPaused.value &&
+                !isOverlayInteracting
+        if (!canEnterImmersiveMode) {
+            return
+        }
+
+        immersiveModeJob = viewModelScope.launch {
+            delay(IMMERSIVE_IDLE_TIMEOUT_MILLIS.milliseconds)
+            if (_isRecordingState.value && !_isSamplingPaused.value && !isOverlayInteracting) {
+                _isImmersiveMode.value = true
+            }
+        }
     }
 
     private suspend fun sampleMetric(

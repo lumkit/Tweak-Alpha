@@ -28,11 +28,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +45,7 @@ import io.github.lumkit.tweak.MainActivity
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.common.base.BaseService
+import io.github.lumkit.tweak.common.component.rememberTextWidth
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
 import io.github.lumkit.tweak.common.utils.FpsUtils
 import io.github.lumkit.tweak.common.utils.SnapToEdgeTouchProvider
@@ -76,8 +78,10 @@ class FpsRecordService : BaseService() {
     companion object {
         const val TAG = "FpsRecordService"
 
-        private const val ACTION_SHOW_RECORD_OVERLAY = "io.github.lumkit.tweak.action.SHOW_RECORD_OVERLAY"
-        private const val ACTION_HIDE_RECORD_OVERLAY = "io.github.lumkit.tweak.action.HIDE_RECORD_OVERLAY"
+        private const val ACTION_SHOW_RECORD_OVERLAY =
+            "io.github.lumkit.tweak.action.SHOW_RECORD_OVERLAY"
+        private const val ACTION_HIDE_RECORD_OVERLAY =
+            "io.github.lumkit.tweak.action.HIDE_RECORD_OVERLAY"
 
         fun showRecordOverlay() {
             val intent = Intent(application, FpsRecordService::class.java)
@@ -97,6 +101,12 @@ class FpsRecordService : BaseService() {
             context = this@FpsRecordService,
             edgePadding = (resources.displayMetrics.density * 8f + .5f).roundToInt()
         ).apply {
+            onInteractionStart = {
+                FpsRecordServiceViewModel.onOverlayInteractionStart()
+            }
+            onInteractionEnd = {
+                FpsRecordServiceViewModel.onOverlayInteractionEnd()
+            }
             onPositionSettled = { x, y ->
                 serviceScope.launch {
                     TweakDataStore.setFpsOverlayPosition(x, y)
@@ -161,6 +171,7 @@ class FpsRecordService : BaseService() {
                     overlayHelper.dismiss()
                 }
             }
+
             ACTION_HIDE_RECORD_OVERLAY -> {
                 logD("ACTION_HIDE_RECORD_OVERLAY", TAG)
                 if (overlayHelper.isShowing) {
@@ -239,24 +250,35 @@ private val json by lazy {
 private fun ComposeOverlayHelper.FpsRecordContent() {
     val viewModel = FpsRecordServiceViewModel
     val recordingState by viewModel.isRecordingState.collectAsStateWithLifecycle()
+    val isImmersiveMode by viewModel.isImmersiveMode.collectAsStateWithLifecycle()
     var currentFps by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    var invisibleState by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(recordingState) {
         while (isActive) {
             currentFps = "%d".format(FpsUtils.getCurrentFps().roundToInt())
             delay(1000.milliseconds)
         }
     }
 
+    LaunchedEffect(isImmersiveMode) {
+        requestReSnap()
+        if (isImmersiveMode) {
+            delay(2000.milliseconds)
+            if (!isActive) return@LaunchedEffect
+            invisibleState = true
+        } else {
+            invisibleState = false
+        }
+    }
+
     ContextContent {
         Row(
             modifier = Modifier.clip(Capsule())
+                .alpha(if (invisibleState) .45f else 1f)
                 .background(MiuixTheme.colorScheme.onBackground.copy(.65f))
-                .padding(6.dp)
-                .onSizeChanged {
-                    // 内容大小变化时重新吸边
-                    requestReSnap()
-                },
+                .padding(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -269,6 +291,10 @@ private fun ComposeOverlayHelper.FpsRecordContent() {
                             viewModel.stopRecord()
                         } else {
                             viewModel.startRecord()
+                        }
+                        scope.launch {
+                            delay(500.milliseconds)
+                            requestReSnap()
                         }
                     },
                 contentAlignment = Alignment.Center
@@ -284,9 +310,23 @@ private fun ComposeOverlayHelper.FpsRecordContent() {
                         ) {
                             Box(
                                 modifier = Modifier.size(12.dp)
+                                    .alpha(
+                                        if (isImmersiveMode) {
+                                            .31f
+                                        } else {
+                                            1f
+                                        }
+                                    )
                                     .clip(Rectangle.copy(cornerRadius = 3.dp))
                                     .background(MiuixTheme.colorScheme.error)
                             )
+                            if (isImmersiveMode) {
+                                Text(
+                                    text = currentFps,
+                                    style = MiuixTheme.textStyles.body2,
+                                    color = MiuixTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     } else {
                         Box(
@@ -308,7 +348,9 @@ private fun ComposeOverlayHelper.FpsRecordContent() {
             if (!recordingState) {
                 PreferenceContent(this@FpsRecordContent)
             } else {
-                ClockContent()
+                if (!isImmersiveMode) {
+                    ClockContent()
+                }
             }
         }
     }
@@ -369,8 +411,9 @@ private fun PreferenceContent(helper: ComposeOverlayHelper) {
 @Composable
 private fun ClockContent() {
     val timeText by FpsRecordServiceViewModel.elapsedTimeText.collectAsStateWithLifecycle()
-    val currentFps by FpsRecordServiceViewModel.currentFpsState.collectAsStateWithLifecycle()
     val isSamplingPaused by FpsRecordServiceViewModel.isSamplingPaused.collectAsStateWithLifecycle()
+    val textStyle = MiuixTheme.textStyles.footnote2
+    val maxWidth = rememberTextWidth(textStyle, "FPS: 888")
 
     Row(
         verticalAlignment = Alignment.CenterVertically
@@ -378,16 +421,14 @@ private fun ClockContent() {
         Spacer(modifier = Modifier.width(16.dp))
 
         Text(
-            text = buildString {
-                append("FPS: $currentFps\n")
-                append(timeText)
-            },
-            style = MiuixTheme.textStyles.footnote2,
+            text = timeText,
+            style = textStyle,
             color = if (isSamplingPaused) {
                 colorBusy
             } else {
                 MiuixTheme.colorScheme.background
-            }
+            },
+            modifier = Modifier.width(maxWidth)
         )
 
         Spacer(modifier = Modifier.width(10.dp))
