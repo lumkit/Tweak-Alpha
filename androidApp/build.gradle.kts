@@ -7,6 +7,10 @@ plugins {
     id("tweak.android.application.flavors")
 }
 
+val tweakReleaseKeyAlias = System.getenv("TWEAK_RELEASE_KEY_ALIAS").orEmpty()
+val tweakReleaseKeyPassword = System.getenv("TWEAK_RELEASE_KEY_PASSWORD").orEmpty()
+val tweakReleaseStorePassword = System.getenv("TWEAK_RELEASE_STORE_PASSWORD").orEmpty()
+
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_11
@@ -27,10 +31,10 @@ android {
 
     signingConfigs {
         create("tweakRelease") {
-            keyAlias =  "lumkit"
-            keyPassword =  "0409.kaly"
-            storeFile =  file("./sign/tweak-alpha")
-            storePassword = "0409.kaly"
+            keyAlias = tweakReleaseKeyAlias
+            keyPassword = tweakReleaseKeyPassword
+            storeFile = file("./sign/tweak-alpha")
+            storePassword = tweakReleaseStorePassword
             enableV1Signing = true
             enableV2Signing = true
             enableV3Signing = true

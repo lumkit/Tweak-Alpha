@@ -1,12 +1,12 @@
 #include <android/log.h>
 #include <jni.h>
+#include <cstdio>
 #include <string>
 
 namespace {
 
     constexpr char kLogTag[] = "TweakNative";
     constexpr char kAllowedPackagePrefix[] = "io.github.lumkit.tweak";
-
     void clearPendingException(JNIEnv *env) {
         if (env->ExceptionCheck()) {
             env->ExceptionClear();
@@ -139,15 +139,43 @@ namespace {
         return callStaticStringMethod(env, "android/app/ActivityThread", "currentProcessName");
     }
 
-    bool isAllowedPackage(const std::string &packageName) {
-        if (packageName.empty()) {
+    std::string readProcCmdline() {
+        FILE *file = std::fopen("/proc/self/cmdline", "rb");
+        if (file == nullptr) {
+            return {};
+        }
+        std::string result;
+        char buffer[256];
+        while (const size_t read = std::fread(buffer, 1, sizeof(buffer), file)) {
+            result.append(buffer, read);
+        }
+        std::fclose(file);
+        for (char &ch : result) {
+            if (ch == '\0') {
+                ch = ' ';
+            }
+        }
+        return result;
+    }
+
+    bool hasAllowedPrefix(const std::string &value) {
+        if (value.empty()) {
             return false;
         }
-        if (packageName == kAllowedPackagePrefix) {
+        if (value == kAllowedPackagePrefix) {
             return true;
         }
         const std::string allowedPrefix = std::string(kAllowedPackagePrefix) + ".";
-        return packageName.rfind(allowedPrefix, 0) == 0;
+        const std::string allowedProcessPrefix = std::string(kAllowedPackagePrefix) + ":";
+        return value.rfind(allowedPrefix, 0) == 0 || value.rfind(allowedProcessPrefix, 0) == 0;
+    }
+
+    bool isAllowedPackage(const std::string &packageName) {
+        return hasAllowedPrefix(packageName);
+    }
+
+    bool isAllowedProcess(const std::string &processInfo) {
+        return hasAllowedPrefix(processInfo);
     }
 
     void throwSecurityException(JNIEnv *env, const std::string &message) {
@@ -170,22 +198,26 @@ JNI_OnLoad(JavaVM *vm, void * /*reserved*/) {
     }
 
     const std::string packageName = resolveCurrentPackageName(env);
-    if (!isAllowedPackage(packageName)) {
+    const std::string processInfo = readProcCmdline();
+    const bool allowed = isAllowedPackage(packageName) || isAllowedProcess(processInfo);
+    if (!allowed) {
         __android_log_print(
                 ANDROID_LOG_ERROR,
                 kLogTag,
-                "Illegal native load request, package=%s",
-                packageName.empty() ? "<unknown>" : packageName.c_str()
+                "Illegal native load request, package=%s, process=%s",
+                packageName.empty() ? "<unknown>" : packageName.c_str(),
+                processInfo.empty() ? "<empty>" : processInfo.c_str()
         );
         throwSecurityException(env, "Illegal package for tweak_shared_native: " + packageName);
-        exit(-1);
+        return JNI_ERR;
     }
 
     __android_log_print(
             ANDROID_LOG_INFO,
             kLogTag,
-            "Native library loaded by package=%s",
-            packageName.c_str()
+            "Native library loaded by package=%s, process=%s",
+            packageName.c_str(),
+            processInfo.empty() ? "<empty>" : processInfo.c_str()
     );
     return JNI_VERSION_1_6;
 }
