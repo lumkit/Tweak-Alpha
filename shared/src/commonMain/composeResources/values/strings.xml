@@ -128,4 +128,9 @@
     <string name="text_open_sources">开源许可</string>
     <string name="text_join_qq">讨论组</string>
     <string name="text_qq_url">mqqapi://card/show_pslcard?src_type=internal&amp;version=1&amp;uin=768798964&amp;card_type=group&amp;source=qrcode</string>
+    <string name="text_shutdown">关机</string>
+    <string name="text_reboot">重启</string>
+    <string name="text_reboot_to_bl">重启到Bootloader</string>
+    <string name="text_reboot_to_rec">重启到Recovery</string>
+    <string name="text_reboot_to_edl">重启到9008模式（EDL）</string>
 </resources>

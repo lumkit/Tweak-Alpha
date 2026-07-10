@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -27,7 +28,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -49,21 +53,33 @@ import io.github.lumkit.tweak.common.component.CategoryCard
 import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
+import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.VerticalDivider
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Close2
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
@@ -74,6 +90,11 @@ import tweak_alpha.shared.generated.resources.text_cpu_state_description
 import tweak_alpha.shared.generated.resources.text_gpu_state
 import tweak_alpha.shared.generated.resources.text_memory_physical
 import tweak_alpha.shared.generated.resources.text_memory_state
+import tweak_alpha.shared.generated.resources.text_reboot
+import tweak_alpha.shared.generated.resources.text_reboot_to_bl
+import tweak_alpha.shared.generated.resources.text_reboot_to_edl
+import tweak_alpha.shared.generated.resources.text_reboot_to_rec
+import tweak_alpha.shared.generated.resources.text_shutdown
 import tweak_alpha.shared.generated.resources.text_storage
 import tweak_alpha.shared.generated.resources.text_storage_flash_type
 import tweak_alpha.shared.generated.resources.text_storage_free
@@ -105,6 +126,9 @@ fun InfoPage() {
                     title = stringResource(Res.string.nav_home),
                     scrollBehavior = scrollBehavior,
                     backdrop = backdrop,
+                    actions = {
+                        Actions()
+                    }
                 )
             },
             containerColor = MiuixTheme.colorScheme.surface,
@@ -723,6 +747,97 @@ private fun FlowRowScope.StorageContent(
                     style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                 )
+            }
+        }
+    }
+}
+
+data class RebootAction(
+    val text: StringResource,
+    val onTap: () -> Unit
+)
+
+@Composable
+private fun RowScope.Actions() {
+    val scope = rememberCoroutineScope { Dispatchers.IO }
+
+    // 高级重启
+    Box {
+        var popState by remember { mutableStateOf(false) }
+        val actions = remember {
+            listOf(
+                RebootAction(
+                    text = Res.string.text_shutdown,
+                    onTap = {
+                        scope.launch {
+                            ReusableShells.execSync("/system/bin/svc power shutdown || /system/bin/reboot -p || /system/bin/setprop sys.powerctl shutdown")
+                        }
+                    }
+                ),
+                RebootAction(
+                    text = Res.string.text_reboot,
+                    onTap = {
+                        scope.launch {
+                            ReusableShells.execSync("/system/bin/svc power reboot || /system/bin/reboot || /system/bin/setprop sys.powerctl reboot")
+                        }
+                    }
+                ),
+                RebootAction(
+                    text = Res.string.text_reboot_to_rec,
+                    onTap = {
+                        scope.launch {
+                            ReusableShells.execSync("/system/bin/svc power reboot recovery || /system/bin/reboot recovery || /system/bin/setprop sys.powerctl reboot,recovery")
+                        }
+                    }
+                ),
+                RebootAction(
+                    text = Res.string.text_reboot_to_bl,
+                    onTap = {
+                        scope.launch {
+                            ReusableShells.execSync("/system/bin/svc power reboot bootloader || /system/bin/reboot bootloader || /system/bin/setprop sys.powerctl reboot,bootloader")
+                        }
+                    }
+                ),
+                RebootAction(
+                    text = Res.string.text_reboot_to_edl,
+                    onTap = {
+                        scope.launch {
+                            ReusableShells.execSync("/system/bin/reboot edl || /system/bin/setprop sys.powerctl reboot,edl")
+                        }
+                    }
+                ),
+            )
+        }
+
+        IconButton(
+            onClick = {
+                popState = true
+            }
+        ) {
+            Icon(
+                imageVector = MiuixIcons.Close2,
+                contentDescription = null
+            )
+        }
+
+        OverlayListPopup(
+            show = popState,
+            alignment = PopupPositionProvider.Align.End,
+            onDismissRequest = { popState = false }
+        ) {
+            ListPopupColumn {
+                actions.forEachIndexed { index, action ->
+                    DropdownImpl(
+                        text = stringResource(action.text),
+                        optionSize = actions.size,
+                        isSelected = false,
+                        index = index,
+                        onSelectedIndexChange = {
+                            action.onTap()
+                            popState = false
+                        }
+                    )
+                }
             }
         }
     }
