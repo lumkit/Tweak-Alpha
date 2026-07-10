@@ -1,6 +1,5 @@
 package io.github.lumkit.tweak.ui.screen.settings
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -88,7 +87,6 @@ fun OpenSourceScreen(
                 end = it.calculateEndPadding(direction) + 16.dp,
                 bottom = it.calculateBottomPadding() + 16.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(list) { bean ->
                 TooltipBox(text = bean.tip) {
