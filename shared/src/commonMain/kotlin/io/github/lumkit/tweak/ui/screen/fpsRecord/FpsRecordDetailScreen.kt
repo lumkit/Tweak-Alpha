@@ -54,6 +54,7 @@ import com.kyant.shapes.copy
 import io.github.lumkit.tweak.common.component.LineChartAxisType
 import io.github.lumkit.tweak.common.component.LineChartData
 import io.github.lumkit.tweak.common.component.LineChartXAxisData
+import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.SmoothLineChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.VerticalBarChart
@@ -135,101 +136,103 @@ fun FpsRecordDetailScreen(
     val detail by viewModel.detail.collectAsStateWithLifecycle()
     val hideDDR by remember(detail) { mutableStateOf(detail?.ddrFreqSamples?.all { it == 0L } == true) }
 
-    Scaffold(
-        topBar = {
-            TopBar(
-                title = stringResource(Res.string.text_fps_recording),
-                subTitle = "${detail?.appName ?: ""} - ${detail?.appPackageName ?: ""}",
-                scrollBehavior = scrollBehavior,
-                backdrop = backdrop,
-                navigationIcon = {
-                    IconButton(
-                        onClick = navigator::goBack
-                    ) {
-                        Icon(
-                            MiuixIcons.Back,
-                            contentDescription = stringResource(Res.string.text_go_back),
-                        )
-                    }
-                },
-            )
-        },
-        containerColor = MiuixTheme.colorScheme.surface,
-        floatingToolbarPosition = ToolbarPosition.BottomEnd
-    ) {
-        LazyColumn(
-            modifier = Modifier.layerBackdrop(backdrop)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .overScrollVertical()
-                .fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = it.calculateStartPadding(direction) + 16.dp,
-                top = it.calculateTopPadding() + 16.dp,
-                end = it.calculateEndPadding(direction) + 16.dp,
-                bottom = it.calculateBottomPadding() + 16.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+    ScreenSurface {
+        Scaffold(
+            topBar = {
+                TopBar(
+                    title = stringResource(Res.string.text_fps_recording),
+                    subTitle = "${detail?.appName ?: ""} - ${detail?.appPackageName ?: ""}",
+                    scrollBehavior = scrollBehavior,
+                    backdrop = backdrop,
+                    navigationIcon = {
+                        IconButton(
+                            onClick = navigator::goBack
+                        ) {
+                            Icon(
+                                MiuixIcons.Back,
+                                contentDescription = stringResource(Res.string.text_go_back),
+                            )
+                        }
+                    },
+                )
+            },
+            containerColor = MiuixTheme.colorScheme.surface,
+            floatingToolbarPosition = ToolbarPosition.BottomEnd
         ) {
-            item {
-                DeviceInfoContent(
-                    platformName = detail?.platformName ?: "",
-                    deviceName = detail?.deviceModel ?: "",
-                    platformVersionName = detail?.platformVersionName ?: "",
-                )
-            }
-
-            item {
-                RecordAppInfo(
-                    iconPath = detail?.appIconPath,
-                    recordDate = detail?.recordDate ?: "--",
-                    appName = detail?.appName ?: "--",
-                    appVersionInfo = detail?.appVersion ?: "--",
-                    fpsMax = detail?.maxFps ?: -1.0,
-                    fpsMin = detail?.minFps ?: -1.0,
-                    fpsAvg = detail?.avgFps ?: -1.0,
-                    fpsVariance = detail?.fpsDiff ?: -1.0,
-                    fpsLow45 = (detail?.above45FpsRatio ?: 0.0).toFloat(),
-                    fpsLow5 = (detail?.low5Fps ?: 0.0).toFloat(),
-                    temperatureMax = detail?.maxBatteryTemperature?.toFloat() ?: 25f,
-                    powerAvg = detail?.avgPower?.toFloat() ?: 0f,
-                    deviceResolution = detail?.deviceResolution
-                )
-            }
-
-            item {
-                FpsChart(
-                    detail = detail,
-                )
-            }
-
-            item {
-                FrameTimeChart(detail = detail)
-            }
-
-            item {
-                CpuLoadsChart(detail = detail)
-            }
-
-            item {
-                CpuFreqChart(detail = detail)
-            }
-
-            item {
-                CpuCyclesChart(detail = detail)
-            }
-
-            if (!hideDDR) {
+            LazyColumn(
+                modifier = Modifier.layerBackdrop(backdrop)
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .overScrollVertical()
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = it.calculateStartPadding(direction) + 16.dp,
+                    top = it.calculateTopPadding() + 16.dp,
+                    end = it.calculateEndPadding(direction) + 16.dp,
+                    bottom = it.calculateBottomPadding() + 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 item {
-                    MemoryFreqChart(detail = detail)
+                    DeviceInfoContent(
+                        platformName = detail?.platformName ?: "",
+                        deviceName = detail?.deviceModel ?: "",
+                        platformVersionName = detail?.platformVersionName ?: "",
+                    )
                 }
-            }
 
-            item {
-                PowerChart(detail = detail)
-            }
+                item {
+                    RecordAppInfo(
+                        iconPath = detail?.appIconPath,
+                        recordDate = detail?.recordDate ?: "--",
+                        appName = detail?.appName ?: "--",
+                        appVersionInfo = detail?.appVersion ?: "--",
+                        fpsMax = detail?.maxFps ?: -1.0,
+                        fpsMin = detail?.minFps ?: -1.0,
+                        fpsAvg = detail?.avgFps ?: -1.0,
+                        fpsVariance = detail?.fpsDiff ?: -1.0,
+                        fpsLow45 = (detail?.above45FpsRatio ?: 0.0).toFloat(),
+                        fpsLow5 = (detail?.low5Fps ?: 0.0).toFloat(),
+                        temperatureMax = detail?.maxBatteryTemperature?.toFloat() ?: 25f,
+                        powerAvg = detail?.avgPower?.toFloat() ?: 0f,
+                        deviceResolution = detail?.deviceResolution
+                    )
+                }
 
-            item {
-                CpuTemperatureChart(detail = detail)
+                item {
+                    FpsChart(
+                        detail = detail,
+                    )
+                }
+
+                item {
+                    FrameTimeChart(detail = detail)
+                }
+
+                item {
+                    CpuLoadsChart(detail = detail)
+                }
+
+                item {
+                    CpuFreqChart(detail = detail)
+                }
+
+                item {
+                    CpuCyclesChart(detail = detail)
+                }
+
+                if (!hideDDR) {
+                    item {
+                        MemoryFreqChart(detail = detail)
+                    }
+                }
+
+                item {
+                    PowerChart(detail = detail)
+                }
+
+                item {
+                    CpuTemperatureChart(detail = detail)
+                }
             }
         }
     }

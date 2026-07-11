@@ -40,6 +40,7 @@ import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
 import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.feature.UpdateEngineClient
 import io.github.lumkit.tweak.common.feature.UpdateErrorCode
@@ -242,106 +243,108 @@ fun UpdateSystemScreen() {
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopBar(
-                title = stringResource(Res.string.text_feature_update_system),
-                scrollBehavior = scrollBehavior,
-                backdrop = backdrop,
-                navigationIcon = {
-                    IconButton(
-                        onClick = navigator::goBack
-                    ) {
-                        Icon(
-                            MiuixIcons.Back,
-                            contentDescription = stringResource(Res.string.text_go_back),
-                        )
-                    }
-                },
-                actions = {
-                    Box {
+    ScreenSurface {
+        Scaffold(
+            topBar = {
+                TopBar(
+                    title = stringResource(Res.string.text_feature_update_system),
+                    scrollBehavior = scrollBehavior,
+                    backdrop = backdrop,
+                    navigationIcon = {
                         IconButton(
-                            onClick = {
-                                showMorePopup = true
-                            }
+                            onClick = navigator::goBack
                         ) {
                             Icon(
-                                imageVector = MiuixIcons.More,
-                                contentDescription = null
+                                MiuixIcons.Back,
+                                contentDescription = stringResource(Res.string.text_go_back),
                             )
                         }
+                    },
+                    actions = {
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    showMorePopup = true
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.More,
+                                    contentDescription = null
+                                )
+                            }
 
-                        WindowListPopup(
-                            show = showMorePopup,
-                            alignment = PopupPositionProvider.Align.End,
-                            onDismissRequest = { showMorePopup = false } // 关闭弹窗菜单
-                        ) {
-                            ListPopupColumn {
-                                moreOptions.forEachIndexed { index, option ->
-                                    DropdownImpl(
-                                        text = stringResource(option.title),
-                                        optionSize = moreOptions.size,
-                                        isSelected = false,
-                                        index = index,
-                                        onSelectedIndexChange = {
-                                            option.onTap()
-                                            showMorePopup = false
-                                        },
-                                        enabled = !unzipping
-                                    )
+                            WindowListPopup(
+                                show = showMorePopup,
+                                alignment = PopupPositionProvider.Align.End,
+                                onDismissRequest = { showMorePopup = false } // 关闭弹窗菜单
+                            ) {
+                                ListPopupColumn {
+                                    moreOptions.forEachIndexed { index, option ->
+                                        DropdownImpl(
+                                            text = stringResource(option.title),
+                                            optionSize = moreOptions.size,
+                                            isSelected = false,
+                                            index = index,
+                                            onSelectedIndexChange = {
+                                                option.onTap()
+                                                showMorePopup = false
+                                            },
+                                            enabled = !unzipping
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            )
-        },
-        containerColor = MiuixTheme.colorScheme.surface,
-    ) {
-        var buttonHeight by remember { mutableStateOf(0.dp) }
+                )
+            },
+            containerColor = MiuixTheme.colorScheme.surface,
+        ) {
+            var buttonHeight by remember { mutableStateOf(0.dp) }
 
-        Box {
-            LazyColumn(
-                modifier = Modifier.layerBackdrop(backdrop)
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .overScrollVertical()
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = it.calculateStartPadding(direction) + 16.dp,
-                    top = it.calculateTopPadding() + 16.dp,
-                    end = it.calculateEndPadding(direction) + 16.dp,
-                    bottom = it.calculateBottomPadding() + 32.dp + buttonHeight
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item {
-                    InfoCard()
-                }
-
-                item {
-                    InstallContent()
-                }
-            }
-
-            Button(
-                onClick = {
-                    val rom = selectedRom
-                    if (status is UpdateStatus.Idle && rom != null && !unzipping) {
-                        UpdateEngineViewModel.installRom(rom.uri.toString())
+            Box {
+                LazyColumn(
+                    modifier = Modifier.layerBackdrop(backdrop)
+                        .nestedScroll(scrollBehavior.nestedScrollConnection)
+                        .overScrollVertical()
+                        .fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = it.calculateStartPadding(direction) + 16.dp,
+                        top = it.calculateTopPadding() + 16.dp,
+                        end = it.calculateEndPadding(direction) + 16.dp,
+                        bottom = it.calculateBottomPadding() + 32.dp + buttonHeight
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        InfoCard()
                     }
-                },
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                enabled = status is UpdateStatus.Idle && selectedRom != null && !unzipping,
-                modifier = Modifier.align(Alignment.BottomCenter)
-                    .padding(bottom = it.calculateBottomPadding() + 16.dp)
-                    .padding(start = it.calculateStartPadding(direction) + 16.dp)
-                    .padding(end = it.calculateEndPadding(direction) + 16.dp)
-                    .fillMaxWidth()
-                    .onSizeChanged {
-                        buttonHeight = with(density) { it.height.toDp() }
+
+                    item {
+                        InstallContent()
                     }
-            ) {
-                Text(text = stringResource(Res.string.text_install))
+                }
+
+                Button(
+                    onClick = {
+                        val rom = selectedRom
+                        if (status is UpdateStatus.Idle && rom != null && !unzipping) {
+                            UpdateEngineViewModel.installRom(rom.uri.toString())
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColorsPrimary(),
+                    enabled = status is UpdateStatus.Idle && selectedRom != null && !unzipping,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .padding(bottom = it.calculateBottomPadding() + 16.dp)
+                        .padding(start = it.calculateStartPadding(direction) + 16.dp)
+                        .padding(end = it.calculateEndPadding(direction) + 16.dp)
+                        .fillMaxWidth()
+                        .onSizeChanged {
+                            buttonHeight = with(density) { it.height.toDp() }
+                        }
+                ) {
+                    Text(text = stringResource(Res.string.text_install))
+                }
             }
         }
     }

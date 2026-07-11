@@ -43,7 +43,7 @@ import kotlin.math.roundToInt
 @Preview
 fun App() {
     ContextContent {
-        val backgroundColor = MiuixTheme.colorScheme.surface
+        val backgroundColor = MiuixTheme.colorScheme.surfaceContainer
 
         GlobalCompositionProvider {
             val snackbarHostState = LocalSnackBarHostState.current

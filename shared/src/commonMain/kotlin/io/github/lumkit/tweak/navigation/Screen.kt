@@ -23,4 +23,7 @@ sealed class Screen: NavKey {
 
     @Serializable
     data object OpenSources: Screen()
+
+    @Serializable
+    data object AppManager: Screen()
 }

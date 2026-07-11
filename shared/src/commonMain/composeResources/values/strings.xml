@@ -136,4 +136,7 @@
     <string name="text_overlay_load">负载监视器</string>
     <string name="text_overlay_watcher">监视器</string>
     <string name="text_overlay_watcher_description">可用于打开各种悬浮窗监视器</string>
+    <string name="text_app_manager">应用管理</string>
+    <string name="text_app_manager_description">可卸载、冻结用户应用或系统应用</string>
+    <string name="text_app">应用</string>
 </resources>

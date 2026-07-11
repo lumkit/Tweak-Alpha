@@ -1,46 +1,68 @@
-package io.github.lumkit.tweak.ui.screen.settings
+package io.github.lumkit.tweak.ui.screen.appManager
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.TopBar
-import io.github.lumkit.tweak.common.utils.openUrl
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
+import io.github.lumkit.tweak.navigation.Screen
+import io.github.lumkit.tweak.ui.screen.feature.FeatureProvider
+import io.github.lumkit.tweak.ui.screen.feature.model.Capability
+import io.github.lumkit.tweak.ui.screen.feature.model.Feature
+import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
-import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.ic_record_chart
+import tweak_alpha.shared.generated.resources.text_app_manager
+import tweak_alpha.shared.generated.resources.text_app_manager_description
+import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_go_back
 import tweak_alpha.shared.generated.resources.text_open_sources
 
-@Composable
-fun OpenSourceScreen(
-    viewModel: OpenSourceViewModel = viewModel { OpenSourceViewModel() }
-) {
+internal val AppManagerProvider = object : FeatureProvider {
+    override val feature: Feature
+        get() = Feature(
+            key = "AppManagerProvider",
+            title = Res.string.text_app_manager,
+            icon = Res.drawable.ic_record_chart,
+            description = Res.string.text_app_manager_description,
+            capabilities = setOf(
+                Capability.SHIZUKU_OR_ROOT,
+            ),
+            route = Screen.AppManager,
+            defaultState = FeatureState.ENABLED,
+            ruleDescription = {
+                stringResource(Res.string.text_feature_rule_description_update_sys)
+            }
+        )
 
-    val list by viewModel.licenseState.collectAsStateWithLifecycle()
+    @Composable
+    override fun Content() {
+        AppManagerContent()
+    }
+
+}
+
+@Composable
+private fun AppManagerContent() {
     val navigator = LocalNavigator.current
 
     val direction = LocalLayoutDirection.current
@@ -68,7 +90,6 @@ fun OpenSourceScreen(
             },
             containerColor = MiuixTheme.colorScheme.surface,
         ) {
-
             LazyColumn(
                 modifier = Modifier.layerBackdrop(backdrop)
                     .fillMaxSize()
@@ -81,17 +102,7 @@ fun OpenSourceScreen(
                     bottom = it.calculateBottomPadding() + 16.dp
                 ),
             ) {
-                items(list) { bean ->
-                    TooltipBox(text = bean.tip) {
-                        ArrowPreference(
-                            title = bean.title,
-                            summary = "${bean.author}\n${bean.tip}",
-                            onClick = {
-                                openUrl(bean.url)
-                            }
-                        )
-                    }
-                }
+
             }
         }
     }

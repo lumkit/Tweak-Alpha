@@ -58,7 +58,7 @@ fun ScreenSurface(
         modifier = modifier.squircleClip(
             cornerRadius = radius,
         ),
-        color = MiuixTheme.colorScheme.surface
+        color = MiuixTheme.colorScheme.surface,
     ) {
         AnimatedContent(
             targetState = enabledBackgroundImage,

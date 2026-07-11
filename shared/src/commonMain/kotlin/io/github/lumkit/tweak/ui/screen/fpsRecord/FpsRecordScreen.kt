@@ -54,6 +54,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
@@ -195,81 +196,83 @@ private fun FpsRecordContent() {
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopBar(
-                title = stringResource(Res.string.text_fps_recording),
-                scrollBehavior = scrollBehavior,
-                backdrop = backdrop,
-                navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            if (actionState.value) {
-                                actionState.value = false
-                            } else {
-                                navigator.goBack()
+    ScreenSurface {
+        Scaffold(
+            topBar = {
+                TopBar(
+                    title = stringResource(Res.string.text_fps_recording),
+                    scrollBehavior = scrollBehavior,
+                    backdrop = backdrop,
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                if (actionState.value) {
+                                    actionState.value = false
+                                } else {
+                                    navigator.goBack()
+                                }
                             }
+                        ) {
+                            Icon(
+                                MiuixIcons.Back,
+                                contentDescription = stringResource(Res.string.text_go_back),
+                            )
                         }
-                    ) {
-                        Icon(
-                            MiuixIcons.Back,
-                            contentDescription = stringResource(Res.string.text_go_back),
-                        )
+                    },
+                )
+            },
+            containerColor = MiuixTheme.colorScheme.surface,
+            floatingToolbar = {
+                FloatActionBar(
+                    actionState = actionState,
+                    recordingState = recordingState,
+                    requestOverlay = requestOverlay,
+                    onSizeChanged = {
+                        floatActionBarHeight = with(density) {
+                            it.height.toDp()
+                        }
                     }
-                },
-            )
-        },
-        containerColor = MiuixTheme.colorScheme.surface,
-        floatingToolbar = {
-            FloatActionBar(
-                actionState = actionState,
-                recordingState = recordingState,
-                requestOverlay = requestOverlay,
-                onSizeChanged = {
-                    floatActionBarHeight = with(density) {
-                        it.height.toDp()
-                    }
-                }
-            )
-        },
-        floatingToolbarPosition = ToolbarPosition.BottomEnd
-    ) {
-        LazyColumn(
-            modifier = Modifier.layerBackdrop(backdrop)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .overScrollVertical()
-                .fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = it.calculateStartPadding(direction) + 16.dp,
-                top = it.calculateTopPadding() + 16.dp,
-                end = it.calculateEndPadding(direction) + 16.dp,
-                bottom = it.calculateBottomPadding() + 16.dp + floatActionBarHeight
-            ),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                )
+            },
+            floatingToolbarPosition = ToolbarPosition.BottomEnd
         ) {
+            LazyColumn(
+                modifier = Modifier.layerBackdrop(backdrop)
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .overScrollVertical()
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = it.calculateStartPadding(direction) + 16.dp,
+                    top = it.calculateTopPadding() + 16.dp,
+                    end = it.calculateEndPadding(direction) + 16.dp,
+                    bottom = it.calculateBottomPadding() + 16.dp + floatActionBarHeight
+                ),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
 
-            item {
-                InfoContent(viewModel)
-            }
-
-            item {
-                Column {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    HorizontalDivider(modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(16.dp))
+                item {
+                    InfoContent(viewModel)
                 }
-            }
 
-            item {
-                RecordHead(sessionNotes)
-            }
+                item {
+                    Column {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(modifier = Modifier.fillMaxWidth())
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
 
-            items(
-                items = sessionNotes,
-                key = { it.sessionId }
-            ) { noteVo ->
-                RecordItem(noteVo, actionState) { sessionId ->
-                    navigator.navigate(Screen.FpsRecordDetail(sessionId))
+                item {
+                    RecordHead(sessionNotes)
+                }
+
+                items(
+                    items = sessionNotes,
+                    key = { it.sessionId }
+                ) { noteVo ->
+                    RecordItem(noteVo, actionState) { sessionId ->
+                        navigator.navigate(Screen.FpsRecordDetail(sessionId))
+                    }
                 }
             }
         }
