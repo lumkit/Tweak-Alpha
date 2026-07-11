@@ -8,7 +8,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import io.github.lumkit.tweak.MainActivity
 import io.github.lumkit.tweak.application
@@ -62,37 +61,37 @@ class UpdateEngineService: BaseService() {
             val intent = Intent(application, UpdateEngineService::class.java)
             intent.action = ACTION_UPDATE_ROM
             intent.putExtra(EXTRA_DATA_ROM_PATH, path)
-            ContextCompat.startForegroundService(application, intent)
+            application.startService(intent)
         }
 
         fun cancelUpdate() {
             val intent = Intent(application, UpdateEngineService::class.java)
             intent.action = ACTION_CANCEL_UPDATE
-            ContextCompat.startForegroundService(application, intent)
+            application.startService(intent)
         }
 
         fun mergeUpdate() {
             val intent = Intent(application, UpdateEngineService::class.java)
             intent.action = ACTION_MERGE_UPDATE
-            ContextCompat.startForegroundService(application, intent)
+            application.startService(intent)
         }
 
         fun resetUpdate() {
             val intent = Intent(application, UpdateEngineService::class.java)
             intent.action = ACTION_RESET_UPDATE
-            ContextCompat.startForegroundService(application, intent)
+            application.startService(intent)
         }
 
         fun suspendUpdate() {
             val intent = Intent(application, UpdateEngineService::class.java)
             intent.action = ACTION_SUSPEND_UPDATE
-            ContextCompat.startForegroundService(application, intent)
+            application.startService(intent)
         }
 
         fun resumeUpdate() {
             val intent = Intent(application, UpdateEngineService::class.java)
             intent.action = ACTION_RESUME_UPDATE
-            ContextCompat.startForegroundService(application, intent)
+            application.startService(intent)
         }
     }
 

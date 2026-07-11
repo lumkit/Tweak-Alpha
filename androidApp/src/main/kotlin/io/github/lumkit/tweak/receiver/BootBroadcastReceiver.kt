@@ -59,7 +59,7 @@ class BootBroadcastReceiver: BroadcastReceiver() {
 
             if (runtimeMode == RuntimeMode.Root && support) {
                 val intent = Intent(context, UpdateEngineService::class.java)
-                context.startSmartService(intent)
+                context.startService(intent)
             }
         }
     }
