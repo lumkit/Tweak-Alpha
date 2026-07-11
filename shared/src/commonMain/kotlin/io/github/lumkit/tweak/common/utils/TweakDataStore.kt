@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -57,6 +58,11 @@ object TweakDataStore {
     // FPS 悬浮窗位置
     private val fpsOverlayXKey = intPreferencesKey("fps_overlay_x")
     private val fpsOverlayYKey = intPreferencesKey("fps_overlay_y")
+    private val loadWatcherOverlayXKey = intPreferencesKey("load_watcher_overlay_x")
+    private val loadWatcherOverlayYKey = intPreferencesKey("load_watcher_overlay_y")
+    private val fpsSourcePathKey = stringPreferencesKey("fps_source_path")
+    private val fpsSourceTokenIndexKey = intPreferencesKey("fps_source_token_index")
+    private val fpsSourceDividerKey = floatPreferencesKey("fps_source_divider")
 
     fun themeModeFlow(): Flow<ColorSchemeMode> = preferences.data.map {
         it[themeModeKey] ?: 0
@@ -208,5 +214,64 @@ object TweakDataStore {
             }
         }
     }
+
+    fun loadWatcherOverlayPositionFlow(): Flow<Pair<Int, Int>?> = preferences.data.map {
+        val x = it[loadWatcherOverlayXKey]
+        val y = it[loadWatcherOverlayYKey]
+        if (x != null && y != null) x to y else null
+    }
+
+    val loadWatcherOverlayPosition: Pair<Int, Int>?
+        get() = runBlocking {
+            loadWatcherOverlayPositionFlow().firstOrNull()
+        }
+
+    suspend fun setLoadWatcherOverlayPosition(x: Int, y: Int) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[loadWatcherOverlayXKey] = x
+                preferences[loadWatcherOverlayYKey] = y
+            }
+        }
+    }
+
+    fun fpsSourceFlow(): Flow<FpsSourceConfig?> = preferences.data.map {
+        val path = it[fpsSourcePathKey]?.takeIf(String::isNotBlank) ?: return@map null
+        FpsSourceConfig(
+            path = path,
+            tokenIndex = it[fpsSourceTokenIndexKey] ?: 0,
+            divider = it[fpsSourceDividerKey] ?: 1f,
+        )
+    }
+
+    val fpsSource: FpsSourceConfig?
+        get() = runBlocking {
+            fpsSourceFlow().firstOrNull()
+        }
+
+    suspend fun setFpsSource(config: FpsSourceConfig) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[fpsSourcePathKey] = config.path
+                preferences[fpsSourceTokenIndexKey] = config.tokenIndex
+                preferences[fpsSourceDividerKey] = config.divider
+            }
+        }
+    }
+
+    suspend fun clearFpsSource() {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences.remove(fpsSourcePathKey)
+                preferences.remove(fpsSourceTokenIndexKey)
+                preferences.remove(fpsSourceDividerKey)
+            }
+        }
+    }
 }
 
+data class FpsSourceConfig(
+    val path: String,
+    val tokenIndex: Int,
+    val divider: Float,
+)

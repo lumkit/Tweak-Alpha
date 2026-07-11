@@ -193,9 +193,17 @@ actual fun getDeviceScreenHeight(): Int {
     return getDeviceScreenMetrics().heightPixels
 }
 
+private val windowManager by lazy {
+    application.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+}
+
+@Suppress("DEPRECATION")
+actual fun getDeviceScreenRefreshRate(): Float {
+    return windowManager.defaultDisplay?.refreshRate?.takeIf { it > 0f } ?: 60f
+}
+
 @Suppress("DEPRECATION")
 private fun getDeviceScreenMetrics(): DisplayMetrics {
-    val windowManager = application.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     return DisplayMetrics().also { metrics ->
         windowManager.defaultDisplay.getRealMetrics(metrics)
     }

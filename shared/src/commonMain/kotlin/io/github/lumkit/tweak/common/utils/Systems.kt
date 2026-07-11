@@ -86,6 +86,8 @@ expect fun getDeviceScreenWidth(): Int
 
 expect fun getDeviceScreenHeight(): Int
 
+expect fun getDeviceScreenRefreshRate(): Float
+
 expect val packageName: String
 
 expect fun startKeepAliveService(isForegroundService: Boolean)

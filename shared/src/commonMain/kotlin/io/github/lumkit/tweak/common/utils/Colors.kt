@@ -11,10 +11,10 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-private const val MID_USED_THRESHOLD = 0.65f
-private const val HIGH_USED_THRESHOLD = 0.85f
+private const val LOW_USED_THRESHOLD = 0.2f
+private const val MID_USED_THRESHOLD = 0.75f
+private const val HIGH_USED_THRESHOLD = 0.9f
 
 private val UsedColorAnimationSpec = tween<Color>(
     durationMillis = 120,
@@ -25,19 +25,23 @@ private enum class UsedColorLevel {
     DEFAULT,
     MID,
     HIGH,
+    LOW,
 }
 
 @Composable
 fun animatedColorAsUsed(
     @FloatRange(from = 0.0, to = 1.0) targetUsed: Float,
-    defaultColor: Color = MiuixTheme.colorScheme.primary.copy(.75f),
-    midColor: Color = Color(0xFFFC8A1B).copy(.75f),
-    highColor: Color = Color(0xFFF9592F).copy(.75f),
+    alpha: Float = .75f,
+    lowColor: Color = Color(0xFF02D98D).copy(alpha),
+    defaultColor: Color = Color(0xFF87CB00).copy(alpha),
+    midColor: Color = Color(0xFFFC8A1B).copy(alpha),
+    highColor: Color = Color(0xFFF9592F).copy(alpha),
     animationSpec: AnimationSpec<Color> = UsedColorAnimationSpec,
 ): State<Color> {
     val level = when {
         targetUsed > HIGH_USED_THRESHOLD -> UsedColorLevel.HIGH
         targetUsed > MID_USED_THRESHOLD -> UsedColorLevel.MID
+        targetUsed > LOW_USED_THRESHOLD -> UsedColorLevel.LOW
         else -> UsedColorLevel.DEFAULT
     }
 
@@ -45,7 +49,8 @@ fun animatedColorAsUsed(
         when (level) {
             UsedColorLevel.HIGH -> highColor
             UsedColorLevel.MID -> midColor
-            UsedColorLevel.DEFAULT -> defaultColor
+            UsedColorLevel.LOW -> defaultColor
+            UsedColorLevel.DEFAULT -> lowColor
         }
     }
 
@@ -144,5 +149,38 @@ fun animatedColorAsBattery(
     return animateColorAsState(
         targetValue = color,
         animationSpec = animationSpec,
+    )
+}
+
+@Composable
+fun animatedColorAsBatteryLevel(
+    @FloatRange(from = 0.0, to = 1.0) targetUsed: Float,
+    alpha: Float = .75f,
+    lowColor: Color = Color(0xFF02D98D).copy(alpha),
+    defaultColor: Color = Color(0xFF87CB00).copy(alpha),
+    midColor: Color = Color(0xFFFC8A1B).copy(alpha),
+    highColor: Color = Color(0xFFF9592F).copy(alpha),
+    animationSpec: AnimationSpec<Color> = UsedColorAnimationSpec,
+): State<Color> {
+    val level = when {
+        targetUsed > HIGH_USED_THRESHOLD -> UsedColorLevel.HIGH
+        targetUsed > MID_USED_THRESHOLD -> UsedColorLevel.MID
+        targetUsed > LOW_USED_THRESHOLD -> UsedColorLevel.LOW
+        else -> UsedColorLevel.DEFAULT
+    }
+
+    val targetColor = remember(level, defaultColor, midColor, highColor) {
+        when (level) {
+            UsedColorLevel.HIGH -> lowColor
+            UsedColorLevel.MID -> defaultColor
+            UsedColorLevel.LOW -> midColor
+            UsedColorLevel.DEFAULT -> highColor
+        }
+    }
+
+    return animateColorAsState(
+        targetValue = targetColor,
+        animationSpec = animationSpec,
+        label = "animatedColorAsUsed",
     )
 }

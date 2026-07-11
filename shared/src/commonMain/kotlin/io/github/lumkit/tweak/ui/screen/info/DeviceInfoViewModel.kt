@@ -249,7 +249,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         }
     }
 
-    private fun formatFreq(freq: String, unit: String = "MHz"): String =
+    fun formatFreq(freq: String, unit: String = "MHz"): String =
         "%d%s".format((freq.toLongOrNull() ?: 0L) / 1000L, unit)
 
     private suspend fun updateMemoryInfo() {

@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.lang.ref.WeakReference
 
 /**
  * 无障碍服务，用于监听前台应用切换
@@ -26,6 +27,7 @@ class TweakAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "TweakAccessibilityService"
+        private var serviceReference: WeakReference<TweakAccessibilityService>? = null
         private val IGNORED_WINDOW_TYPES = setOf(
             AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY,
             AccessibilityWindowInfo.TYPE_INPUT_METHOD,
@@ -36,6 +38,9 @@ class TweakAccessibilityService : AccessibilityService() {
             "android",
             "com.android.systemui",
         )
+
+        val overlayContextOrNull: TweakAccessibilityService?
+            get() = serviceReference?.get()
     }
 
     private var keepAliveView: View? = null
@@ -45,6 +50,7 @@ class TweakAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        serviceReference = WeakReference(this)
         ForegroundAppMonitor._isRunning.value = true
 
         serviceInfo = serviceInfo.apply {
@@ -215,6 +221,9 @@ class TweakAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (serviceReference?.get() === this) {
+            serviceReference = null
+        }
         resolveForegroundJob?.cancel()
         windowPackageCache.evictAll()
         removeKeepAliveOverlay()

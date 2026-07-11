@@ -58,6 +58,8 @@ import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
+import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
+import io.github.lumkit.tweak.service.OverlayMonitor
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -78,8 +80,11 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.Close2
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
@@ -90,6 +95,9 @@ import tweak_alpha.shared.generated.resources.text_cpu_state_description
 import tweak_alpha.shared.generated.resources.text_gpu_state
 import tweak_alpha.shared.generated.resources.text_memory_physical
 import tweak_alpha.shared.generated.resources.text_memory_state
+import tweak_alpha.shared.generated.resources.text_overlay_load
+import tweak_alpha.shared.generated.resources.text_overlay_watcher
+import tweak_alpha.shared.generated.resources.text_overlay_watcher_description
 import tweak_alpha.shared.generated.resources.text_reboot
 import tweak_alpha.shared.generated.resources.text_reboot_to_bl
 import tweak_alpha.shared.generated.resources.text_reboot_to_edl
@@ -760,6 +768,60 @@ data class RebootAction(
 @Composable
 private fun RowScope.Actions() {
     val scope = rememberCoroutineScope { Dispatchers.IO }
+
+    // 监听器悬浮窗
+    Box {
+        var popState by remember { mutableStateOf(false) }
+
+        val requestOverlay = rememberRequestOverlayPermission {
+            popState = true
+        }
+
+        IconButton(
+            onClick = {
+                requestOverlay()
+            }
+        ) {
+            Icon(
+                imageVector = MiuixIcons.Backup,
+                contentDescription = null
+            )
+        }
+
+        val actions = remember {
+            listOf(
+                RebootAction(
+                    text = Res.string.text_overlay_load,
+                    onTap = {
+
+                    }
+                ),
+            )
+        }
+
+        val loadWatcherShowState by OverlayMonitor.loadWatcherIsShowing.collectAsStateWithLifecycle()
+
+        OverlayDialog(
+            title = stringResource(Res.string.text_overlay_watcher),
+            summary = stringResource(Res.string.text_overlay_watcher_description),
+            show = popState,
+            onDismissRequest = { popState = false }
+        ) {
+            Column {
+                SwitchPreference(
+                    title = stringResource(Res.string.text_overlay_load),
+                    checked = loadWatcherShowState,
+                    onCheckedChange = {
+                        if (!it) {
+                            OverlayMonitor.hideLoadWatcherOverlay()
+                        } else {
+                            OverlayMonitor.showLoadWatcherOverlay()
+                        }
+                    }
+                )
+            }
+        }
+    }
 
     // 高级重启
     Box {
