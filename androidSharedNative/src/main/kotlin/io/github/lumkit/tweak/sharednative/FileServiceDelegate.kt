@@ -1,5 +1,9 @@
 package io.github.lumkit.tweak.sharednative
 
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import java.io.File
@@ -114,6 +118,41 @@ internal object FileServiceDelegate {
     }
 
     @JvmStatic
+    fun listInstalledApps(): Bundle = try {
+        val pm = PrivilegedContextProvider.requirePackageManagerContext().packageManager
+        val matchFlags = PackageManager.MATCH_DISABLED_COMPONENTS.toLong()
+        val packageInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(matchFlags))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getInstalledPackages(matchFlags.toInt())
+        }
+        val bundles = packageInfos.mapNotNull { it.toInstalledAppBundle(pm) }
+        NativeFileBundles.successBundleList(bundles)
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
+    @JvmStatic
+    fun getInstalledApp(packageName: String): Bundle = try {
+        val pm = PrivilegedContextProvider.requirePackageManagerContext().packageManager
+        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getPackageInfo(
+                packageName,
+                PackageManager.PackageInfoFlags.of(PackageManager.MATCH_DISABLED_COMPONENTS.toLong()),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(packageName, PackageManager.MATCH_DISABLED_COMPONENTS)
+        }
+        val bundle = packageInfo.toInstalledAppBundle(pm)
+            ?: throw IllegalStateException("applicationInfo is null for $packageName")
+        NativeFileBundles.successBundle(bundle)
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
+    @JvmStatic
     fun unzipToDir(pfd: ParcelFileDescriptor, targetDir: String): Bundle = try {
         // 确保目标目录存在
         NativeFileBridge.mkdirs(targetDir)
@@ -155,5 +194,54 @@ internal object FileServiceDelegate {
         NativeFileBundles.successUnit()
     } catch (throwable: Throwable) {
         NativeFileBundles.failure(throwable)
+    }
+}
+
+private fun PackageInfo.toInstalledAppBundle(pm: PackageManager): Bundle? {
+    val appInfo = applicationInfo ?: return null
+    val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        longVersionCode
+    } else {
+        @Suppress("DEPRECATION")
+        versionCode.toLong()
+    }
+    val state = resolveAppState(pm, packageName, appInfo)
+    return Bundle().apply {
+        putString(NativeFileBundles.KEY_PACKAGE_NAME, packageName)
+        putString(NativeFileBundles.KEY_APP_NAME, runCatching {
+            appInfo.loadLabel(pm).toString()
+        }.getOrDefault(packageName))
+        putString(NativeFileBundles.KEY_VERSION_NAME, versionName.orEmpty())
+        putLong(NativeFileBundles.KEY_VERSION_CODE, versionCode)
+        putInt(NativeFileBundles.KEY_UID, appInfo.uid)
+        putString(NativeFileBundles.KEY_DATA_DIR, appInfo.dataDir.orEmpty())
+        putString(NativeFileBundles.KEY_SOURCE_DIR, appInfo.sourceDir.orEmpty())
+        putInt(
+            NativeFileBundles.KEY_MIN_SDK,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) appInfo.minSdkVersion else 0
+        )
+        putInt(NativeFileBundles.KEY_TARGET_SDK, appInfo.targetSdkVersion)
+        putLong(NativeFileBundles.KEY_FIRST_INSTALL_TIME, firstInstallTime)
+        putLong(NativeFileBundles.KEY_LAST_UPDATE_TIME, lastUpdateTime)
+        putBoolean(
+            NativeFileBundles.KEY_IS_SYSTEM_APP,
+            (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+        )
+        putString(NativeFileBundles.KEY_APP_STATE, state)
+    }
+}
+
+private fun resolveAppState(
+    pm: PackageManager,
+    packageName: String,
+    appInfo: ApplicationInfo,
+): String {
+    val setting = runCatching { pm.getApplicationEnabledSetting(packageName) }
+        .getOrNull() ?: PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+    return when (setting) {
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER -> "FROZEN"
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED -> "DISABLED"
+        else -> if (appInfo.enabled) "ENABLED" else "DISABLED"
     }
 }

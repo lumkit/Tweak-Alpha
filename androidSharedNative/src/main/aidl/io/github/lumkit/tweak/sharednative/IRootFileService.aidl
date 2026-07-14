@@ -17,5 +17,7 @@ interface IRootFileService {
     Bundle move(String sourcePath, String targetPath, boolean overwrite);
     Bundle chmod(String path, String mode);
     Bundle readCpuCycles(int coreIndex);
+    Bundle listInstalledApps();
+    Bundle getInstalledApp(String packageName);
     Bundle unzipToDir(in ParcelFileDescriptor pfd, String targetDir);
 }

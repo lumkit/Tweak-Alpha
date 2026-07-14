@@ -27,6 +27,7 @@ import io.github.lumkit.tweak.common.component.LiquidBottomTab
 import io.github.lumkit.tweak.common.component.LiquidBottomTabs
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.feature.setupUpdateForegroundService
+import io.github.lumkit.tweak.common.utils.AppsHelper
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.model.NavigationViewModel
 import io.github.lumkit.tweak.navigation.LocalNavigator
@@ -45,6 +46,9 @@ private fun Setup() {
     LaunchedEffect(Unit) {
         // 启动系统更新前台服务
         setupUpdateForegroundService()
+
+        // 初始化App列表
+        AppsHelper.init()
     }
 
 }

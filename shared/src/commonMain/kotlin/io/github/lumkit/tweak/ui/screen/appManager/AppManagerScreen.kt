@@ -35,7 +35,6 @@ import tweak_alpha.shared.generated.resources.text_app_manager
 import tweak_alpha.shared.generated.resources.text_app_manager_description
 import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_go_back
-import tweak_alpha.shared.generated.resources.text_open_sources
 
 internal val AppManagerProvider = object : FeatureProvider {
     override val feature: Feature
@@ -73,7 +72,7 @@ private fun AppManagerContent() {
         Scaffold(
             topBar = {
                 TopBar(
-                    title = stringResource(Res.string.text_open_sources),
+                    title = stringResource(Res.string.text_app_manager),
                     scrollBehavior = scrollBehavior,
                     backdrop = backdrop,
                     navigationIcon = {
@@ -96,7 +95,7 @@ private fun AppManagerContent() {
                     .overScrollVertical()
                     .nestedScroll(scrollBehavior.nestedScrollConnection),
                 contentPadding = PaddingValues(
-                    start = it.calculateStartPadding(direction),
+                    start = it.calculateStartPadding(direction) + 16.dp,
                     top = it.calculateTopPadding(),
                     end = it.calculateEndPadding(direction) + 16.dp,
                     bottom = it.calculateBottomPadding() + 16.dp

@@ -77,7 +77,7 @@ fun OpenSourceScreen(
                 contentPadding = PaddingValues(
                     start = it.calculateStartPadding(direction),
                     top = it.calculateTopPadding(),
-                    end = it.calculateEndPadding(direction) + 16.dp,
+                    end = it.calculateEndPadding(direction),
                     bottom = it.calculateBottomPadding() + 16.dp
                 ),
             ) {

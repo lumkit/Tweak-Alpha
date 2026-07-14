@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.common.feature
 import android.content.Intent
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.common.utils.startSmartService
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.service.UpdateEngineService
@@ -48,7 +49,7 @@ actual fun CoroutineScope.setupUpdateForegroundService() {
 
         if (runtimeMode == RuntimeMode.Root && support) {
             val intent = Intent(application, UpdateEngineService::class.java)
-            application.startService(intent)
+            application.startSmartService(intent)
         }
     }
 }

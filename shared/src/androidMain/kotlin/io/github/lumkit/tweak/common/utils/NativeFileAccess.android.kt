@@ -38,7 +38,7 @@ actual object PlatformNativeFileServices : NativeFileServiceProvider {
     }
 }
 
-private object RootFileServiceConnectionManager {
+internal object RootFileServiceConnectionManager {
     private val mutex = Mutex()
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -283,7 +283,7 @@ private object RootNativeFileService : NativeFileService {
     }
 }
 
-private object ShizukuFileServiceConnectionManager {
+internal object ShizukuFileServiceConnectionManager {
     private val mutex = Mutex()
 
     @Volatile

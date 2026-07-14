@@ -2,7 +2,6 @@ package io.github.lumkit.tweak
 
 import android.app.Application
 import com.topjohnwu.superuser.Shell
-import io.github.lumkit.tweak.common.utils.AppsHelper
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.isDebugBuild
 import io.github.lumkit.tweak.sharednative.BatteryBridge
@@ -17,7 +16,6 @@ class TweakApplication: Application() {
 
         BatteryBridge.init(this)
         initLibSu()
-        initAppsHelper()
     }
 
     private fun initLibSu() {
@@ -27,9 +25,5 @@ class TweakApplication: Application() {
                 .setFlags(Shell.FLAG_MOUNT_MASTER)
                 .setTimeout(TweakDataStore.shellTimeoutMilliseconds)
         )
-    }
-
-    private fun initAppsHelper() {
-        AppsHelper.init()
     }
 }
