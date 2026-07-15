@@ -129,7 +129,7 @@ import top.yukonga.miuix.kmp.window.WindowDialog
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_all_apps_fill
 import tweak_alpha.shared.generated.resources.ic_ice_app
-import tweak_alpha.shared.generated.resources.ic_record_chart
+import tweak_alpha.shared.generated.resources.ic_module
 import tweak_alpha.shared.generated.resources.ic_sun
 import tweak_alpha.shared.generated.resources.ic_system_apps
 import tweak_alpha.shared.generated.resources.ic_unable_app
@@ -162,7 +162,7 @@ internal val AppManagerProvider = object : FeatureProvider {
         get() = Feature(
             key = "AppManagerProvider",
             title = Res.string.text_app_manager,
-            icon = Res.drawable.ic_record_chart,
+            icon = Res.drawable.ic_module,
             description = Res.string.text_app_manager_description,
             capabilities = setOf(
                 Capability.SHIZUKU_OR_ROOT,
