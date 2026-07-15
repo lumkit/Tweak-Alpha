@@ -56,6 +56,11 @@ expect fun areNotificationsEnabled(): Boolean
  */
 expect fun jumpToAppInfo()
 
+/**
+ * 跳转至指定应用详情
+ */
+expect fun jumpToAppInfo(packageName: String)
+
 @Immutable
 enum class DeviceType {
     PHONE,

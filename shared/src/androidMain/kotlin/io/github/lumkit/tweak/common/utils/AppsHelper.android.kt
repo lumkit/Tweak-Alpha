@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.common.utils
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -63,11 +64,16 @@ actual object AppsHelper {
         }
     }
 
+    private var isInit = false
+
     actual fun init() {
+        if (isInit) return
+        isInit = true
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
             addAction(Intent.ACTION_PACKAGE_REMOVED)
             addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addAction(Intent.ACTION_PACKAGE_CHANGED)
             addDataScheme("package")
         }
         ContextCompat.registerReceiver(
@@ -127,6 +133,7 @@ actual object AppsHelper {
 
             Intent.ACTION_PACKAGE_ADDED,
             Intent.ACTION_PACKAGE_REPLACED,
+            Intent.ACTION_PACKAGE_CHANGED,
             -> {
                 upsertPackage(packageName)
                 logD(
@@ -235,16 +242,24 @@ actual object AppsHelper {
         runCatching { packageInfo.toAppInfo(pm, cacheDir) }.getOrNull()
     }
 
-    private suspend fun upsertPackage(packageName: String) {
+    private suspend fun resolveInstalledApp(
+        packageName: String,
+        pm: PackageManager = application.packageManager,
+        cacheDir: String = iconCacheDir,
+    ): AppInfo? {
+        return fetchAppInfoViaBinder(packageName, pm, cacheDir)
+            ?: loadSingleInstalledAppDirectly(packageName, pm, cacheDir)
+    }
+
+    private suspend fun upsertPackage(packageName: String): AppInfo? {
         val pm = application.packageManager
         val cacheDir = iconCacheDir
-        val appInfo = fetchAppInfoViaBinder(packageName, pm, cacheDir)
-            ?: loadSingleInstalledAppDirectly(packageName, pm, cacheDir)
-            ?: return
+        val appInfo = resolveInstalledApp(packageName, pm, cacheDir) ?: return null
         _apps.value = _apps.value
             .filterNot { it.packageName == packageName }
             .plus(appInfo)
             .sortedBy { it.appName }
+        return appInfo
     }
 
     private fun removePackage(packageName: String) {
@@ -273,6 +288,7 @@ actual object AppsHelper {
             targetSdk = appInfo.targetSdkVersion,
             firstInstallTime = firstInstallTime,
             lastUpdateTime = lastUpdateTime,
+            abiList = appInfo.resolveAbiList(),
             isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
             state = resolveState(pm, packageName, appInfo),
         )
@@ -297,6 +313,9 @@ actual object AppsHelper {
             targetSdk = getInt(NativeFileBundles.KEY_TARGET_SDK),
             firstInstallTime = getLong(NativeFileBundles.KEY_FIRST_INSTALL_TIME),
             lastUpdateTime = getLong(NativeFileBundles.KEY_LAST_UPDATE_TIME),
+            abiList = getStringArrayList(NativeFileBundles.KEY_ABI_LIST)
+                ?.mapNotNull(::parseAppAbi)
+                .orEmpty(),
             isSystemApp = getBoolean(NativeFileBundles.KEY_IS_SYSTEM_APP),
             state = state,
         )
@@ -316,6 +335,7 @@ actual object AppsHelper {
         targetSdk: Int,
         firstInstallTime: Long,
         lastUpdateTime: Long,
+        abiList: List<AppAbi>,
         isSystemApp: Boolean,
         state: AppState,
     ): AppInfo {
@@ -333,6 +353,7 @@ actual object AppsHelper {
             targetSdk = targetSdk,
             firstInstallTime = firstInstallTime,
             lastUpdateTime = lastUpdateTime,
+            abiList = abiList,
             iconPath = iconFile.absolutePath,
             isSystemApp = isSystemApp,
             state = state,
@@ -459,7 +480,33 @@ actual object AppsHelper {
         } else {
             "pm enable $packageName"
         }
-        return runPrivileged("setFrozen", command) { upsertPackage(packageName) }
+        val result = runPrivileged("setFrozen", command) { upsertPackage(packageName) }
+        if (!frozen || result is AppOperationResult.Failure) {
+            return result
+        }
+
+        val appInfo = apps.value.find { it.packageName == packageName }
+        return if (appInfo?.state != AppState.ENABLED) {
+            AppOperationResult.Success
+        } else {
+            if (appInfo.isSystemApp) {
+                AppOperationResult.Failure("冻结失败：系统应用不能被冻结")
+            } else {
+                AppOperationResult.Failure("冻结失败")
+            }
+        }
+    }
+
+    actual suspend fun forceStop(packageName: String): AppOperationResult = withContext(Dispatchers.IO) {
+        val commands = listOf(
+            "am force-stop --user 0 '$packageName'",
+            "am force-stop '$packageName'",
+        )
+        runPrivilegedFallback(
+            operation = "forceStop",
+            commands = commands,
+            onSuccess = { }
+        )
     }
 
     actual suspend fun launch(packageName: String): AppOperationResult = withContext(Dispatchers.IO) {
@@ -507,6 +554,42 @@ actual object AppsHelper {
         }
     }
 
+    /**
+     * 依次尝试多个特权命令，兼容不同 Android 版本/ROM 的命令参数差异。
+     */
+    private suspend fun runPrivilegedFallback(
+        operation: String,
+        commands: List<String>,
+        onSuccess: suspend () -> Unit,
+    ): AppOperationResult = withContext(Dispatchers.IO) {
+        var lastFailure: AppOperationResult.Failure? = null
+
+        for (command in commands.distinct()) {
+            val outputResult = runCatching { ReusableShells.execSync(command) }
+            val output = outputResult.getOrNull()
+            if (output == null) {
+                val throwable = outputResult.exceptionOrNull()
+                logE("$operation failed: ${throwable?.message}", throwable, TAG)
+                lastFailure = AppOperationResult.Failure(
+                    throwable?.message ?: "$operation 执行失败"
+                )
+                continue
+            }
+
+            val failed = FAILURE_KEYWORDS.any { output.contains(it, ignoreCase = true) } ||
+                FORCE_STOP_FALLBACK_KEYWORDS.any { output.contains(it, ignoreCase = true) }
+
+            if (!failed) {
+                onSuccess()
+                return@withContext AppOperationResult.Success
+            }
+
+            lastFailure = AppOperationResult.Failure(output.ifBlank { "$operation 执行失败" })
+        }
+
+        lastFailure ?: AppOperationResult.Failure("$operation 执行失败")
+    }
+
     private val FAILURE_KEYWORDS = listOf(
         "Failure",
         "Error",
@@ -517,6 +600,67 @@ actual object AppsHelper {
         "Permission",
         "denied",
     )
+
+    private val FORCE_STOP_FALLBACK_KEYWORDS = listOf(
+        "Unknown option",
+        "Unknown user",
+        "IllegalArgumentException",
+    )
+}
+
+private fun ApplicationInfo.resolveAbiList(): List<AppAbi> {
+    val values = linkedSetOf<AppAbi>()
+    readHiddenAbiField("primaryCpuAbi")?.toAppAbi()?.let(values::add)
+    readHiddenAbiField("secondaryCpuAbi")?.toAppAbi()?.let(values::add)
+    nativeLibraryDir?.toAppAbiFromPath()?.let(values::add)
+    sourceDir?.toAppAbiFromPath()?.let(values::add)
+    return values.toList()
+}
+
+@SuppressLint("PrivateApi")
+private fun ApplicationInfo.readHiddenAbiField(fieldName: String): String? {
+    return runCatching {
+        ApplicationInfo::class.java.getDeclaredField(fieldName).apply {
+            isAccessible = true
+        }.get(this) as? String
+    }.getOrNull()?.takeIf(String::isNotBlank)
+}
+
+private fun String.toAppAbi(): AppAbi? {
+    val normalized = lowercase()
+    return when {
+        normalized.startsWith("arm64-v8a") || normalized.startsWith("arm64") -> AppAbi.ARM64_V8A
+        normalized.startsWith("armeabi-v7a") -> AppAbi.ARMEABI_V7A
+        normalized == "armeabi" -> AppAbi.ARMEABI
+        normalized.startsWith("x86_64") -> AppAbi.X86_64
+        normalized == "x86" -> AppAbi.X86
+        normalized.startsWith("mips64") -> AppAbi.MIPS64
+        normalized.startsWith("mips") -> AppAbi.MIPS
+        normalized.startsWith("riscv64") -> AppAbi.RISCV64
+        else -> null
+    }
+}
+
+private fun String.toAppAbiFromPath(): AppAbi? {
+    val normalized = lowercase()
+    return when {
+        "/lib64/" in normalized ||
+            "/arm64-v8a/" in normalized ||
+            "/arm64/" in normalized -> AppAbi.ARM64_V8A
+        "/armeabi-v7a/" in normalized -> AppAbi.ARMEABI_V7A
+        "/armeabi/" in normalized -> AppAbi.ARMEABI
+        "/x86_64/" in normalized -> AppAbi.X86_64
+        "/x86/" in normalized -> AppAbi.X86
+        "/mips64/" in normalized -> AppAbi.MIPS64
+        "/mips/" in normalized -> AppAbi.MIPS
+        "/riscv64/" in normalized -> AppAbi.RISCV64
+        else -> null
+    }
+}
+
+private fun parseAppAbi(value: String): AppAbi? {
+    return runCatching { AppAbi.valueOf(value) }.getOrNull()
+        ?: AppAbi.entries.firstOrNull { it.abiName.equals(value, ignoreCase = true) }
 }
 
 @Suppress("DEPRECATION")

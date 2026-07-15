@@ -94,9 +94,14 @@ actual fun ManagedActivityResultLauncher<String, Boolean>.requestNotificationPer
 actual fun areNotificationsEnabled(): Boolean = NotificationManagerCompat.from(application).areNotificationsEnabled()
 actual fun jumpToAppInfo() {
     logD("jumpToAppInfo")
+    jumpToAppInfo(application.packageName)
+}
+
+actual fun jumpToAppInfo(packageName: String) {
+    logD("jumpToAppInfo: $packageName")
     val intent = Intent(
         Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-        "package:${application.packageName}".toUri()
+        "package:$packageName".toUri()
     )
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     application.startActivity(intent)

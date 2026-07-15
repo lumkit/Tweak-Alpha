@@ -30,6 +30,7 @@ object NativeFileBundles {
     const val KEY_TARGET_SDK = "target_sdk"
     const val KEY_FIRST_INSTALL_TIME = "first_install_time"
     const val KEY_LAST_UPDATE_TIME = "last_update_time"
+    const val KEY_ABI_LIST = "abi_list"
     const val KEY_IS_SYSTEM_APP = "is_system_app"
     const val KEY_APP_STATE = "app_state"
 

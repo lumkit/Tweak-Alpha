@@ -223,6 +223,10 @@ private fun PackageInfo.toInstalledAppBundle(pm: PackageManager): Bundle? {
         putInt(NativeFileBundles.KEY_TARGET_SDK, appInfo.targetSdkVersion)
         putLong(NativeFileBundles.KEY_FIRST_INSTALL_TIME, firstInstallTime)
         putLong(NativeFileBundles.KEY_LAST_UPDATE_TIME, lastUpdateTime)
+        putStringArrayList(
+            NativeFileBundles.KEY_ABI_LIST,
+            ArrayList(appInfo.resolveAbiBitNames()),
+        )
         putBoolean(
             NativeFileBundles.KEY_IS_SYSTEM_APP,
             (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
@@ -243,5 +247,54 @@ private fun resolveAppState(
         PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
         PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED -> "DISABLED"
         else -> if (appInfo.enabled) "ENABLED" else "DISABLED"
+    }
+}
+
+private fun ApplicationInfo.resolveAbiBitNames(): List<String> {
+    val values = linkedSetOf<String>()
+    readHiddenAbiField("primaryCpuAbi")?.toAbiEntryName()?.let(values::add)
+    readHiddenAbiField("secondaryCpuAbi")?.toAbiEntryName()?.let(values::add)
+    nativeLibraryDir?.toAbiEntryNameFromPath()?.let(values::add)
+    sourceDir?.toAbiEntryNameFromPath()?.let(values::add)
+    return values.toList()
+}
+
+private fun ApplicationInfo.readHiddenAbiField(fieldName: String): String? {
+    return runCatching {
+        ApplicationInfo::class.java.getDeclaredField(fieldName).apply {
+            isAccessible = true
+        }.get(this) as? String
+    }.getOrNull()?.takeIf(String::isNotBlank)
+}
+
+private fun String.toAbiEntryName(): String? {
+    val normalized = lowercase()
+    return when {
+        normalized.startsWith("arm64-v8a") || normalized.startsWith("arm64") -> "ARM64_V8A"
+        normalized.startsWith("armeabi-v7a") -> "ARMEABI_V7A"
+        normalized == "armeabi" -> "ARMEABI"
+        normalized.startsWith("x86_64") -> "X86_64"
+        normalized == "x86" -> "X86"
+        normalized.startsWith("mips64") -> "MIPS64"
+        normalized.startsWith("mips") -> "MIPS"
+        normalized.startsWith("riscv64") -> "RISCV64"
+        else -> null
+    }
+}
+
+private fun String.toAbiEntryNameFromPath(): String? {
+    val normalized = lowercase()
+    return when {
+        "/lib64/" in normalized ||
+            "/arm64-v8a/" in normalized ||
+            "/arm64/" in normalized -> "ARM64_V8A"
+        "/armeabi-v7a/" in normalized -> "ARMEABI_V7A"
+        "/armeabi/" in normalized -> "ARMEABI"
+        "/x86_64/" in normalized -> "X86_64"
+        "/x86/" in normalized -> "X86"
+        "/mips64/" in normalized -> "MIPS64"
+        "/mips/" in normalized -> "MIPS"
+        "/riscv64/" in normalized -> "RISCV64"
+        else -> null
     }
 }

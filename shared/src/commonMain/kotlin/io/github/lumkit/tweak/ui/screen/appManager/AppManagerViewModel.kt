@@ -3,12 +3,41 @@ package io.github.lumkit.tweak.ui.screen.appManager
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.AppInfo
+import io.github.lumkit.tweak.common.utils.AppOperationResult
+import io.github.lumkit.tweak.common.utils.AppState
 import io.github.lumkit.tweak.common.utils.AppsHelper
+import io.github.lumkit.tweak.common.utils.logD
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
+import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.text_app_uninstall
+import tweak_alpha.shared.generated.resources.text_dialog_running_task
+import tweak_alpha.shared.generated.resources.text_enable_app
+import tweak_alpha.shared.generated.resources.text_force_app_failed
+import tweak_alpha.shared.generated.resources.text_force_app_partial_success
+import tweak_alpha.shared.generated.resources.text_force_app_success
+import tweak_alpha.shared.generated.resources.text_operation_batch_failed
+import tweak_alpha.shared.generated.resources.text_operation_batch_partial_success
+import tweak_alpha.shared.generated.resources.text_operation_batch_success
+import tweak_alpha.shared.generated.resources.text_unable_app
 
 class AppManagerViewModel: BaseViewModel() {
+
+    companion object {
+        private const val TAG = "AppManagerViewModel"
+    }
+
+    private val _loadingState = MutableStateFlow(false)
+    val loadingState = _loadingState.asStateFlow()
+
+    private val _loadingTextRes = MutableStateFlow(Res.string.text_dialog_running_task)
+    val loadingTextRes = _loadingTextRes.asStateFlow()
 
     private val _allApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val allApps = _allApps.asStateFlow()
@@ -19,14 +48,255 @@ class AppManagerViewModel: BaseViewModel() {
     private val _systemApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val systemApps = _systemApps.asStateFlow()
 
+    private val _unabledApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    val unabledApps = _unabledApps.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery = _searchQuery.asStateFlow()
+
+    private val _selectedMode = MutableStateFlow(false)
+    val selectedMode = _selectedMode.asStateFlow()
+
+    private val _selectedApps = MutableStateFlow<Set<String>>(emptySet())
+    val selectedApps = _selectedApps.asStateFlow()
+
+    private val _selectableAppPackageNames = MutableStateFlow<Set<String>>(emptySet())
+    val selectableAppPackageNames = _selectableAppPackageNames.asStateFlow()
+
+    val hasSelectedAllPackageNames = combine(selectedApps, selectableAppPackageNames) { selected, selectable ->
+        selectable.isNotEmpty() && selected.size == selectable.size
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        false
+    )
+
     init {
         viewModelScope.launch {
             AppsHelper.apps.collect {
-                _allApps.value = it
-                _userApps.value = it.filter { info -> info.isSystemApp.not() }
-                _systemApps.value = it.filter { info -> info.isSystemApp }
+                logD("app list=$it", TAG)
+                _allApps.value = it.filter { info -> info.state == AppState.ENABLED }
+                _userApps.value = it.filter { info -> info.isSystemApp.not() && info.state == AppState.ENABLED }
+                _systemApps.value = it.filter { info -> info.isSystemApp && info.state == AppState.ENABLED }
+                _unabledApps.value = it.filter { info -> info.state != AppState.ENABLED }
+                _selectableAppPackageNames.value = it.map { info -> info.packageName }.toSet()
             }
         }
     }
 
+    fun setSelectedMode(selectedMode: Boolean) {
+        _selectedMode.value = selectedMode
+    }
+
+    fun setSelectableAppPackageNames(selectableAppPackageNames: Set<String>) {
+        _selectableAppPackageNames.value = selectableAppPackageNames
+    }
+
+    fun toggleSelectedAppInfo(packageName: String) {
+        _selectedApps.update { selected ->
+            if (packageName in selected) selected - packageName else selected + packageName
+        }
+    }
+
+    fun toggleSelectedAllApps() {
+        val selectable = selectableAppPackageNames.value.toSet()
+        if (selectable.isEmpty()) {
+            cleanSelectedPackageNames()
+            return
+        }
+        _selectedApps.update { selected ->
+            val current = selected.intersect(selectable)
+            if (current.size == selectable.size) {
+                emptySet()
+            } else {
+                selectable
+            }
+        }
+    }
+
+    fun cleanSelectedPackageNames() {
+        _selectedApps.value = emptySet()
+    }
+
+    fun syncAppsOnResume() {
+        viewModelScope.launch {
+            AppsHelper.refresh()
+        }
+    }
+
+    private data class BatchOperationSummary(
+        val successCount: Int,
+        val failures: List<Pair<String, String>>,
+    )
+
+    private fun consumeSelectedPackages(): List<String> {
+        val selectedApps = _selectedApps.value.toList()
+        _selectedMode.value = false
+        _selectedApps.value = emptySet()
+        return selectedApps
+    }
+
+    private suspend fun runBatchOperation(
+        packages: List<String>,
+        operation: suspend (String) -> AppOperationResult,
+    ): BatchOperationSummary {
+        var successCount = 0
+        val failures = mutableListOf<Pair<String, String>>()
+
+        packages.forEach { packageName ->
+            when (val result = operation(packageName)) {
+                AppOperationResult.Success -> {
+                    successCount++
+                }
+
+                is AppOperationResult.Failure -> {
+                    failures += packageName to result.message
+                }
+            }
+        }
+
+        return BatchOperationSummary(
+            successCount = successCount,
+            failures = failures,
+        )
+    }
+
+    private suspend fun buildBatchOperationMessage(
+        actionName: String,
+        summary: BatchOperationSummary,
+    ): String? {
+        return when {
+            summary.successCount == 0 && summary.failures.isEmpty() -> null
+            summary.failures.isEmpty() -> {
+                getString(Res.string.text_operation_batch_success).format(actionName, summary.successCount)
+            }
+
+            summary.successCount > 0 -> {
+                getString(Res.string.text_operation_batch_partial_success).format(
+                    actionName,
+                    summary.successCount,
+                    summary.failures.size,
+                )
+            }
+
+            else -> {
+                val firstFailure = summary.failures.firstOrNull()
+                buildString {
+                    append(getString(Res.string.text_operation_batch_failed).format(actionName))
+                    firstFailure?.let { (packageName, message) ->
+                        append("：")
+                        append(packageName)
+                        if (message.isNotBlank()) {
+                            append("，")
+                            append(message)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun forceKillSelectedApps() = suspendLaunch(
+        id = "forceKillSelectedApps",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        val selectedApps = consumeSelectedPackages()
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+
+        if (selectedApps.isEmpty()) {
+            success()
+            return@suspendLaunch
+        }
+
+        val summary = runBatchOperation(selectedApps, AppsHelper::forceStop)
+        val message = when {
+            summary.failures.isEmpty() -> getString(Res.string.text_force_app_success)
+                .format(summary.successCount)
+            summary.successCount > 0 -> getString(Res.string.text_force_app_partial_success)
+                .format(summary.successCount, summary.failures.size)
+            else -> {
+                val firstFailure = summary.failures.firstOrNull()
+                buildString {
+                    append(getString(Res.string.text_force_app_failed))
+                    firstFailure?.let { (packageName, failureMessage) ->
+                        append("：")
+                        append(packageName)
+                        if (failureMessage.isNotBlank()) {
+                            append("，")
+                            append(failureMessage)
+                        }
+                    }
+                }
+            }
+        }
+        success(message)
+    }
+
+    fun unableSelectedApps() = suspendLaunch(
+        id = "unableSelectedApps",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        val selectedApps = consumeSelectedPackages()
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+
+        if (selectedApps.isEmpty()) {
+            success()
+            return@suspendLaunch
+        }
+
+        val summary = runBatchOperation(selectedApps) { packageName ->
+            AppsHelper.setFrozen(packageName, true)
+        }
+        success(buildBatchOperationMessage(getString(Res.string.text_unable_app), summary))
+    }
+
+    fun enableSelectedApps() = suspendLaunch(
+        id = "enableSelectedApps",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        val selectedApps = consumeSelectedPackages()
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+
+        if (selectedApps.isEmpty()) {
+            success()
+            return@suspendLaunch
+        }
+
+        val summary = runBatchOperation(selectedApps) { packageName ->
+            AppsHelper.setFrozen(packageName, false)
+        }
+        success(buildBatchOperationMessage(getString(Res.string.text_enable_app), summary))
+    }
+
+    fun uninstallSelectedApps() = suspendLaunch(
+        id = "uninstallSelectedApps",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        val selectedApps = consumeSelectedPackages()
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+
+        if (selectedApps.isEmpty()) {
+            success()
+            return@suspendLaunch
+        }
+
+        val summary = runBatchOperation(selectedApps, AppsHelper::uninstall)
+        success(buildBatchOperationMessage(getString(Res.string.text_app_uninstall), summary))
+    }
 }

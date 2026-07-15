@@ -16,6 +16,7 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.shadow.Shadow
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -36,6 +37,56 @@ fun TopBar(
     TopAppBar(
         title = title,
         largeTitle = largeTitle,
+        subtitle = subTitle,
+        scrollBehavior = scrollBehavior,
+        color = if (advancedBackdropEffectSupported) {
+            Color.Transparent
+        } else {
+            background
+        },
+        navigationIcon = navigationIcon,
+        actions = actions,
+        modifier = modifier.fillMaxWidth()
+            .drawBackdrop(
+                backdrop = backdrop,
+                shape = {
+                    RoundedCornerShape(0.dp)
+                },
+                effects = {
+                    if (advancedBackdropEffectSupported) {
+                        vibrancy()
+                        blur(8f.dp.toPx())
+                        lens(8f.dp.toPx(), 8f.dp.toPx())
+                    }
+                },
+                shadow = { Shadow(radius = 0.dp) },
+                onDrawSurface = {
+                    if (advancedBackdropEffectSupported) {
+                        drawRect(background.copy(.4f))
+                    } else {
+                        drawRect(background)
+                    }
+                },
+                highlight = { null }
+            )
+    )
+}
+
+@Composable
+fun SmallTopAppBar(
+    title: String,
+    modifier: Modifier = Modifier,
+    subTitle: String = "",
+    scrollBehavior: ScrollBehavior,
+    backdrop: Backdrop,
+    navigationIcon: @Composable (() -> Unit) = {},
+    actions: @Composable (RowScope.() -> Unit) = {},
+) {
+    val background = MiuixTheme.colorScheme.surface
+    val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
+
+    SmallTopAppBar(
+        title = title,
         subtitle = subTitle,
         scrollBehavior = scrollBehavior,
         color = if (advancedBackdropEffectSupported) {

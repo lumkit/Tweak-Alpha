@@ -21,6 +21,18 @@ enum class AppState {
     FROZEN,
 }
 
+@Serializable
+enum class AppAbi(val abiName: String, val bitSize: Int) {
+    ARMEABI("armeabi", 32),
+    ARMEABI_V7A("armeabi-v7a", 32),
+    ARM64_V8A("arm64-v8a", 64),
+    X86("x86", 32),
+    X86_64("x86_64", 64),
+    MIPS("mips", 32),
+    MIPS64("mips64", 64),
+    RISCV64("riscv64", 64),
+}
+
 /**
  * 应用操作结果。
  *
@@ -63,6 +75,8 @@ data class AppInfo(
     val firstInstallTime: Long,
     /** 更新时间（毫秒时间戳） */
     val lastUpdateTime: Long,
+    /** 应用 ABI 列表 */
+    val abiList: List<AppAbi> = emptyList(),
     /** 图标缓存路径 */
     val iconPath: String,
     /** 是否为系统应用 */
@@ -130,6 +144,13 @@ expect object AppsHelper {
      * @param frozen `true` 冻结（`pm disable-user`），`false` 解冻（`pm enable`）
      */
     suspend fun setFrozen(packageName: String, frozen: Boolean): AppOperationResult
+
+    /**
+     * 强制停止应用进程。
+     *
+     * @param packageName 目标包名
+     */
+    suspend fun forceStop(packageName: String): AppOperationResult
 
     /**
      * 启动应用。
