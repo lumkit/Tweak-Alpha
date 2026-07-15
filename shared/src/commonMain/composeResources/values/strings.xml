@@ -165,4 +165,5 @@
     <string name="text_operation_batch_success">成功%s%d个应用</string>
     <string name="text_operation_batch_partial_success">成功%s%d个应用，%d个应用失败</string>
     <string name="text_operation_batch_failed">%s应用失败</string>
+    <string name="text_selected_apps_format">已选择：%d/%d</string>
 </resources>

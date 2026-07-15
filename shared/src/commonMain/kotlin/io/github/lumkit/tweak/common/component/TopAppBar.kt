@@ -1,5 +1,7 @@
 package io.github.lumkit.tweak.common.component
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -7,7 +9,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -81,21 +87,14 @@ fun SmallTopAppBar(
     backdrop: Backdrop,
     navigationIcon: @Composable (() -> Unit) = {},
     actions: @Composable (RowScope.() -> Unit) = {},
+    expander: @Composable (ColumnScope.() -> Unit)? = null,
+    onSizeChanged: (DpSize) -> Unit = {},
 ) {
     val background = MiuixTheme.colorScheme.surface
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
+    val density = LocalDensity.current
 
-    SmallTopAppBar(
-        title = title,
-        subtitle = subTitle,
-        scrollBehavior = scrollBehavior,
-        color = if (advancedBackdropEffectSupported) {
-            Color.Transparent
-        } else {
-            background
-        },
-        navigationIcon = navigationIcon,
-        actions = actions,
+    Column(
         modifier = modifier.fillMaxWidth()
             .drawBackdrop(
                 backdrop = backdrop,
@@ -119,5 +118,24 @@ fun SmallTopAppBar(
                 },
                 highlight = { null }
             )
-    )
+            .onSizeChanged {
+                with(density) { onSizeChanged(it.toSize().toDpSize()) }
+            }
+    ) {
+        SmallTopAppBar(
+            title = title,
+            subtitle = subTitle,
+            scrollBehavior = scrollBehavior,
+            color = if (advancedBackdropEffectSupported) {
+                Color.Transparent
+            } else {
+                background
+            },
+            navigationIcon = navigationIcon,
+            actions = actions,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        expander?.invoke(this)
+    }
 }

@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -54,11 +55,13 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -73,6 +76,7 @@ import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
 import io.github.lumkit.tweak.LocalSnackBarHostState
+import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.component.Block
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.SmallTopAppBar
@@ -86,8 +90,10 @@ import io.github.lumkit.tweak.ui.screen.feature.FeatureProvider
 import io.github.lumkit.tweak.ui.screen.feature.model.Capability
 import io.github.lumkit.tweak.ui.screen.feature.model.Feature
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
@@ -100,9 +106,12 @@ import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
+import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
+import top.yukonga.miuix.kmp.basic.SearchBar
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.basic.TooltipBox
@@ -112,6 +121,7 @@ import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Close2
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -141,6 +151,7 @@ import tweak_alpha.shared.generated.resources.text_enable_app
 import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_force_kill_app
 import tweak_alpha.shared.generated.resources.text_no_native_abi
+import tweak_alpha.shared.generated.resources.text_selected_apps_format
 import tweak_alpha.shared.generated.resources.text_system_apps
 import tweak_alpha.shared.generated.resources.text_unable_app
 import tweak_alpha.shared.generated.resources.text_unabled_apps
@@ -177,8 +188,8 @@ private fun AppManagerContent(
     val navigator = LocalNavigator.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var bottomToolBarHeight by remember { mutableStateOf(0.dp) }
+    var topHeight by remember { mutableStateOf(0.dp) }
     val direction = LocalLayoutDirection.current
-    val hostState = LocalSnackBarHostState.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
     val pages = remember(viewModel) {
@@ -207,55 +218,159 @@ private fun AppManagerContent(
     }
 
     val pager = rememberPagerState { pages.size }
+    val currentPage by remember { derivedStateOf { pager.currentPage } }
+    val currentAppPage = remember(pages, currentPage) { pages[currentPage] }
+    val currentPageApps by currentAppPage.listState.collectAsStateWithLifecycle()
     val selectMode by viewModel.selectedMode.collectAsStateWithLifecycle()
+    val searchMode by viewModel.searchMode.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val loadingState by viewModel.loadingState.collectAsStateWithLifecycle()
     val loadingTextRes by viewModel.loadingTextRes.collectAsStateWithLifecycle()
-
-    BackHandler(selectMode) {
-        viewModel.setSelectedMode(false)
+    val selectedApps by viewModel.selectedApps.collectAsStateWithLifecycle()
+    val normalizedSearchQuery = remember(searchQuery) { searchQuery.trim() }
+    val currentAppList by rememberFilteredApps(
+        apps = currentPageApps,
+        query = normalizedSearchQuery,
+    )
+    val subTitle = if (selectMode) {
+        stringResource(Res.string.text_selected_apps_format).format(selectedApps.size, currentAppList.size)
+    } else {
+        buildString {
+            append(stringResource(currentAppPage.titleRes))
+            append(": ")
+            append("${currentAppList.size} Apps")
+        }
     }
 
+    BackHandler(selectMode || searchMode) {
+        if (selectMode) {
+            viewModel.setSelectedMode(false)
+            return@BackHandler
+        }
+        viewModel.setSearchMode(false)
+    }
+
+    AppManagerSelectionEffect(
+        selectMode = selectMode,
+        onExitSelection = viewModel::cleanSelectedPackageNames,
+    )
+    AppManagerLoadStateEffects(viewModel)
+    AppManagerResumeSyncEffect(
+        lifecycleOwner = lifecycleOwner,
+        onResume = viewModel::syncAppsOnResume,
+    )
+    AppManagerLoadingDialog(
+        loadingState = loadingState,
+        loadingTextRes = loadingTextRes,
+    )
+
+    ScreenSurface {
+        Scaffold(
+            topBar = {
+                AppManagerTopBar(
+                    viewModel = viewModel,
+                    title = stringResource(Res.string.text_app_manager),
+                    subTitle = subTitle,
+                    selectMode = selectMode,
+                    scrollBehavior = scrollBehavior,
+                    backdrop = backdrop,
+                    onNavigationClick = {
+                        if (!selectMode && !searchMode) {
+                            navigator.goBack()
+                        } else if (selectMode) {
+                            viewModel.setSelectedMode(false)
+                        } else {
+                            viewModel.setSearchMode(false)
+                        }
+                    },
+                ) {
+                    topHeight = it.height
+                }
+            },
+            floatingToolbar = {
+                AppManagerFloatingToolbar(
+                    selectMode = selectMode,
+                    pages = pages,
+                    pagerState = pager,
+                    onToolBarHeight = {
+                        bottomToolBarHeight = it
+                    }
+                )
+            },
+            floatingToolbarPosition = ToolbarPosition.BottomCenter,
+            containerColor = MiuixTheme.colorScheme.surface,
+        ) { paddingValues ->
+
+            val listPaddingValues = remember(bottomToolBarHeight, paddingValues, direction, topHeight) {
+                PaddingValues(
+                    start = paddingValues.calculateStartPadding(direction),
+                    end = paddingValues.calculateEndPadding(direction),
+                    top = topHeight + 12.dp,
+                    bottom = paddingValues.calculateBottomPadding() + bottomToolBarHeight,
+                )
+            }
+
+            AppManagerContentLayout(
+                backdrop = backdrop,
+                pages = pages,
+                pagerState = pager,
+                currentPage = currentPage,
+                selectMode = selectMode,
+                searchQuery = normalizedSearchQuery,
+                listPaddingValues = listPaddingValues,
+                scrollBehavior = scrollBehavior,
+                direction = direction,
+                viewModel = viewModel,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppManagerSelectionEffect(
+    selectMode: Boolean,
+    onExitSelection: () -> Unit,
+) {
     LaunchedEffect(selectMode) {
         if (!selectMode) {
-            viewModel.cleanSelectedPackageNames()
+            onExitSelection()
         }
     }
+}
+
+@Composable
+private fun AppManagerLoadStateEffects(viewModel: AppManagerViewModel) {
+    val hostState = LocalSnackBarHostState.current
 
     viewModel.LoadStateLaunchEffect {
-        Watch("forceKillSelectedApps") {
-            it.message?.let { msg ->
-                if (msg.isNotBlank()) {
-                    hostState.showSnackbar(it.message ?: "")
-                }
-            }
-        }
-        Watch("unableSelectedApps") {
-            it.message?.let { msg ->
-                if (msg.isNotBlank()) {
-                    hostState.showSnackbar(it.message ?: "")
-                }
-            }
-        }
-        Watch("enableSelectedApps") {
-            it.message?.let { msg ->
-                if (msg.isNotBlank()) {
-                    hostState.showSnackbar(it.message ?: "")
-                }
-            }
-        }
-        Watch("uninstallSelectedApps") {
-            it.message?.let { msg ->
-                if (msg.isNotBlank()) {
-                    hostState.showSnackbar(it.message ?: "")
-                }
-            }
+        WatchSnackBarState("forceKillSelectedApps", hostState)
+        WatchSnackBarState("unableSelectedApps", hostState)
+        WatchSnackBarState("enableSelectedApps", hostState)
+        WatchSnackBarState("uninstallSelectedApps", hostState)
+    }
+}
+
+@Composable
+private fun BaseViewModel.LoadStateWatcher.WatchSnackBarState(
+    id: String,
+    hostState: SnackbarHostState,
+) {
+    Watch(id) {
+        it.message?.takeIf(String::isNotBlank)?.also { msg ->
+            hostState.showSnackbar(msg)
         }
     }
+}
 
-    DisposableEffect(lifecycleOwner, viewModel) {
+@Composable
+private fun AppManagerResumeSyncEffect(
+    lifecycleOwner: LifecycleOwner,
+    onResume: () -> Unit,
+) {
+    DisposableEffect(lifecycleOwner, onResume) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.syncAppsOnResume()
+                onResume()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -263,13 +378,17 @@ private fun AppManagerContent(
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
+}
 
+@Composable
+private fun AppManagerLoadingDialog(
+    loadingState: Boolean,
+    loadingTextRes: StringResource,
+) {
     WindowDialog(
         show = loadingState,
         enableWindowDim = true,
-        onDismissRequest = {
-
-        },
+        onDismissRequest = {},
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -283,160 +402,199 @@ private fun AppManagerContent(
             )
         }
     }
+}
 
-    ScreenSurface {
-        Scaffold(
-            topBar = {
-                SmallTopAppBar(
-                    title = stringResource(Res.string.text_app_manager),
-                    subTitle = if (selectMode) "" else {
-                        val page = remember(pager.currentPage) { pages[pager.currentPage] }
-                        val list by page.listState.collectAsStateWithLifecycle()
-                        buildString {
-                            append(stringResource(page.titleRes))
-                            append(": ")
-                            append("${list.size} Apps")
-                        }
-                    },
-                    scrollBehavior = scrollBehavior,
-                    backdrop = backdrop,
-                    navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                if (!selectMode) {
-                                    navigator.goBack()
-                                } else {
-                                    viewModel.setSelectedMode(false)
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = if (selectMode) {
-                                    MiuixIcons.Close
-                                } else {
-                                    MiuixIcons.Back
-                                },
-                                contentDescription = null,
-                            )
-                        }
-                    },
-                    actions = {
-                        if (selectMode) {
-                            // 全选按钮
-                            Block {
-                                val hasSelectedAll by viewModel.hasSelectedAllPackageNames.collectAsStateWithLifecycle()
-                                val selectedApps by viewModel.selectedApps.collectAsStateWithLifecycle()
-                                val parentState = when {
-                                    selectedApps.isEmpty() -> ToggleableState.Off
-                                    hasSelectedAll -> ToggleableState.On
-                                    else -> ToggleableState.Indeterminate
-                                }
+@Composable
+private fun AppManagerTopBar(
+    viewModel: AppManagerViewModel,
+    title: String,
+    subTitle: String,
+    selectMode: Boolean,
+    scrollBehavior: ScrollBehavior,
+    backdrop: LayerBackdrop,
+    onNavigationClick: () -> Unit,
+    onSizeChanged: (DpSize) -> Unit = {},
+) {
+    val searchMode by viewModel.searchMode.collectAsStateWithLifecycle()
 
-                                IconButton(
-                                    onClick = {
-                                        viewModel.toggleSelectedAllApps()
-                                    }
-                                ) {
-                                    Checkbox(
-                                        state = parentState,
-                                        onClick = null
-                                    )
-                                }
-                            }
-                        }
-                    }
-                )
-            },
-            floatingToolbar = {
-                val selectMode by viewModel.selectedMode.collectAsStateWithLifecycle()
-                Column {
-                    AnimatedVisibility(
-                        visible = !selectMode
-                    ) {
-                        FloatingToolBar(
-                            pages = pages,
-                            pagerState = pager,
-                        ) {
-                            bottomToolBarHeight = it
-                        }
-                    }
-                }
-            },
-            floatingToolbarPosition = ToolbarPosition.BottomCenter,
-            containerColor = MiuixTheme.colorScheme.surface,
-        ) { paddingValues ->
-
-            val listPaddingValues = remember(bottomToolBarHeight) {
-                PaddingValues(
-                    start = paddingValues.calculateStartPadding(direction),
-                    end = paddingValues.calculateEndPadding(direction),
-                    top = paddingValues.calculateTopPadding(),
-                    bottom = paddingValues.calculateBottomPadding() + bottomToolBarHeight,
+    SmallTopAppBar(
+        title = title,
+        subTitle = subTitle,
+        scrollBehavior = scrollBehavior,
+        backdrop = backdrop,
+        navigationIcon = {
+            IconButton(onClick = onNavigationClick) {
+                Icon(
+                    imageVector = if (selectMode) MiuixIcons.Close else MiuixIcons.Back,
+                    contentDescription = null,
                 )
             }
-
-            Box {
-                HorizontalPager(
-                    modifier = Modifier.fillMaxSize()
-                        .layerBackdrop(backdrop),
-                    state = pager,
-                    userScrollEnabled = !selectMode,
+        },
+        actions = {
+            if (!searchMode) {
+                IconButton(
+                    onClick = {
+                        viewModel.setSearchMode(true)
+                    }
                 ) {
-                    val page = remember(it) { pages[it] }
-
-                    AppItems(
-                        page,
-                        listPaddingValues,
-                        scrollBehavior,
-                        direction,
-                        viewModel.selectedMode,
-                        viewModel.selectedApps,
-                        onTap = { appInfo ->
-                            if (!viewModel.selectedMode.value) {
-                                jumpToAppInfo(appInfo.packageName)
-                            } else {
-                                viewModel.toggleSelectedAppInfo(appInfo.packageName)
-                            }
-                        },
-                        onLongClick = { appInfo ->
-                            if (!viewModel.selectedMode.value) {
-                                viewModel.setSelectedMode(true)
-                                viewModel.setSelectableAppPackageNames(page.listState.value.map { item -> item.packageName }
-                                    .toSet())
-                                viewModel.toggleSelectedAppInfo(appInfo.packageName)
-                            }
-                        }
+                    Icon(
+                        imageVector = MiuixIcons.Search,
+                        contentDescription = null,
                     )
                 }
+            }
 
-                AnimatedContent(
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                        .fillMaxWidth(),
-                    targetState = selectMode,
-                    transitionSpec = {
-                        if (targetState) {
-                            // 展开
-                            slideInVertically(
-                                initialOffsetY = { it }
-                            ) togetherWith slideOutVertically(
-                                targetOffsetY = { -it / 4 }
-                            )
-                        } else {
-                            // 折叠
-                            slideInVertically(
-                                initialOffsetY = { -it / 4 }
-                            ) togetherWith slideOutVertically(
-                                targetOffsetY = { it }
-                            )
-                        }.using(
-                            SizeTransform(clip = false)
-                        )
+            if (selectMode) {
+                AppManagerSelectionAction(viewModel)
+            }
+        },
+        expander = {
+            AnimatedVisibility(
+                visible = searchMode
+            ) {
+                SearchContent(viewModel)
+            }
+        },
+        onSizeChanged = onSizeChanged
+    )
+}
+
+@Composable
+private fun SearchContent(viewModel: AppManagerViewModel) {
+    val searchText by viewModel.searchQuery.collectAsStateWithLifecycle()
+    var expanded by remember { mutableStateOf(false) }
+
+    SearchBar(
+        inputField = {
+            InputField(
+                query = searchText,
+                onQueryChange = {
+                    viewModel.setSearchQuery(it)
+                },
+                onSearch = {},
+                expanded = expanded,
+                onExpandedChange = { expanded = it }
+            )
+        },
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.padding(bottom = 12.dp),
+    ) {}
+}
+
+@Composable
+private fun AppManagerSelectionAction(viewModel: AppManagerViewModel) {
+    val hasSelectedAll by viewModel.hasSelectedAllPackageNames.collectAsStateWithLifecycle()
+    val selectedApps by viewModel.selectedApps.collectAsStateWithLifecycle()
+    val parentState = when {
+        selectedApps.isEmpty() -> ToggleableState.Off
+        hasSelectedAll -> ToggleableState.On
+        else -> ToggleableState.Indeterminate
+    }
+
+    Block {
+        IconButton(onClick = viewModel::toggleSelectedAllApps) {
+            Checkbox(
+                state = parentState,
+                onClick = null
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppManagerFloatingToolbar(
+    selectMode: Boolean,
+    pages: List<AppPage>,
+    pagerState: PagerState,
+    onToolBarHeight: (Dp) -> Unit,
+) {
+    Column {
+        AnimatedVisibility(visible = !selectMode) {
+            FloatingToolBar(
+                pages = pages,
+                pagerState = pagerState,
+                onToolBarHeight = onToolBarHeight,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppManagerContentLayout(
+    backdrop: LayerBackdrop,
+    pages: List<AppPage>,
+    pagerState: PagerState,
+    currentPage: Int,
+    selectMode: Boolean,
+    searchQuery: String,
+    listPaddingValues: PaddingValues,
+    scrollBehavior: ScrollBehavior,
+    direction: LayoutDirection,
+    viewModel: AppManagerViewModel,
+) {
+    Box {
+        HorizontalPager(
+            modifier = Modifier.fillMaxSize()
+                .layerBackdrop(backdrop),
+            state = pagerState,
+            userScrollEnabled = !selectMode,
+        ) { pageIndex ->
+            val page = remember(pageIndex) { pages[pageIndex] }
+
+            AppItems(
+                page = page,
+                paddingValues = listPaddingValues,
+                scrollBehavior = scrollBehavior,
+                direction = direction,
+                searchQuery = searchQuery,
+                selectModeState = viewModel.selectedMode,
+                selectedAppsState = viewModel.selectedApps,
+                onTap = { appInfo ->
+                    if (!selectMode) {
+                        jumpToAppInfo(appInfo.packageName)
+                    } else {
+                        viewModel.toggleSelectedAppInfo(appInfo.packageName)
                     }
-                ) { visible ->
-                    if (visible) {
-                        BottomToolbar(backdrop, viewModel, pager)
+                },
+                onLongClick = { appInfo, selectablePackages ->
+                    if (!selectMode) {
+                        viewModel.setSelectedMode(true)
+                        viewModel.setSelectableAppPackageNames(selectablePackages)
+                        viewModel.toggleSelectedAppInfo(appInfo.packageName)
                     }
                 }
+            )
+        }
+
+        AnimatedContent(
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            targetState = selectMode,
+            transitionSpec = {
+                if (targetState) {
+                    slideInVertically(
+                        initialOffsetY = { it }
+                    ) togetherWith slideOutVertically(
+                        targetOffsetY = { -it / 4 }
+                    )
+                } else {
+                    slideInVertically(
+                        initialOffsetY = { -it / 4 }
+                    ) togetherWith slideOutVertically(
+                        targetOffsetY = { it }
+                    )
+                }.using(
+                    SizeTransform(clip = false)
+                )
+            }
+        ) { visible ->
+            if (visible) {
+                BottomToolbar(
+                    backdrop = backdrop,
+                    viewModel = viewModel,
+                    currentPosition = currentPage,
+                )
             }
         }
     }
@@ -446,130 +604,54 @@ private fun AppManagerContent(
 private fun BoxScope.BottomToolbar(
     backdrop: LayerBackdrop,
     viewModel: AppManagerViewModel,
-    pagerState: PagerState,
+    currentPosition: Int,
 ) {
     val background = MiuixTheme.colorScheme.surface
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
     val selectedApps by viewModel.selectedApps.collectAsStateWithLifecycle()
     val isEmpty = remember(selectedApps) { selectedApps.isEmpty() }
-    val currentPosition = pagerState.currentPage
     val isUnfreezeAction = currentPosition == 3
     var forceDialogState by remember { mutableStateOf(false) }
     var iceDialogState by remember { mutableStateOf(false) }
     var uninstallDialogState by remember { mutableStateOf(false) }
 
-    OverlayDialog(
-        title = stringResource(Res.string.text_dialog_warm_tip),
-        summary = stringResource(Res.string.text_dialog_force_stop_app_summary),
+    ForceStopDialog(
         show = forceDialogState,
         onDismissRequest = {
             forceDialogState = false
-        }
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    viewModel.forceKillSelectedApps()
-                    forceDialogState = false
-                },
-                colors = ButtonDefaults.buttonColorsPrimary()
-            ) {
-                Text(text = stringResource(Res.string.text_dialog_force_stop_confirm))
-            }
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    forceDialogState = false
-                }
-            ) {
-                Text(text = stringResource(Res.string.text_dialog_cancel))
-            }
-        }
-    }
-
-    OverlayDialog(
-        title = stringResource(Res.string.text_dialog_warm_tip),
-        summary = if (isUnfreezeAction) {
-            stringResource(Res.string.text_dialog_unfreeze_app_summary)
-        } else {
-            stringResource(Res.string.text_dialog_freeze_app_summary)
         },
+        onConfirm = {
+            viewModel.forceKillSelectedApps()
+            forceDialogState = false
+        }
+    )
+
+    FreezeActionDialog(
         show = iceDialogState,
+        isUnfreezeAction = isUnfreezeAction,
         onDismissRequest = {
             iceDialogState = false
-        }
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    if (isUnfreezeAction) {
-                        viewModel.enableSelectedApps()
-                    } else {
-                        viewModel.unableSelectedApps()
-                    }
-                    iceDialogState = false
-                },
-                colors = ButtonDefaults.buttonColorsPrimary()
-            ) {
-                Text(
-                    text = if (isUnfreezeAction) {
-                        stringResource(Res.string.text_enable_app)
-                    } else {
-                        stringResource(Res.string.text_unable_app)
-                    }
-                )
+        },
+        onConfirm = {
+            if (isUnfreezeAction) {
+                viewModel.enableSelectedApps()
+            } else {
+                viewModel.unableSelectedApps()
             }
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    iceDialogState = false
-                }
-            ) {
-                Text(text = stringResource(Res.string.text_dialog_cancel))
-            }
+            iceDialogState = false
         }
-    }
+    )
 
-    OverlayDialog(
-        title = stringResource(Res.string.text_dialog_warm_tip),
-        summary = stringResource(Res.string.text_dialog_uninstall_app_summary),
+    UninstallDialog(
         show = uninstallDialogState,
         onDismissRequest = {
             uninstallDialogState = false
+        },
+        onConfirm = {
+            viewModel.uninstallSelectedApps()
+            uninstallDialogState = false
         }
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    viewModel.uninstallSelectedApps()
-                    uninstallDialogState = false
-                },
-                colors = ButtonDefaults.buttonColorsPrimary()
-            ) {
-                Text(text = stringResource(Res.string.text_app_uninstall))
-            }
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    uninstallDialogState = false
-                }
-            ) {
-                Text(text = stringResource(Res.string.text_dialog_cancel))
-            }
-        }
-    }
+    )
 
     Row(
         modifier = Modifier.fillMaxWidth()
@@ -718,6 +800,101 @@ private fun BoxScope.BottomToolbar(
 }
 
 @Composable
+private fun ForceStopDialog(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    OverlayDialog(
+        title = stringResource(Res.string.text_dialog_warm_tip),
+        summary = stringResource(Res.string.text_dialog_force_stop_app_summary),
+        show = show,
+        onDismissRequest = onDismissRequest,
+    ) {
+        DialogActionButtons(
+            confirmText = stringResource(Res.string.text_dialog_force_stop_confirm),
+            onConfirm = onConfirm,
+            onCancel = onDismissRequest,
+        )
+    }
+}
+
+@Composable
+private fun FreezeActionDialog(
+    show: Boolean,
+    isUnfreezeAction: Boolean,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    OverlayDialog(
+        title = stringResource(Res.string.text_dialog_warm_tip),
+        summary = if (isUnfreezeAction) {
+            stringResource(Res.string.text_dialog_unfreeze_app_summary)
+        } else {
+            stringResource(Res.string.text_dialog_freeze_app_summary)
+        },
+        show = show,
+        onDismissRequest = onDismissRequest,
+    ) {
+        DialogActionButtons(
+            confirmText = if (isUnfreezeAction) {
+                stringResource(Res.string.text_enable_app)
+            } else {
+                stringResource(Res.string.text_unable_app)
+            },
+            onConfirm = onConfirm,
+            onCancel = onDismissRequest,
+        )
+    }
+}
+
+@Composable
+private fun UninstallDialog(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    OverlayDialog(
+        title = stringResource(Res.string.text_dialog_warm_tip),
+        summary = stringResource(Res.string.text_dialog_uninstall_app_summary),
+        show = show,
+        onDismissRequest = onDismissRequest,
+    ) {
+        DialogActionButtons(
+            confirmText = stringResource(Res.string.text_app_uninstall),
+            onConfirm = onConfirm,
+            onCancel = onDismissRequest,
+        )
+    }
+}
+
+@Composable
+private fun DialogActionButtons(
+    confirmText: String,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Button(
+            modifier = Modifier.weight(1f),
+            onClick = onConfirm,
+            colors = ButtonDefaults.buttonColorsPrimary()
+        ) {
+            Text(text = confirmText)
+        }
+        Button(
+            modifier = Modifier.weight(1f),
+            onClick = onCancel,
+        ) {
+            Text(text = stringResource(Res.string.text_dialog_cancel))
+        }
+    }
+}
+
+@Composable
 private fun FloatingToolBar(
     pagerState: PagerState,
     pages: List<AppPage>,
@@ -793,12 +970,22 @@ private fun AppItems(
     paddingValues: PaddingValues,
     scrollBehavior: ScrollBehavior,
     direction: LayoutDirection,
+    searchQuery: String,
     selectModeState: StateFlow<Boolean>,
     selectedAppsState: StateFlow<Set<String>>,
     onTap: (AppInfo) -> Unit,
-    onLongClick: (AppInfo) -> Unit,
+    onLongClick: (AppInfo, Set<String>) -> Unit,
 ) {
     val apps by page.listState.collectAsStateWithLifecycle()
+    val selectMode by selectModeState.collectAsStateWithLifecycle()
+    val selectedApps by selectedAppsState.collectAsStateWithLifecycle()
+    val currentAppList by rememberFilteredApps(
+        apps = apps,
+        query = searchQuery,
+    )
+    val selectablePackageNames = remember(currentAppList) {
+        currentAppList.map { it.packageName }.toSet()
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize()
@@ -812,32 +999,80 @@ private fun AppItems(
         ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        items(apps) { info ->
-            AppItem(info, selectModeState, selectedAppsState, onTap, onLongClick)
+        items(
+            items = currentAppList,
+            key = { it.packageName }
+        ) { info ->
+            AppItem(
+                appInfo = info,
+                selectMode = selectMode,
+                selected = info.packageName in selectedApps,
+                onTap = onTap,
+                onLongClick = {
+                    onLongClick(it, selectablePackageNames)
+                },
+            )
         }
+    }
+}
+
+@Composable
+private fun rememberFilteredApps(
+    apps: List<AppInfo>,
+    query: String,
+) = produceState(initialValue = apps, apps, query) {
+    value = if (query.isBlank()) {
+        apps
+    } else {
+        withContext(Dispatchers.Default) {
+            apps.filterByQuery(query)
+        }
+    }
+}
+
+private fun List<AppInfo>.filterByQuery(query: String): List<AppInfo> {
+    if (query.isBlank()) return this
+    val normalizedQuery = query.lowercase()
+    return filter { appInfo ->
+        appInfo.appName.contains(normalizedQuery, ignoreCase = true) ||
+            appInfo.packageName.contains(normalizedQuery, ignoreCase = true)
     }
 }
 
 @Composable
 private fun AppItem(
     appInfo: AppInfo,
-    selectModeState: StateFlow<Boolean>,
-    selectedAppsState: StateFlow<Set<String>>,
+    selectMode: Boolean,
+    selected: Boolean,
     onTap: (AppInfo) -> Unit,
     onLongClick: (AppInfo) -> Unit,
 ) {
-    val abiMap by remember(appInfo) {
-        derivedStateOf {
-            when {
-                appInfo.abiList.isEmpty() -> Res.string.text_no_native_abi
-                appInfo.abiList.firstOrNull()?.bitSize == 64 -> Res.string.text_abi_64
-                else -> Res.string.text_abi_32
-            }
+    val abiMap = remember(appInfo.abiList) {
+        when {
+            appInfo.abiList.isEmpty() -> Res.string.text_no_native_abi
+            appInfo.abiList.firstOrNull()?.bitSize == 64 -> Res.string.text_abi_64
+            else -> Res.string.text_abi_32
         }
     }
-    val selectedApps by selectedAppsState.collectAsStateWithLifecycle()
-    val selectMode by selectModeState.collectAsStateWithLifecycle()
-    val selected = appInfo.packageName in selectedApps
+    val abiText = stringResource(abiMap)
+    val descriptionText = remember(
+        appInfo.packageName,
+        appInfo.versionName,
+        appInfo.versionCode,
+        appInfo.targetSdk,
+        appInfo.minSdk,
+        abiText,
+    ) {
+        buildString {
+            append(appInfo.packageName)
+            append('\n')
+            append(appInfo.versionName)
+            append(" (${appInfo.versionCode})")
+            append("\nTarget: ${appInfo.targetSdk}, Min: ${appInfo.minSdk}")
+            append(", ")
+            append(abiText)
+        }
+    }
 
     Box(
         modifier = Modifier.fillMaxWidth()
@@ -891,14 +1126,7 @@ private fun AppItem(
 
             Text(
                 modifier = Modifier,
-                text = buildString {
-                    append(appInfo.packageName)
-                    append('\n')
-                    append(appInfo.versionName)
-                    append(" (${appInfo.versionCode})")
-                    append("\nTarget: ${appInfo.targetSdk}, Min: ${appInfo.minSdk}")
-                    append(", ${stringResource(abiMap)}")
-                },
+                text = descriptionText,
                 color = MiuixTheme.colorScheme.onSurface.copy(.31f),
                 style = MiuixTheme.textStyles.footnote2.copy(
                     fontSize = 10.sp,

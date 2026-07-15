@@ -54,6 +54,9 @@ class AppManagerViewModel: BaseViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
+    private val _searchMode = MutableStateFlow(false)
+    val searchMode = _searchMode.asStateFlow()
+
     private val _selectedMode = MutableStateFlow(false)
     val selectedMode = _selectedMode.asStateFlow()
 
@@ -82,6 +85,14 @@ class AppManagerViewModel: BaseViewModel() {
                 _selectableAppPackageNames.value = it.map { info -> info.packageName }.toSet()
             }
         }
+    }
+
+    fun setSearchMode(searchMode: Boolean) {
+        _searchMode.value = searchMode
+    }
+
+    fun setSearchQuery(searchQuery: String) {
+        _searchQuery.value = searchQuery
     }
 
     fun setSelectedMode(selectedMode: Boolean) {
