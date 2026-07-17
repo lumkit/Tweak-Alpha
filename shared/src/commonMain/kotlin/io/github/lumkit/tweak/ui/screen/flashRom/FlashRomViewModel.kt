@@ -98,6 +98,12 @@ object FlashRomViewModel : BaseViewModel() {
         val deviceSelectionEnabled: Boolean
             get() = !busy
 
+        /** 仅在已连接设备且非刷写进行中时允许切换脚本 */
+        val scriptSelectionEnabled: Boolean
+            get() = !busy &&
+                phase != Phase.Flashing &&
+                phase != Phase.Success
+
         val selectedScript: LineFlashScript?
             get() = scripts.firstOrNull { it.name == selectedScriptName }
                 ?: scripts.firstOrNull()
@@ -133,6 +139,16 @@ object FlashRomViewModel : BaseViewModel() {
     /** 响应式按钮启用状态：同时观察 ROM / 设备 / 阶段 / 在线设备列表 */
     val startEnabled = combine(_uiState, _targetFastbootDevice, fastBootDevices) { ui, device, devices ->
         computeStartEnabled(ui, device, devices)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        false,
+    )
+
+    /** 响应式：脚本下拉是否可点（需已选在线设备，且非刷写中） */
+    val scriptSelectionEnabled = combine(_uiState, _targetFastbootDevice, fastBootDevices) { ui, device, devices ->
+        val deviceOnline = device != null && devices.any { it.id == device.id }
+        deviceOnline && ui.scriptSelectionEnabled
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -266,7 +282,9 @@ object FlashRomViewModel : BaseViewModel() {
 
     fun setSelectedScript(scriptName: String) {
         val current = _uiState.value
-        if (current.phase == Phase.Flashing) return
+        if (!current.scriptSelectionEnabled) return
+        val device = _targetFastbootDevice.value ?: return
+        if (fastBootDevices.value.none { it.id == device.id }) return
         val script = current.scripts.firstOrNull { it.name == scriptName } ?: return
         _uiState.value = current.copy(
             selectedScriptName = script.name,

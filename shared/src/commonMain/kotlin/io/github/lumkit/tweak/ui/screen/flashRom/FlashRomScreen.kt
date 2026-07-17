@@ -414,6 +414,7 @@ private fun Actions(viewModel: FlashRomViewModel) {
 @Composable
 private fun ChooseRomContent(viewModel: FlashRomViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
+    val scriptSelectionEnabled by viewModel.scriptSelectionEnabled.collectAsStateWithLifecycle()
 
     val picker = rememberFilePickerLauncher {
         viewModel.setRomPath(it.firstOrNull() ?: "")
@@ -474,7 +475,7 @@ private fun ChooseRomContent(viewModel: FlashRomViewModel) {
                     onSelectedIndexChange = { index ->
                         ui.scripts.getOrNull(index)?.name?.let(viewModel::setSelectedScript)
                     },
-                    enabled = !ui.busy && ui.phase != FlashRomViewModel.Phase.Flashing,
+                    enabled = scriptSelectionEnabled,
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
