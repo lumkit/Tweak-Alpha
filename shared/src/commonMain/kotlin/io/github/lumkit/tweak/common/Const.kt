@@ -4,6 +4,8 @@ expect object Const {
     object Path {
         val cachePath: String
         val otaPackage: String
+        /** 外部存储根目录，默认 `/storage/emulated/0` */
+        val externalStorage: String
     }
 }
 

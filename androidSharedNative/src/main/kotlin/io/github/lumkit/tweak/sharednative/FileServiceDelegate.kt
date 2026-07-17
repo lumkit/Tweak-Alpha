@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import java.io.File
+import java.io.FileNotFoundException
 import java.nio.charset.StandardCharsets
 import java.util.zip.ZipInputStream
 
@@ -31,12 +32,74 @@ internal object FileServiceDelegate {
         NativeFileBundles.failure(throwable)
     }
 
+    /**
+     * 列出目录子项，并通过 [ParcelFileDescriptor] 流式回传，避免 Binder 单次事务过大。
+     *
+     * 文本格式：每行 `D\t绝对路径` 或 `F\t绝对路径`（D=目录，F=文件）。
+     */
+    @JvmStatic
+    fun listEntries(path: String): Bundle = try {
+        val entries = NativeFileBridge.list(path)?.toList().orEmpty()
+        val tempFile = File.createTempFile("tweak_list_entries_", ".tsv")
+        try {
+            tempFile.bufferedWriter(StandardCharsets.UTF_8).use { writer ->
+                for (entryPath in entries) {
+                    val isDirectory = File(entryPath).isDirectory
+                    writer.append(if (isDirectory) 'D' else 'F')
+                    writer.append('\t')
+                    writer.append(entryPath)
+                    writer.append('\n')
+                }
+            }
+            val pfd = ParcelFileDescriptor.open(
+                tempFile,
+                ParcelFileDescriptor.MODE_READ_ONLY,
+            )
+            // 已打开 FD 后删除路径，进程退出或客户端关闭 FD 时由内核回收内容
+            tempFile.delete()
+            NativeFileBundles.successUnit().apply {
+                putParcelable(NativeFileBundles.KEY_FD, pfd)
+                putInt(NativeFileBundles.KEY_COUNT, entries.size)
+            }
+        } catch (throwable: Throwable) {
+            tempFile.delete()
+            throw throwable
+        }
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
     @JvmStatic
     fun zipEntries(path: String): Bundle = try {
         val entries = ZipEntryReader.readEntries(path)
         NativeFileBundles.successBundleList(entries)
     } catch (throwable: Throwable) {
         NativeFileBundles.failure(throwable)
+    }
+
+    @JvmStatic
+    fun openReadOnlyFd(path: String): ParcelFileDescriptor {
+        val file = File(path)
+        if (!file.isFile) {
+            throw FileNotFoundException("File not found: $path")
+        }
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+    }
+
+    @JvmStatic
+    fun openWriteOnlyFd(path: String, create: Boolean, truncate: Boolean): ParcelFileDescriptor {
+        val file = File(path)
+        if (create) {
+            file.parentFile?.mkdirs()
+            if (!file.exists()) {
+                file.createNewFile()
+            }
+        }
+        if (!file.exists()) {
+            throw FileNotFoundException("File not found: $path")
+        }
+        val mode = buildWriteMode(truncate)
+        return ParcelFileDescriptor.open(file, mode)
     }
 
     @JvmStatic
@@ -194,6 +257,16 @@ internal object FileServiceDelegate {
         NativeFileBundles.successUnit()
     } catch (throwable: Throwable) {
         NativeFileBundles.failure(throwable)
+    }
+
+    private fun buildWriteMode(truncate: Boolean): Int {
+        var mode = ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE
+        mode = if (truncate) {
+            mode or ParcelFileDescriptor.MODE_TRUNCATE
+        } else {
+            mode or ParcelFileDescriptor.MODE_APPEND
+        }
+        return mode
     }
 }
 

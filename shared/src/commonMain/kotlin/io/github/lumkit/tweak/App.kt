@@ -28,6 +28,7 @@ import io.github.lumkit.tweak.navigation.Navigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.navigation.rememberNavigationState
 import io.github.lumkit.tweak.ui.screen.feature.FeatureRegistry
+import io.github.lumkit.tweak.ui.screen.filePicker.FilePickerScreen
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordDetailScreen
 import io.github.lumkit.tweak.ui.screen.main.MainScreen
 import io.github.lumkit.tweak.ui.screen.settings.OpenSourceScreen
@@ -127,6 +128,10 @@ private fun AppRoute(
 
             entry<Screen.OpenSources> {
                 OpenSourceScreen()
+            }
+
+            entry<Screen.FilePicker> {
+                FilePickerScreen(it)
             }
         }
     }

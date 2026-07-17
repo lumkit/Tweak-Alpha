@@ -38,6 +38,19 @@ data class ZipEntry(
     val offset: Long,
 )
 
+/**
+ * 目录子项元信息。
+ *
+ * @property path 子项绝对路径
+ * @property name 子项名称（不含父路径）
+ * @property isDirectory 是否为目录
+ */
+data class FileEntry(
+    val path: String,
+    val name: String,
+    val isDirectory: Boolean,
+)
+
 sealed interface NativeFileResult<out T> {
     data class Success<T>(val value: T) : NativeFileResult<T>
 
@@ -50,6 +63,8 @@ interface NativeFileService {
     suspend fun exists(path: String): NativeFileResult<Boolean>
 
     suspend fun list(path: String): NativeFileResult<List<String>>
+
+    suspend fun listEntries(path: String): NativeFileResult<List<FileEntry>>
 
     suspend fun zipEntries(path: String): NativeFileResult<List<ZipEntry>>
 

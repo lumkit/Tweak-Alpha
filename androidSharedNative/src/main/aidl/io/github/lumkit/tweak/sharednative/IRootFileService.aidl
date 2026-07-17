@@ -6,7 +6,10 @@ import android.os.ParcelFileDescriptor;
 interface IRootFileService {
     Bundle exists(String path);
     Bundle list(String path);
+    Bundle listEntries(String path);
     Bundle zipEntries(String path);
+    ParcelFileDescriptor openReadOnlyFd(String path);
+    ParcelFileDescriptor openWriteOnlyFd(String path, boolean create, boolean truncate);
     Bundle readBytes(String path);
     Bundle readText(String path);
     Bundle writeBytes(String path, in byte[] bytes);

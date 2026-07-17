@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.common
 
+import android.os.Environment
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.getOrNull
@@ -31,5 +32,8 @@ actual object Const {
 
                 return path
             }
+
+        actual val externalStorage: String
+            get() = Environment.getExternalStorageDirectory().absolutePath
     }
 }

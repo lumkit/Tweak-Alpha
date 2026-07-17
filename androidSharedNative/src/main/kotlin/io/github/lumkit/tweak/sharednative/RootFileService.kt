@@ -17,8 +17,20 @@ class RootFileService : RootService() {
             return FileServiceDelegate.list(path)
         }
 
+        override fun listEntries(path: String): Bundle {
+            return FileServiceDelegate.listEntries(path)
+        }
+
         override fun zipEntries(path: String): Bundle {
             return FileServiceDelegate.zipEntries(path)
+        }
+
+        override fun openReadOnlyFd(path: String): ParcelFileDescriptor {
+            return FileServiceDelegate.openReadOnlyFd(path)
+        }
+
+        override fun openWriteOnlyFd(path: String, create: Boolean, truncate: Boolean): ParcelFileDescriptor {
+            return FileServiceDelegate.openWriteOnlyFd(path, create, truncate)
         }
 
         override fun readBytes(path: String): Bundle {

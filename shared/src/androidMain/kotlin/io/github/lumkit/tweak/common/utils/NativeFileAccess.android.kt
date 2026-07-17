@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.ParcelFileDescriptor
 import androidx.core.net.toUri
 import com.topjohnwu.superuser.Shell
 import com.topjohnwu.superuser.ipc.RootService
@@ -110,6 +111,34 @@ internal object RootFileServiceConnectionManager {
     }
 }
 
+internal suspend fun openPrivilegedReadOnlyFd(
+    backend: NativeFileBackend,
+    path: String,
+): ParcelFileDescriptor {
+    return when (backend) {
+        NativeFileBackend.ROOT -> RootFileServiceConnectionManager.getService().openReadOnlyFd(path)
+        NativeFileBackend.SHIZUKU -> ShizukuFileServiceConnectionManager.getService().openReadOnlyFd(path)
+        NativeFileBackend.User -> throw IllegalArgumentException("User backend does not support privileged fd: $path")
+    }
+}
+
+internal suspend fun openPrivilegedWriteOnlyFd(
+    backend: NativeFileBackend,
+    path: String,
+    create: Boolean = true,
+    truncate: Boolean = true,
+): ParcelFileDescriptor {
+    return when (backend) {
+        NativeFileBackend.ROOT -> RootFileServiceConnectionManager.getService()
+            .openWriteOnlyFd(path, create, truncate)
+
+        NativeFileBackend.SHIZUKU -> ShizukuFileServiceConnectionManager.getService()
+            .openWriteOnlyFd(path, create, truncate)
+
+        NativeFileBackend.User -> throw IllegalArgumentException("User backend does not support privileged fd: $path")
+    }
+}
+
 private object RootNativeFileService : NativeFileService {
     override val backend: NativeFileBackend = NativeFileBackend.ROOT
 
@@ -130,6 +159,15 @@ private object RootNativeFileService : NativeFileService {
                 bundle.getStringArrayList(NativeFileBundles.KEY_STRING_LIST)?.toList().orEmpty()
             },
             block = { service -> service.list(path) },
+        )
+    }
+
+    override suspend fun listEntries(path: String): NativeFileResult<List<FileEntry>> {
+        return execute(
+            operation = "listEntries",
+            primaryPath = path,
+            transform = { bundle -> bundle.toFileEntries() },
+            block = { service -> service.listEntries(path) },
         )
     }
 
@@ -379,6 +417,15 @@ private object ShizukuNativeFileService : NativeFileService {
         )
     }
 
+    override suspend fun listEntries(path: String): NativeFileResult<List<FileEntry>> {
+        return execute(
+            operation = "listEntries",
+            primaryPath = path,
+            transform = { bundle -> bundle.toFileEntries() },
+            block = { service -> service.listEntries(path) },
+        )
+    }
+
     override suspend fun zipEntries(path: String): NativeFileResult<List<ZipEntry>> {
         return execute(
             operation = "zipEntries",
@@ -526,6 +573,42 @@ private object ShizukuNativeFileService : NativeFileService {
             transform = { },
             block = block,
         )
+    }
+}
+
+/**
+ * 从特权服务通过 PFD 流式回传的目录列表中解析 [FileEntry]。
+ *
+ * 行格式：`D\t绝对路径` / `F\t绝对路径`。
+ * 使用 FD 流式读取可避免大量子项时 Binder 回包超限。
+ */
+private fun Bundle.toFileEntries(): List<FileEntry> {
+    val pfd = getParcelableCompat<ParcelFileDescriptor>(NativeFileBundles.KEY_FD)
+        ?: return emptyList()
+
+    return ParcelFileDescriptor.AutoCloseInputStream(pfd).bufferedReader().useLines { lines ->
+        lines.mapNotNull { line ->
+            val separator = line.indexOf('\t')
+            if (separator <= 0 || separator >= line.lastIndex) return@mapNotNull null
+            val type = line[0]
+            if (type != 'D' && type != 'F') return@mapNotNull null
+            val path = line.substring(separator + 1)
+            if (path.isEmpty()) return@mapNotNull null
+            FileEntry(
+                path = path,
+                name = path.substringAfterLast('/').ifBlank { path },
+                isDirectory = type == 'D',
+            )
+        }.toList()
+    }
+}
+
+@Suppress("DEPRECATION")
+private inline fun <reified T : android.os.Parcelable> Bundle.getParcelableCompat(key: String): T? {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getParcelable(key, T::class.java)
+    } else {
+        getParcelable(key) as? T
     }
 }
 

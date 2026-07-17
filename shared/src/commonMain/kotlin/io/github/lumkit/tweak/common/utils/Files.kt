@@ -57,6 +57,16 @@ object Files {
         return getService().list(path)
     }
 
+    /**
+     * 列出目录下的直接子项，并附带是否为目录的元信息。
+     *
+     * @param path 目标目录路径
+     * @return 成功时返回 [FileEntry] 列表
+     */
+    suspend fun listEntries(path: String): NativeFileResult<List<FileEntry>> {
+        return getService().listEntries(path)
+    }
+
     suspend fun zipEntries(path: String): NativeFileResult<List<ZipEntry>> {
         return getService().zipEntries(path)
     }

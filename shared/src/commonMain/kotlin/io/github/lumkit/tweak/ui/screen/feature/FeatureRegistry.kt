@@ -4,9 +4,11 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import io.github.lumkit.tweak.ui.screen.appManager.AppManagerProvider
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureCategory
+import io.github.lumkit.tweak.ui.screen.flashRom.FlashRomProvider
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordingProvider
 import io.github.lumkit.tweak.ui.screen.updateSys.UpdateSystemProvider
 import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.text_advanced_modules
 import tweak_alpha.shared.generated.resources.text_app
 import tweak_alpha.shared.generated.resources.text_feature_performance
 import tweak_alpha.shared.generated.resources.text_feature_system
@@ -53,6 +55,17 @@ object FeatureRegistry {
                 title = Res.string.text_app,
                 features = setOf(
                     AppManagerProvider,
+                )
+            )
+        )
+
+        // 应用管理
+        registerProvider(
+            FeatureCategory(
+                key = "Advanced",
+                title = Res.string.text_advanced_modules,
+                features = setOf(
+                    FlashRomProvider,
                 )
             )
         )
