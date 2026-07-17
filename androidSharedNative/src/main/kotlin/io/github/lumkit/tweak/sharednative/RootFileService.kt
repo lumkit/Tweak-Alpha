@@ -84,6 +84,10 @@ class RootFileService : RootService() {
         override fun unzipToDir(pfd: ParcelFileDescriptor, targetDir: String): Bundle {
             return FileServiceDelegate.unzipToDir(pfd, targetDir)
         }
+
+        override fun unzipPathToDir(sourcePath: String, targetDir: String): Bundle {
+            return FileServiceDelegate.unzipPathToDir(sourcePath, targetDir)
+        }
     }
 
     override fun onBind(intent: Intent): IBinder {

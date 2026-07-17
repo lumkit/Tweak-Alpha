@@ -193,4 +193,73 @@
     <string name="text_file_picker_select_current_folder">选择当前文件夹</string>
     <string name="text_file_picker_open_folder">打开文件夹</string>
     <string name="text_start_flash">开始刷机</string>
+    <string name="text_flash_verify_and_flash">校验ROM并刷入</string>
+    <string name="text_flash_choose_script">刷写脚本</string>
+    <string name="text_flash_choose_script_summary">默认「清除全部数据并刷入」，可切换其它脚本</string>
+    <string name="text_flash_script_clean_all">清除全部数据并刷入</string>
+    <string name="text_flash_script_clean_all_lock">清除全部数据、刷入并锁定</string>
+    <string name="text_flash_script_clean_all_lock_crc">清除全部数据、刷入并锁定（CRC）</string>
+    <string name="text_flash_script_save_user_data">保留用户数据刷入</string>
+    <string name="text_flash_script_custom">自定义脚本：%1$s</string>
+    <string name="text_flash_phase_unpacking">解压中</string>
+    <string name="text_flash_phase_validating">校验中</string>
+    <string name="text_flash_phase_ready">校验完成</string>
+    <string name="text_flash_phase_flashing">刷机中</string>
+    <string name="text_flash_phase_success">刷机完成</string>
+    <string name="text_flash_phase_error">出错</string>
+    <string name="text_flash_progress_format">%1$d% · %2$s</string>
+    <string name="text_flash_task_waiting">等待中</string>
+    <string name="text_flash_task_in_progress">进行中</string>
+    <string name="text_flash_task_completed">已完成</string>
+    <string name="text_flash_task_failed_summary">失败</string>
+    <string name="text_flash_task_percent">%1$d%</string>
+
+    <string name="text_flash_task_flash_running">正在刷入：%1$s</string>
+    <string name="text_flash_task_flash_done">已刷入 %1$s</string>
+    <string name="text_flash_task_flash_pending">等待刷入 %1$s</string>
+    <string name="text_flash_task_flash_failed">刷入失败：%1$s</string>
+
+    <string name="text_flash_task_erase_running">正在擦除：%1$s</string>
+    <string name="text_flash_task_erase_done">已擦除 %1$s</string>
+    <string name="text_flash_task_erase_pending">等待擦除 %1$s</string>
+    <string name="text_flash_task_erase_failed">擦除失败：%1$s</string>
+
+    <string name="text_flash_task_check_running">正在校验：%1$s</string>
+    <string name="text_flash_task_check_done">已校验 %1$s</string>
+    <string name="text_flash_task_check_pending">等待校验 %1$s</string>
+    <string name="text_flash_task_check_failed">校验失败：%1$s</string>
+
+    <string name="text_flash_task_reboot_running">正在重启设备</string>
+    <string name="text_flash_task_reboot_done">已发送重启命令</string>
+    <string name="text_flash_task_reboot_pending">等待重启设备</string>
+    <string name="text_flash_task_reboot_failed">重启失败</string>
+
+    <string name="text_flash_task_lock_running">正在锁定 Bootloader</string>
+    <string name="text_flash_task_lock_done">已锁定 Bootloader</string>
+    <string name="text_flash_task_lock_pending">等待锁定 Bootloader</string>
+    <string name="text_flash_task_lock_failed">锁定 Bootloader 失败</string>
+
+    <string name="text_flash_task_slot_running">正在切换槽位：%1$s</string>
+    <string name="text_flash_task_slot_done">已切换槽位 %1$s</string>
+    <string name="text_flash_task_slot_pending">等待切换槽位 %1$s</string>
+    <string name="text_flash_task_slot_failed">切换槽位失败：%1$s</string>
+
+    <string name="text_flash_task_command_running">正在执行：%1$s</string>
+    <string name="text_flash_task_command_done">已执行 %1$s</string>
+    <string name="text_flash_task_command_pending">等待执行 %1$s</string>
+    <string name="text_flash_task_command_failed">执行失败：%1$s</string>
+
+    <string name="text_flash_error_item">错误：%1$s</string>
+    <string name="text_flash_insufficient_space">可用空间不足，需要至少 %1$s（压缩包两倍），当前可用 %2$s</string>
+    <string name="text_flash_unsupported_archive">不支持的压缩格式：%1$s</string>
+    <string name="text_flash_usb_session_error">USB 通信失败，可能是上次刷写中断导致 Fastboot 会话异常。请重启 Fastboot 设备后重试。</string>
+    <string name="text_flash_reboot_fastboot_hint">建议先重启 Fastboot 设备，再重新校验并刷入</string>
+    <string name="text_flash_reboot_fastboot_action">重启 Fastboot 设备</string>
+    <string name="text_flash_reboot_fastboot_success">已发送重启命令，请等待设备重新进入 Fastboot</string>
+    <string name="text_flash_reboot_fastboot_failed">重启失败：%1$s。请手动长按电源键重启到 Fastboot</string>
+    <string name="text_flash_device_lost">目标 Fastboot 设备已断连或更换，任务已取消并清空工作区</string>
+    <string name="text_flash_missing_files">刷入前检查失败，缺少文件：%1$s</string>
+    <string name="text_flash_no_script">请先选择刷写脚本</string>
+    <string name="text_flash_ready_hint">校验已通过，请确认脚本后再次点击按钮开始刷入</string>
+    <string name="text_flash_service_running">线刷任务进行中</string>
 </resources>

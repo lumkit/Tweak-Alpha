@@ -23,4 +23,5 @@ interface IRootFileService {
     Bundle listInstalledApps();
     Bundle getInstalledApp(String packageName);
     Bundle unzipToDir(in ParcelFileDescriptor pfd, String targetDir);
+    Bundle unzipPathToDir(String sourcePath, String targetDir);
 }

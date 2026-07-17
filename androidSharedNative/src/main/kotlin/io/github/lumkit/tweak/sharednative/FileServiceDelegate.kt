@@ -259,6 +259,14 @@ internal object FileServiceDelegate {
         NativeFileBundles.failure(throwable)
     }
 
+    @JvmStatic
+    fun unzipPathToDir(sourcePath: String, targetDir: String): Bundle = try {
+        val pfd = openReadOnlyFd(sourcePath)
+        unzipToDir(pfd, targetDir)
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
     private fun buildWriteMode(truncate: Boolean): Int {
         var mode = ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE
         mode = if (truncate) {

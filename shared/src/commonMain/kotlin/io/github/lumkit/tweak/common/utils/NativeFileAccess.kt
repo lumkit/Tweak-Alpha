@@ -104,6 +104,11 @@ interface NativeFileService {
      * @return 成功时返回 [Unit]
      */
     suspend fun unzipFromUri(uriString: String, targetDir: String): NativeFileResult<Unit>
+
+    /**
+     * 从绝对路径解压 ZIP 到目标目录。
+     */
+    suspend fun unzipFromPath(sourcePath: String, targetDir: String): NativeFileResult<Unit>
 }
 
 interface NativeFileServiceProvider {

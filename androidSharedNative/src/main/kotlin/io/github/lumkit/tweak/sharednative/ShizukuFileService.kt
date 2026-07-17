@@ -84,4 +84,8 @@ class ShizukuFileService : IRootFileService.Stub() {
     override fun unzipToDir(pfd: ParcelFileDescriptor, targetDir: String): Bundle {
         return FileServiceDelegate.unzipToDir(pfd, targetDir)
     }
+
+    override fun unzipPathToDir(sourcePath: String, targetDir: String): Bundle {
+        return FileServiceDelegate.unzipPathToDir(sourcePath, targetDir)
+    }
 }

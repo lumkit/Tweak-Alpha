@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 enum class NavigationIntentTargetScreen {
     UpdateSystem,
     FpsRecord,
+    FlashRom,
 }
 
 @Serializable

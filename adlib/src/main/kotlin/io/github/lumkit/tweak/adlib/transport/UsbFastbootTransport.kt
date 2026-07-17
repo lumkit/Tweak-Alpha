@@ -7,6 +7,7 @@ import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import io.github.lumkit.tweak.adlib.exception.FastbootTransportException
+import kotlin.math.min
 
 /**
  * 基于 Android USB Host API 的 [FastbootTransport] 实现。
@@ -30,6 +31,7 @@ class UsbFastbootTransport private constructor(
     private val usbInterface: UsbInterface,
     private val endpointIn: UsbEndpoint,
     private val endpointOut: UsbEndpoint,
+    private val maxTransferSize: Int,
 ) : FastbootTransport {
 
     @Volatile
@@ -40,16 +42,45 @@ class UsbFastbootTransport private constructor(
 
     override fun send(data: ByteArray, offset: Int, length: Int, timeoutMillis: Int): Int {
         checkOpen()
-        val transferred = connection.bulkTransfer(endpointOut, sliceIfNeeded(data, offset, length), length, timeoutMillis)
-        if (transferred < 0) {
-            throw FastbootTransportException("Failed to send data over USB bulk endpoint")
+        require(offset >= 0 && length >= 0 && offset + length <= data.size) {
+            "Invalid send range: offset=$offset length=$length size=${data.size}"
         }
-        return transferred
+        var totalSent = 0
+        var currentOffset = offset
+        var remaining = length
+        while (remaining > 0) {
+            val chunk = min(remaining, maxTransferSize)
+            val transferred = connection.bulkTransfer(
+                endpointOut,
+                data,
+                currentOffset,
+                chunk,
+                timeoutMillis,
+            )
+            if (transferred < 0) {
+                throw FastbootTransportException(
+                    "Failed to send data over USB bulk endpoint (requested=$chunk, sent=$totalSent/$length)",
+                )
+            }
+            if (transferred == 0) {
+                throw FastbootTransportException("USB send stalled (sent=$totalSent/$length)")
+            }
+            totalSent += transferred
+            currentOffset += transferred
+            remaining -= transferred
+        }
+        return totalSent
     }
 
     override fun receive(buffer: ByteArray, timeoutMillis: Int): Int {
         checkOpen()
-        val transferred = connection.bulkTransfer(endpointIn, buffer, buffer.size, timeoutMillis)
+        val transferred = connection.bulkTransfer(
+            endpointIn,
+            buffer,
+            0,
+            min(buffer.size, maxTransferSize),
+            timeoutMillis,
+        )
         if (transferred < 0) {
             throw FastbootTransportException("Failed to receive data over USB bulk endpoint")
         }
@@ -69,23 +100,18 @@ class UsbFastbootTransport private constructor(
         }
     }
 
-    /**
-     * [UsbDeviceConnection.bulkTransfer] 从缓冲区起始处发送，若存在偏移则复制出目标片段。
-     */
-    private fun sliceIfNeeded(data: ByteArray, offset: Int, length: Int): ByteArray {
-        return if (offset == 0) {
-            data
-        } else {
-            data.copyOfRange(offset, offset + length)
-        }
-    }
-
     companion object {
 
         /** Fastboot 接口标识：厂商自定义类。 */
         private const val FASTBOOT_INTERFACE_CLASS = UsbConstants.USB_CLASS_VENDOR_SPEC // 0xFF
         private const val FASTBOOT_INTERFACE_SUBCLASS = 0x42
         private const val FASTBOOT_INTERFACE_PROTOCOL = 0x03
+
+        /**
+         * Linux usbfs / Android USB Host 长期稳定上限。
+         * targetSdk >= P 虽不再强制截断，但多数内核仍对更大的单次 URB 不稳定。
+         */
+        private const val MAX_USBFS_BUFFER_SIZE = 16 * 1024
 
         /**
          * 判断给定 USB 设备是否暴露了 Fastboot 接口。
@@ -126,7 +152,20 @@ class UsbFastbootTransport private constructor(
                 throw FastbootTransportException("Failed to claim fastboot interface on ${device.deviceName}")
             }
 
-            return UsbFastbootTransport(connection, usbInterface, endpointIn, endpointOut)
+            val maxTransferSize = resolveMaxTransferSize(endpointOut.maxPacketSize)
+            return UsbFastbootTransport(
+                connection,
+                usbInterface,
+                endpointIn,
+                endpointOut,
+                maxTransferSize,
+            )
+        }
+
+        private fun resolveMaxTransferSize(maxPacketSize: Int): Int {
+            if (maxPacketSize <= 0) return MAX_USBFS_BUFFER_SIZE
+            val aligned = (MAX_USBFS_BUFFER_SIZE / maxPacketSize) * maxPacketSize
+            return aligned.coerceAtLeast(maxPacketSize)
         }
 
         private fun findFastbootInterface(device: UsbDevice): UsbInterface? {

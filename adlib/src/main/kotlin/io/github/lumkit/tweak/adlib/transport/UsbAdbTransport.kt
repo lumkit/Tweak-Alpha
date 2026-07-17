@@ -7,12 +7,14 @@ import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import io.github.lumkit.tweak.adlib.exception.AdbTransportException
+import kotlin.math.min
 
 class UsbAdbTransport private constructor(
     private val connection: UsbDeviceConnection,
     private val usbInterface: UsbInterface,
     private val endpointIn: UsbEndpoint,
     private val endpointOut: UsbEndpoint,
+    private val maxTransferSize: Int,
 ) : AdbTransport {
 
     @Volatile
@@ -23,16 +25,45 @@ class UsbAdbTransport private constructor(
 
     override fun send(data: ByteArray, offset: Int, length: Int, timeoutMillis: Int): Int {
         checkOpen()
-        val transferred = connection.bulkTransfer(endpointOut, sliceIfNeeded(data, offset, length), length, timeoutMillis)
-        if (transferred < 0) {
-            throw AdbTransportException("Failed to send data over USB bulk endpoint")
+        require(offset >= 0 && length >= 0 && offset + length <= data.size) {
+            "Invalid send range: offset=$offset length=$length size=${data.size}"
         }
-        return transferred
+        var totalSent = 0
+        var currentOffset = offset
+        var remaining = length
+        while (remaining > 0) {
+            val chunk = min(remaining, maxTransferSize)
+            val transferred = connection.bulkTransfer(
+                endpointOut,
+                data,
+                currentOffset,
+                chunk,
+                timeoutMillis,
+            )
+            if (transferred < 0) {
+                throw AdbTransportException(
+                    "Failed to send data over USB bulk endpoint (requested=$chunk, sent=$totalSent/$length)",
+                )
+            }
+            if (transferred == 0) {
+                throw AdbTransportException("USB send stalled (sent=$totalSent/$length)")
+            }
+            totalSent += transferred
+            currentOffset += transferred
+            remaining -= transferred
+        }
+        return totalSent
     }
 
     override fun receive(buffer: ByteArray, timeoutMillis: Int): Int {
         checkOpen()
-        val transferred = connection.bulkTransfer(endpointIn, buffer, buffer.size, timeoutMillis)
+        val transferred = connection.bulkTransfer(
+            endpointIn,
+            buffer,
+            0,
+            min(buffer.size, maxTransferSize),
+            timeoutMillis,
+        )
         if (transferred < 0) {
             throw AdbTransportException("Failed to receive data over USB bulk endpoint")
         }
@@ -52,18 +83,11 @@ class UsbAdbTransport private constructor(
         }
     }
 
-    private fun sliceIfNeeded(data: ByteArray, offset: Int, length: Int): ByteArray {
-        return if (offset == 0) {
-            data
-        } else {
-            data.copyOfRange(offset, offset + length)
-        }
-    }
-
     companion object {
         private const val ADB_INTERFACE_CLASS = UsbConstants.USB_CLASS_VENDOR_SPEC
         private const val ADB_INTERFACE_SUBCLASS = 0x42
         private const val ADB_INTERFACE_PROTOCOL = 0x01
+        private const val MAX_USBFS_BUFFER_SIZE = 16 * 1024
 
         fun isAdbDevice(device: UsbDevice): Boolean =
             findAdbInterface(device) != null
@@ -94,7 +118,20 @@ class UsbAdbTransport private constructor(
                 throw AdbTransportException("Failed to claim adb interface on ${device.deviceName}")
             }
 
-            return UsbAdbTransport(connection, usbInterface, endpointIn, endpointOut)
+            val maxTransferSize = resolveMaxTransferSize(endpointOut.maxPacketSize)
+            return UsbAdbTransport(
+                connection,
+                usbInterface,
+                endpointIn,
+                endpointOut,
+                maxTransferSize,
+            )
+        }
+
+        private fun resolveMaxTransferSize(maxPacketSize: Int): Int {
+            if (maxPacketSize <= 0) return MAX_USBFS_BUFFER_SIZE
+            val aligned = (MAX_USBFS_BUFFER_SIZE / maxPacketSize) * maxPacketSize
+            return aligned.coerceAtLeast(maxPacketSize)
         }
 
         private fun findAdbInterface(device: UsbDevice): UsbInterface? {

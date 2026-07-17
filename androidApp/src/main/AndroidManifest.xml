@@ -112,6 +112,11 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"/>
 
+        <service android:name=".service.LineFlashService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
+
         <service android:name=".service.FpsRecordService"
             android:enabled="true"
             android:exported="false"/>

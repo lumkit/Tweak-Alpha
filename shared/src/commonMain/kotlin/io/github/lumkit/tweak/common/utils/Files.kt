@@ -207,6 +207,13 @@ object Files {
         return getService().unzipFromUri(uriString, targetDir)
     }
 
+    /**
+     * 从绝对路径解压 ZIP 到指定目录。
+     */
+    suspend fun unzipFromPath(sourcePath: String, targetDir: String): NativeFileResult<Unit> {
+        return getService().unzipFromPath(sourcePath, targetDir)
+    }
+
 }
 
 

@@ -224,11 +224,16 @@ actual object FastbootManager {
     ): R = withContext(Dispatchers.IO) {
         val native = device.native()
             ?: throw IllegalStateException("设备已断开：${device.deviceName}")
-        val client = delegate.connect(native)
+        val client = runCatching { delegate.connect(native) }
+            .getOrElse { throwable ->
+                logE(throwable.stackTraceToString(), throwable, TAG)
+                throw IllegalStateException("无法连接 Fastboot 设备：${device.deviceName}", throwable)
+            }
         try {
             block(client)
         } finally {
-            client.close()
+            runCatching { client.close() }
+                .onFailure { logE(it.stackTraceToString(), it, TAG) }
         }
     }
 

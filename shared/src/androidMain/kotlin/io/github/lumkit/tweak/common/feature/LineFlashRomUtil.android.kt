@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.common.feature
 
 import android.os.ParcelFileDescriptor
 import io.github.lumkit.tweak.adlib.client.FastbootClient
+import io.github.lumkit.tweak.adlib.exception.FastbootTransportException
 import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.NativeFileBackend
 import io.github.lumkit.tweak.common.utils.getOrNull
@@ -13,6 +14,11 @@ import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.asNativeFileBackend
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import java.io.BufferedInputStream
+import java.io.DataInputStream
+import java.io.EOFException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.Locale
 import java.util.zip.CRC32
 import java.util.zip.CheckedInputStream
@@ -20,6 +26,15 @@ import java.util.zip.CheckedInputStream
 private const val LINE_FLASH_TAG = "LineFlashRomUtil"
 
 actual object LineFlashRomUtil {
+
+    private const val SPARSE_MAGIC = -316211398 // 0xED26FF3A
+    private const val SPARSE_IMAGE_HEADER_SIZE = 28
+    private const val SPARSE_CHUNK_HEADER_SIZE = 12
+    private const val SPARSE_FILL_DATA_SIZE = 4L
+    private const val SPARSE_CHUNK_TYPE_RAW = 0xCAC1
+    private const val SPARSE_CHUNK_TYPE_FILL = 0xCAC2
+    private const val SPARSE_CHUNK_TYPE_DONT_CARE = 0xCAC3
+    private const val SPARSE_CHUNK_TYPE_CRC32 = 0xCAC4
 
     actual suspend fun inspectRomPackage(rootDir: String): LineFlashRomPackage {
         require(Files.exists(rootDir).getOrNull() == true) { "ROM 目录不存在或不可访问: $rootDir" }
@@ -34,13 +49,11 @@ actual object LineFlashRomUtil {
         )
 
         val scripts = Files.list(rootDir).getOrNull().orEmpty()
-            .filter { path ->
-                path.endsWith(".bat", true) || path.endsWith(".sh", true)
-            }
+            .filter { path -> path.endsWith(".bat", true) }
             .sortedBy { it.substringAfterLast('/').substringAfterLast('\\').lowercase(Locale.ROOT) }
             .map { parseFlashScript(it, antiVersion, securityPatch) }
 
-        require(scripts.isNotEmpty()) { "ROM 目录中未发现刷写脚本" }
+        require(scripts.isNotEmpty()) { "ROM 目录中未发现 .bat 刷写脚本" }
 
         return LineFlashRomPackage(
             rootDir = rootDir,
@@ -73,34 +86,42 @@ actual object LineFlashRomUtil {
         val missingFiles = requiredFiles.filterNot { Files.exists(imagesDir joinPath it).getOrNull() == true }.toMutableList()
         val warnings = mutableListOf<String>()
         val crcResults = mutableListOf<LineFlashFileChecksumResult>()
-        val checksumMap = buildMap {
-            putAll(romPackage.checksums.crcByPartition)
-            romPackage.checksums.sparseCrcByPartition.forEach { (partition, crc) -> putIfAbsent(partition, crc) }
-        }
+        val crcByPartition = romPackage.checksums.crcByPartition
+        val sparseCrcByPartition = romPackage.checksums.sparseCrcByPartition
 
         if (hasChecksumStep && !crcListExists && !sparseListExists) {
             missingFiles += "crclist.txt|sparsecrclist.txt"
         }
 
-        if (verifyCrc && checksumMap.isNotEmpty()) {
+        if (verifyCrc && (crcByPartition.isNotEmpty() || sparseCrcByPartition.isNotEmpty())) {
             val checksumEntries = script.steps.mapNotNull { step ->
                 val flash = step as? LineFlashStep.Flash ?: return@mapNotNull null
-                val expected = checksumMap[normalizePartitionName(flash.partition)]
-                    ?: return@mapNotNull null
-                Triple(flash.partition, flash.fileName, expected)
-            }.distinctBy { it.second }
+                val key = normalizePartitionName(flash.partition)
+                // sparsecrclist 使用 sparse chunk CRC；crclist 使用整文件 CRC。二者不可混用。
+                sparseCrcByPartition[key]?.let {
+                    return@mapNotNull ChecksumWork(flash.partition, flash.fileName, it, sparse = true)
+                }
+                crcByPartition[key]?.let {
+                    return@mapNotNull ChecksumWork(flash.partition, flash.fileName, it, sparse = false)
+                }
+                null
+            }.distinctBy { it.fileName }
 
-            checksumEntries.forEachIndexed { index, (partition, fileName, expected) ->
-                val filePath = imagesDir joinPath fileName
-                val actual = computeCrc32(filePath)
-                crcResults += LineFlashFileChecksumResult(partition, fileName, expected, actual)
+            checksumEntries.forEachIndexed { index, work ->
+                val filePath = imagesDir joinPath work.fileName
+                val actual = if (work.sparse) {
+                    computeSparseCrc32(filePath)
+                } else {
+                    computeCrc32(filePath)
+                }
+                crcResults += LineFlashFileChecksumResult(work.partition, work.fileName, work.expected, actual)
                 onProgress?.invoke(
                     progressOf(
                         stage = LineFlashProgress.Stage.VALIDATING,
                         scriptName = script.name,
                         currentStepIndex = index + 1,
                         totalSteps = checksumEntries.size.coerceAtLeast(1),
-                        stepDescription = "校验 $fileName",
+                        stepDescription = "校验 ${work.fileName}",
                     )
                 )
             }
@@ -295,6 +316,8 @@ actual object LineFlashRomUtil {
         val lines = readUtf8Text(scriptPath).lines()
         val steps = mutableListOf<LineFlashStep>()
         val products = linkedSetOf<String>()
+        // 旧包常把 anti 写在脚本里（set CURRENT_ANTI_VER=1），不一定有 anti_version.txt
+        val packageAntiVersion = antiVersion ?: parseScriptAntiVersion(lines)
 
         lines.forEach { rawLine ->
             val line = rawLine.trim()
@@ -307,13 +330,22 @@ actual object LineFlashRomUtil {
                 return@forEach
             }
 
-            if (line.contains("getvar anti", ignoreCase = true) && antiVersion != null) {
-                steps += LineFlashStep.CheckAntiRollback(antiVersion)
+            // getvar 校验行常包在 for/findstr/grep 管道里，绝不能当成 raw Command 下发
+            if (line.contains("getvar anti", ignoreCase = true)) {
+                if (packageAntiVersion != null) {
+                    steps += LineFlashStep.CheckAntiRollback(packageAntiVersion)
+                }
                 return@forEach
             }
 
-            if (line.contains("getvar security-patch-level", ignoreCase = true) && !securityPatch.isNullOrBlank()) {
-                steps += LineFlashStep.CheckSecurityPatch(securityPatch)
+            if (line.contains("getvar security-patch-level", ignoreCase = true)) {
+                if (!securityPatch.isNullOrBlank()) {
+                    steps += LineFlashStep.CheckSecurityPatch(securityPatch)
+                }
+                return@forEach
+            }
+
+            if (line.contains("getvar product", ignoreCase = true)) {
                 return@forEach
             }
 
@@ -345,6 +377,13 @@ actual object LineFlashRomUtil {
             rawLines = lines,
             expectedProducts = products,
         )
+    }
+
+    private fun parseScriptAntiVersion(lines: List<String>): Int? {
+        val pattern = Regex("""(?:set\s+)?CURRENT_ANTI_VER\s*=\s*(\d+)""", RegexOption.IGNORE_CASE)
+        return lines.firstNotNullOfOrNull { line ->
+            pattern.find(line.trim())?.groupValues?.getOrNull(1)?.toIntOrNull()
+        }
     }
 
     private fun parseProducts(line: String): Set<String>? {
@@ -413,6 +452,9 @@ actual object LineFlashRomUtil {
     }
 
     private fun buildFastbootCommand(line: String): String? {
+        // 含管道/重定向/命令替换的行是 shell 包装，不是可下发的 fastboot 协议命令
+        if (lineContainsShellWrapper(line)) return null
+
         val normalized = line.replace("\\", "/")
         val fastbootIndex = normalized.indexOf("fastboot", ignoreCase = true)
         if (fastbootIndex < 0) return null
@@ -420,22 +462,82 @@ actual object LineFlashRomUtil {
         val tokens = commandLine.split(Regex("\\s+"))
             .filter { it.isNotBlank() }
             .filterNot { it == "%*" || it == "$@" }
+            .takeWhile { token -> !isShellMetaToken(token) }
         if (tokens.isEmpty() || !tokens.first().equals("fastboot", true)) return null
-        return tokens.drop(1).joinToString(" ").ifBlank { null }
+        val command = tokens.drop(1).joinToString(" ").ifBlank { return null }
+        if (command.length > 64) return null
+        // getvar 应由类型化步骤处理，避免把校验行误下发
+        if (command.startsWith("getvar", ignoreCase = true)) return null
+        return command
+    }
+
+    private fun lineContainsShellWrapper(line: String): Boolean {
+        val lower = line.lowercase(Locale.ROOT)
+        return lower.contains('|') ||
+            lower.contains("2>&1") ||
+            lower.contains("2^>") ||
+            lower.contains("findstr") ||
+            lower.contains("grep") ||
+            line.contains('`') ||
+            lower.contains("for /f") ||
+            lower.contains("\$(")
+    }
+
+    private fun isShellMetaToken(token: String): Boolean {
+        return token.contains('|') ||
+            token.contains('>') ||
+            token.contains('<') ||
+            token == "||" ||
+            token == "&&" ||
+            token.startsWith('&') ||
+            token.contains('^') ||
+            token.contains('`') ||
+            token.startsWith("$") ||
+            token.contains(')') ||
+            token.contains('(') ||
+            token.contains('\'') ||
+            token.contains('"')
     }
 
     private suspend fun parseChecksumList(path: String): Map<String, Long> {
         val content = readUtf8TextOrNull(path) ?: return emptyMap()
+        val isSparseList = path.substringAfterLast('/').substringAfterLast('\\')
+            .equals("sparsecrclist.txt", ignoreCase = true)
         return content.lines()
             .mapNotNull { line ->
                 val trimmed = line.trim()
-                if (trimmed.isEmpty() || trimmed.equals("CRC-LIST", true)) return@mapNotNull null
+                if (trimmed.isEmpty()) return@mapNotNull null
+                if (trimmed.equals("CRC-LIST", true) || trimmed.equals("SPARSECRC-LIST", true)) {
+                    return@mapNotNull null
+                }
                 val parts = trimmed.split(Regex("\\s+"))
                 if (parts.size < 2) return@mapNotNull null
-                val crc = parts[1].removePrefix("0x").toLongOrNull(16) ?: return@mapNotNull null
-                normalizePartitionName(parts[0]) to crc
+                val partition = normalizePartitionName(parts[0])
+                val crc = if (isSparseList) {
+                    parseSparseCrcExpected(parts) ?: return@mapNotNull null
+                } else {
+                    parts[1].removePrefix("0x").removePrefix("0X").toLongOrNull(16)
+                        ?: return@mapNotNull null
+                }
+                partition to crc
             }
             .toMap()
+    }
+
+    /**
+     * 旧格式: `partition 0xCRC [parts]`；新格式: `partition parts 0xCRC...`。
+     * 多段 CRC 依赖设备侧按下载分片校验，本地预校验无法直接对比整图，故跳过。
+     */
+    private fun parseSparseCrcExpected(parts: List<String>): Long? {
+        val second = parts[1]
+        val looksLikeHexCrc = second.startsWith("0x", ignoreCase = true) ||
+            (second.length >= 7 && second.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' })
+        if (looksLikeHexCrc) {
+            return second.removePrefix("0x").removePrefix("0X").toLongOrNull(16)
+        }
+        val partCount = second.toIntOrNull() ?: return null
+        if (partCount != 1 || parts.size < 3) return null
+        return parts[2].removePrefix("0x").removePrefix("0X").toLongOrNull(16)
     }
 
     private suspend fun computeCrc32(path: String): Long {
@@ -447,6 +549,106 @@ actual object LineFlashRomUtil {
             return checkedInput.checksum.value
         }
     }
+
+    /**
+     * 与小米 gen_sparse_crc 一致：仅对 RAW / FILL 负载做 CRC32。
+     */
+    private suspend fun computeSparseCrc32(path: String): Long {
+        openReadOnlyStream(path).use { raw ->
+            val data = DataInputStream(BufferedInputStream(raw, DEFAULT_BUFFER_SIZE))
+            val headerBytes = ByteArray(SPARSE_IMAGE_HEADER_SIZE)
+            data.readFully(headerBytes)
+            val header = ByteBuffer.wrap(headerBytes).order(ByteOrder.LITTLE_ENDIAN)
+            val magic = header.int
+            val major = header.short.toInt() and 0xffff
+            val minor = header.short.toInt() and 0xffff
+            val fileHeaderSize = header.short.toInt() and 0xffff
+            val chunkHeaderSize = header.short.toInt() and 0xffff
+            val blockSize = Integer.toUnsignedLong(header.int)
+            header.int // total blocks
+            val totalChunks = header.int
+            require(magic == SPARSE_MAGIC) { "不是有效的 sparse 镜像: $path" }
+            require(major == 1 && minor == 0) { "不支持的 sparse 版本 $major.$minor: $path" }
+            require(fileHeaderSize == SPARSE_IMAGE_HEADER_SIZE) { "不支持的 sparse 文件头大小: $path" }
+            require(chunkHeaderSize == SPARSE_CHUNK_HEADER_SIZE) { "不支持的 sparse chunk 头大小: $path" }
+            require(totalChunks >= 0) { "无效的 sparse chunk 数量: $path" }
+            if (fileHeaderSize > SPARSE_IMAGE_HEADER_SIZE) {
+                skipFully(data, (fileHeaderSize - SPARSE_IMAGE_HEADER_SIZE).toLong())
+            }
+
+            val crc = CRC32()
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            val chunkHeaderBytes = ByteArray(SPARSE_CHUNK_HEADER_SIZE)
+            repeat(totalChunks) {
+                data.readFully(chunkHeaderBytes)
+                val chunk = ByteBuffer.wrap(chunkHeaderBytes).order(ByteOrder.LITTLE_ENDIAN)
+                val type = chunk.short.toInt() and 0xffff
+                chunk.short
+                val chunkBlocks = Integer.toUnsignedLong(chunk.int)
+                val totalSize = Integer.toUnsignedLong(chunk.int)
+                require(totalSize >= chunkHeaderSize.toLong()) { "无效的 sparse chunk 大小: $path" }
+                val dataSize = totalSize - chunkHeaderSize
+                when (type) {
+                    SPARSE_CHUNK_TYPE_RAW -> {
+                        var remaining = dataSize
+                        while (remaining > 0) {
+                            val n = minOf(remaining, buffer.size.toLong()).toInt()
+                            data.readFully(buffer, 0, n)
+                            crc.update(buffer, 0, n)
+                            remaining -= n
+                        }
+                    }
+
+                    SPARSE_CHUNK_TYPE_FILL -> {
+                        require(dataSize == SPARSE_FILL_DATA_SIZE) { "FILL chunk 数据长度必须为 4: $path" }
+                        val fill = ByteArray(SPARSE_FILL_DATA_SIZE.toInt())
+                        data.readFully(fill)
+                        require(blockSize > 0 && blockSize % SPARSE_FILL_DATA_SIZE == 0L) {
+                            "无效的 sparse block size: $blockSize"
+                        }
+                        val fillBuf = ByteArray(blockSize.toInt())
+                        var offset = 0
+                        while (offset < fillBuf.size) {
+                            System.arraycopy(fill, 0, fillBuf, offset, fill.size)
+                            offset += fill.size
+                        }
+                        var block = 0L
+                        while (block < chunkBlocks) {
+                            crc.update(fillBuf)
+                            block++
+                        }
+                    }
+
+                    SPARSE_CHUNK_TYPE_DONT_CARE -> {
+                        require(dataSize == 0L) { "DONT_CARE chunk 不应包含数据: $path" }
+                    }
+
+                    SPARSE_CHUNK_TYPE_CRC32 -> skipFully(data, dataSize)
+
+                    else -> error("未知 sparse chunk 类型 0x${type.toString(16)}: $path")
+                }
+            }
+            return crc.value
+        }
+    }
+
+    private fun skipFully(input: DataInputStream, bytes: Long) {
+        var remaining = bytes
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (remaining > 0) {
+            val n = minOf(remaining, buffer.size.toLong()).toInt()
+            val read = input.read(buffer, 0, n)
+            if (read < 0) throw EOFException("Unexpected EOF while skipping sparse data")
+            remaining -= read
+        }
+    }
+
+    private data class ChecksumWork(
+        val partition: String,
+        val fileName: String,
+        val expected: Long,
+        val sparse: Boolean,
+    )
 
     private fun compareSecurityPatch(current: String, target: String): Int {
         val currentDate = parseSecurityPatchDate(current)
@@ -572,12 +774,13 @@ actual object LineFlashRomUtil {
 
     private fun Throwable.toFlashFailure(script: LineFlashScript): LineFlashResult.Failure {
         val stepException = this as? FlashStepException
+        val root = stepException?.cause ?: this
         return LineFlashResult.Failure(
             scriptName = script.name,
             failedStepIndex = stepException?.stepIndex ?: -1,
             failedStep = stepException?.stepDescription ?: "未知步骤",
-            message = stepException?.cause?.message ?: message.orEmpty().ifBlank { "刷写失败" },
-            cause = cause ?: this,
+            message = humanizeFlashError(root),
+            cause = root,
         )
     }
 
@@ -587,3 +790,32 @@ actual object LineFlashRomUtil {
         cause: Throwable,
     ) : IllegalStateException(cause.message ?: stepDescription, cause)
 }
+
+/** 将 Fastboot/USB 异常转换为面向用户的说明文案。 */
+internal fun humanizeFlashError(throwable: Throwable): String {
+    if (throwable.suggestsRebootFastboot()) {
+        return USB_SESSION_ERROR_MESSAGE
+    }
+    return throwable.message.orEmpty().ifBlank { "刷写失败" }
+}
+
+internal fun Throwable.suggestsRebootFastboot(): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is FastbootTransportException) return true
+        val message = current.message.orEmpty()
+        if (message.contains("USB bulk", ignoreCase = true) ||
+            message.contains("Failed to receive", ignoreCase = true) ||
+            message.contains("Failed to send", ignoreCase = true) ||
+            message.contains("USB 通信失败")
+        ) {
+            return true
+        }
+        current = current.cause
+    }
+    return false
+}
+
+private const val USB_SESSION_ERROR_MESSAGE =
+    "USB 通信失败，可能是上次刷写中断导致 Fastboot 会话异常。请重启 Fastboot 设备后重试。"
+

@@ -67,6 +67,11 @@ object NavigationViewModel: BaseViewModel() {
                         val route = json.decodeFromString<Screen.FpsRecord>(intent.screenJson)
                         navigator.singleTop(route)
                     }
+
+                    NavigationIntentTargetScreen.FlashRom -> {
+                        val route = json.decodeFromString<Screen.FlashRom>(intent.screenJson)
+                        navigator.singleTop(route)
+                    }
                 }
             }
         }

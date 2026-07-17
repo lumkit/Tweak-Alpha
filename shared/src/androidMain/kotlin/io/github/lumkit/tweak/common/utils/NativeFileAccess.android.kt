@@ -266,6 +266,12 @@ private object RootNativeFileService : NativeFileService {
         }
     }
 
+    override suspend fun unzipFromPath(sourcePath: String, targetDir: String): NativeFileResult<Unit> {
+        return executeUnit("unzipFromPath", sourcePath, targetDir) { service ->
+            service.unzipPathToDir(sourcePath, targetDir)
+        }
+    }
+
     suspend fun <T> execute(
         operation: String,
         primaryPath: String,
@@ -518,6 +524,12 @@ private object ShizukuNativeFileService : NativeFileService {
             val pfd = application.contentResolver.openFileDescriptor(uri, "r")
                 ?: throw RuntimeException("Cannot open file descriptor from URI: $uriString")
             service.unzipToDir(pfd, targetDir)
+        }
+    }
+
+    override suspend fun unzipFromPath(sourcePath: String, targetDir: String): NativeFileResult<Unit> {
+        return executeUnit("unzipFromPath", sourcePath, targetDir) { service ->
+            service.unzipPathToDir(sourcePath, targetDir)
         }
     }
 

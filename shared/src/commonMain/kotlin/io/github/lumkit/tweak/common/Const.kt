@@ -13,4 +13,13 @@ object ConstCommon {
     object Navigation {
         const val ACTION_DEEPLINK_SELF = "ACTION_DEEPLINK_SELF"
     }
+
+    object Path {
+        /** 特权工作区主目录，存放各类功能临时文件 */
+        const val TWEAK_ALPHA_ROOT = "/data/local/tmp/TweakAlpha"
+
+        const val LINE_FLASH_DIR = "$TWEAK_ALPHA_ROOT/line_flash"
+
+        fun lineFlashSession(sessionId: String): String = "$LINE_FLASH_DIR/$sessionId"
+    }
 }

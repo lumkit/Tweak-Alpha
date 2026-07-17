@@ -397,15 +397,30 @@ class FastbootClient(
     }
 
     private fun resolveMaxDownloadSize(): Long {
-        return runCatching { parseDownloadSize(getVar("max-download-size")) }
+        val reported = runCatching { parseDownloadSize(getVar("max-download-size")) }
             .getOrNull()
             ?.takeIf { it > SPARSE_IMAGE_HEADER_SIZE + SPARSE_CHUNK_HEADER_SIZE }
-            ?: DEFAULT_SPARSE_DOWNLOAD_SIZE
+        // 设备回报异常偏大时仍限制到协议可用上限，避免一次 download 整包
+        val resolved = reported ?: DEFAULT_SPARSE_DOWNLOAD_SIZE
+        return minOf(resolved, UInt.MAX_VALUE.toLong())
     }
 
+    /**
+     * Fastboot `max-download-size` 可能是 `0x20000000`（十六进制）或 `536870912`（十进制）。
+     * 绝不能把纯十进制字符串按 hex 解析，否则会把分片上限放大几个数量级。
+     */
     private fun parseDownloadSize(value: String): Long? {
-        val normalized = value.trim().removePrefix("0x").removePrefix("0X")
-        return normalized.toLongOrNull(16) ?: value.trim().toLongOrNull()
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return null
+        if (trimmed.startsWith("0x", ignoreCase = true)) {
+            return trimmed.substring(2).toLongOrNull(16)
+        }
+        val hasHexLetter = trimmed.any { it in 'a'..'f' || it in 'A'..'F' }
+        return if (hasHexLetter) {
+            trimmed.toLongOrNull(16)
+        } else {
+            trimmed.toLongOrNull()
+        }
     }
 
     private fun hexSize(size: Long): String {
@@ -675,8 +690,9 @@ class FastbootClient(
 
         private const val MAX_COMMAND_SIZE = 64
         private const val RESPONSE_BUFFER_SIZE = 256
-        private const val MAX_CHUNK_SIZE = 512 * 1024
-        private const val FLASH_TIMEOUT_MILLIS = 30_000
+        // 读盘缓冲可大于 USB 单次上限；实际 bulk 分包由 UsbFastbootTransport 处理
+        private const val MAX_CHUNK_SIZE = 256 * 1024
+        private const val FLASH_TIMEOUT_MILLIS = 60_000
         private const val SPARSE_MAGIC = -316211398
         private const val SPARSE_IMAGE_HEADER_SIZE = 28
         private const val SPARSE_CHUNK_HEADER_SIZE = 12
@@ -685,6 +701,7 @@ class FastbootClient(
         private const val SPARSE_CHUNK_TYPE_FILL = 0xCAC2
         private const val SPARSE_CHUNK_TYPE_DONT_CARE = 0xCAC3
         private const val SPARSE_CHUNK_TYPE_CRC32 = 0xCAC4
-        private const val DEFAULT_SPARSE_DOWNLOAD_SIZE = 768L * 1024L * 1024L
+        // 与小米 flash 工具常见上限一致；仅在 getvar 失败时作兜底
+        private const val DEFAULT_SPARSE_DOWNLOAD_SIZE = 256L * 1024L * 1024L
     }
 }
