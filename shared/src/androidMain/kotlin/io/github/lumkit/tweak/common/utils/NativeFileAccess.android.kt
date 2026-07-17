@@ -248,6 +248,15 @@ private object RootNativeFileService : NativeFileService {
         }
     }
 
+    override suspend fun length(path: String): NativeFileResult<Long> {
+        return execute(
+            operation = "length",
+            primaryPath = path,
+            transform = { bundle -> bundle.getLong(NativeFileBundles.KEY_LONG) },
+            block = { service -> service.length(path) },
+        )
+    }
+
     override suspend fun readCpuCycles(coreIndex: Int): NativeFileResult<Long> {
         return execute(
             operation = "readCpuCycles",
@@ -507,6 +516,15 @@ private object ShizukuNativeFileService : NativeFileService {
         return executeUnit("chmod", path) { service ->
             service.chmod(path, mode)
         }
+    }
+
+    override suspend fun length(path: String): NativeFileResult<Long> {
+        return execute(
+            operation = "length",
+            primaryPath = path,
+            transform = { bundle -> bundle.getLong(NativeFileBundles.KEY_LONG) },
+            block = { service -> service.length(path) },
+        )
     }
 
     override suspend fun readCpuCycles(coreIndex: Int): NativeFileResult<Long> {

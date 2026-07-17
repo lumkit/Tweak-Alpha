@@ -174,6 +174,13 @@ internal object FileServiceDelegate {
     }
 
     @JvmStatic
+    fun length(path: String): Bundle = try {
+        NativeFileBundles.successLong(NativeFileBridge.length(path))
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
+    @JvmStatic
     fun readCpuCycles(coreIndex: Int): Bundle = try {
         NativeFileBundles.successLong(CpuCyclesBridge.readCpuCycles(coreIndex))
     } catch (throwable: Throwable) {

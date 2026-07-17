@@ -32,4 +32,7 @@ internal object NativeFileBridge {
 
     @JvmStatic
     external fun chmod(path: String, mode: String)
+
+    @JvmStatic
+    external fun length(path: String): Long
 }

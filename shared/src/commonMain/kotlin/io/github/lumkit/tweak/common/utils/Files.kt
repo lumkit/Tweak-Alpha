@@ -191,6 +191,19 @@ object Files {
         return getService().chmod(path, mode)
     }
 
+    /**
+     * 获取文件或目录占用大小（字节）。
+     *
+     * - 普通文件：返回文件大小
+     * - 目录：递归累加所有子项大小（不跟随符号链接）
+     *
+     * @param path 目标路径
+     * @return 成功时返回占用字节数
+     */
+    suspend fun length(path: String): NativeFileResult<Long> {
+        return getService().length(path)
+    }
+
     suspend fun readCpuCycles(coreIndex: Int): NativeFileResult<Long> {
         return getService().readCpuCycles(coreIndex)
     }

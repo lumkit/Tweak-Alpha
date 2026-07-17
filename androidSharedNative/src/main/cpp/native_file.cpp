@@ -212,6 +212,24 @@ mode_t parseMode(JNIEnv *env, const std::string &modeString) {
     return static_cast<mode_t>(parsed);
 }
 
+/**
+ * 计算路径占用大小：普通文件返回 st_size；目录递归累加子项；不跟随符号链接。
+ */
+jlong calculateLength(JNIEnv *env, const std::string &path) {
+    struct stat status = requireStatus(env, path);
+    if (S_ISLNK(status.st_mode)) {
+        return static_cast<jlong>(status.st_size);
+    }
+    if (S_ISDIR(status.st_mode)) {
+        jlong total = 0;
+        for (const auto &child : listDirectory(env, path)) {
+            total += calculateLength(env, child);
+        }
+        return total;
+    }
+    return static_cast<jlong>(status.st_size);
+}
+
 }  // namespace
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -357,5 +375,14 @@ Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_chmod(JNIEnv *env, jcl
             throwIOException(env, lastError("Failed to chmod " + resolvedPath));
         }
     } catch (...) {
+    }
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_length(JNIEnv *env, jclass, jstring path) {
+    try {
+        return calculateLength(env, requirePath(env, path, "path"));
+    } catch (...) {
+        return -1;
     }
 }

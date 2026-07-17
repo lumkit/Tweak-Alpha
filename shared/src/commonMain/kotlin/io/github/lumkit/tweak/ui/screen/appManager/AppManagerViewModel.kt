@@ -74,6 +74,9 @@ class AppManagerViewModel: BaseViewModel() {
         false
     )
 
+    private val _targetAppInfo = MutableStateFlow<AppInfo?>(null)
+    val targetAppInfo = _targetAppInfo.asStateFlow()
+
     init {
         viewModelScope.launch {
             AppsHelper.apps.collect {
@@ -224,27 +227,20 @@ class AppManagerViewModel: BaseViewModel() {
         }
 
         val summary = runBatchOperation(selectedApps, AppsHelper::forceStop)
-        val message = when {
-            summary.failures.isEmpty() -> getString(Res.string.text_force_app_success)
-                .format(summary.successCount)
-            summary.successCount > 0 -> getString(Res.string.text_force_app_partial_success)
-                .format(summary.successCount, summary.failures.size)
-            else -> {
-                val firstFailure = summary.failures.firstOrNull()
-                buildString {
-                    append(getString(Res.string.text_force_app_failed))
-                    firstFailure?.let { (packageName, failureMessage) ->
-                        append("：")
-                        append(packageName)
-                        if (failureMessage.isNotBlank()) {
-                            append("，")
-                            append(failureMessage)
-                        }
-                    }
-                }
-            }
+        success(buildForceKillMessage(summary))
+    }
+
+    fun forceKillApp(packageName: String) = suspendLaunch(
+        id = "forceKillApp",
+        complete = {
+            _loadingState.value = false
         }
-        success(message)
+    ) {
+        loading()
+        _loadingState.value = true
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+        val summary = runBatchOperation(listOf(packageName), AppsHelper::forceStop)
+        success(buildForceKillMessage(summary))
     }
 
     fun unableSelectedApps() = suspendLaunch(
@@ -285,8 +281,42 @@ class AppManagerViewModel: BaseViewModel() {
             return@suspendLaunch
         }
 
+        val stateByPackage = AppsHelper.apps.value.associateBy(
+            keySelector = { it.packageName },
+            valueTransform = { it.state },
+        )
         val summary = runBatchOperation(selectedApps) { packageName ->
-            AppsHelper.setFrozen(packageName, false)
+            restoreApp(packageName, stateByPackage[packageName])
+        }
+        success(buildBatchOperationMessage(getString(Res.string.text_enable_app), summary))
+    }
+
+    fun freezeApp(packageName: String) = suspendLaunch(
+        id = "unableApp",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+        val summary = runBatchOperation(listOf(packageName)) { pkg ->
+            AppsHelper.setFrozen(pkg, true)
+        }
+        success(buildBatchOperationMessage(getString(Res.string.text_unable_app), summary))
+    }
+
+    fun enableApp(packageName: String, state: AppState) = suspendLaunch(
+        id = "enableApp",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+        val summary = runBatchOperation(listOf(packageName)) { pkg ->
+            restoreApp(pkg, state)
         }
         success(buildBatchOperationMessage(getString(Res.string.text_enable_app), summary))
     }
@@ -309,5 +339,61 @@ class AppManagerViewModel: BaseViewModel() {
 
         val summary = runBatchOperation(selectedApps, AppsHelper::uninstall)
         success(buildBatchOperationMessage(getString(Res.string.text_app_uninstall), summary))
+    }
+
+    fun uninstallApp(packageName: String) = suspendLaunch(
+        id = "uninstallApp",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+        val summary = runBatchOperation(listOf(packageName), AppsHelper::uninstall)
+        success(buildBatchOperationMessage(getString(Res.string.text_app_uninstall), summary))
+    }
+
+    fun setTargetAppInfo(info: AppInfo?){
+        _targetAppInfo.value = info
+    }
+
+    /**
+     * 按当前状态恢复应用：
+     * - [AppState.DISABLED] 走 [AppsHelper.setDisabled]
+     * - [AppState.FROZEN] 走 [AppsHelper.setFrozen]
+     */
+    private suspend fun restoreApp(
+        packageName: String,
+        state: AppState?,
+    ): AppOperationResult {
+        return when (state) {
+            AppState.DISABLED -> AppsHelper.setDisabled(packageName, disabled = false)
+            AppState.FROZEN -> AppsHelper.setFrozen(packageName, frozen = false)
+            AppState.ENABLED, null -> AppsHelper.setFrozen(packageName, frozen = false)
+        }
+    }
+
+    private suspend fun buildForceKillMessage(summary: BatchOperationSummary): String {
+        return when {
+            summary.failures.isEmpty() -> getString(Res.string.text_force_app_success)
+                .format(summary.successCount)
+            summary.successCount > 0 -> getString(Res.string.text_force_app_partial_success)
+                .format(summary.successCount, summary.failures.size)
+            else -> {
+                val firstFailure = summary.failures.firstOrNull()
+                buildString {
+                    append(getString(Res.string.text_force_app_failed))
+                    firstFailure?.let { (packageName, failureMessage) ->
+                        append("：")
+                        append(packageName)
+                        if (failureMessage.isNotBlank()) {
+                            append("，")
+                            append(failureMessage)
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -266,4 +266,18 @@
     <string name="text_flash_no_script">请先选择刷写脚本</string>
     <string name="text_flash_ready_hint">校验已通过，请确认脚本后再次点击按钮开始刷入</string>
     <string name="text_flash_service_running">线刷任务进行中</string>
+
+    <string name="text_app_detail">应用详情</string>
+    <string name="text_app_info_package_name">包名</string>
+    <string name="text_app_info_version_code">版本号</string>
+    <string name="text_app_info_apk_size">安装包大小</string>
+    <string name="text_app_info_target_sdk">目标系统</string>
+    <string name="text_app_info_min_sdk">最低系统</string>
+    <string name="text_app_info_data_dir">数据目录</string>
+    <string name="text_app_info_source_dir">安装目录</string>
+    <string name="text_app_info_first_install">首次安装</string>
+    <string name="text_app_info_last_update">最后更新</string>
+    <string name="text_android_api_format">Android %1$s（API %2$d）</string>
+    <string name="text_close">关闭</string>
+    <string name="text_launch">启动</string>
 </resources>

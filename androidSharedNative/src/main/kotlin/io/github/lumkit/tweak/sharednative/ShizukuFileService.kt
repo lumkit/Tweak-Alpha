@@ -69,6 +69,10 @@ class ShizukuFileService : IRootFileService.Stub() {
         return FileServiceDelegate.chmod(path, mode)
     }
 
+    override fun length(path: String): Bundle {
+        return FileServiceDelegate.length(path)
+    }
+
     override fun readCpuCycles(coreIndex: Int): Bundle {
         return FileServiceDelegate.readCpuCycles(coreIndex)
     }

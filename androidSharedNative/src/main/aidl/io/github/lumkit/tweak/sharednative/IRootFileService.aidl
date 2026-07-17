@@ -19,6 +19,7 @@ interface IRootFileService {
     Bundle copy(String sourcePath, String targetPath, boolean overwrite);
     Bundle move(String sourcePath, String targetPath, boolean overwrite);
     Bundle chmod(String path, String mode);
+    Bundle length(String path);
     Bundle readCpuCycles(int coreIndex);
     Bundle listInstalledApps();
     Bundle getInstalledApp(String packageName);

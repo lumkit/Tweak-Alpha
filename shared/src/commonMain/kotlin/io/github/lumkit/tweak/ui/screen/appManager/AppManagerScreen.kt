@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -26,13 +28,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
@@ -53,6 +59,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -81,8 +88,13 @@ import io.github.lumkit.tweak.common.component.Block
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.SmallTopAppBar
 import io.github.lumkit.tweak.common.utils.AppInfo
+import io.github.lumkit.tweak.common.utils.AppState
+import io.github.lumkit.tweak.common.utils.AppsHelper
+import io.github.lumkit.tweak.common.utils.Files
+import io.github.lumkit.tweak.common.utils.formatDateTime
+import io.github.lumkit.tweak.common.utils.formatMemorySize
+import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
-import io.github.lumkit.tweak.common.utils.jumpToAppInfo
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
@@ -127,7 +139,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.window.WindowDialog
 import tweak_alpha.shared.generated.resources.Res
-import tweak_alpha.shared.generated.resources.ic_all_apps_fill
 import tweak_alpha.shared.generated.resources.ic_ice_app
 import tweak_alpha.shared.generated.resources.ic_module
 import tweak_alpha.shared.generated.resources.ic_sun
@@ -136,10 +147,21 @@ import tweak_alpha.shared.generated.resources.ic_unable_app
 import tweak_alpha.shared.generated.resources.ic_user_apps
 import tweak_alpha.shared.generated.resources.text_abi_32
 import tweak_alpha.shared.generated.resources.text_abi_64
-import tweak_alpha.shared.generated.resources.text_all_apps
+import tweak_alpha.shared.generated.resources.text_android_api_format
+import tweak_alpha.shared.generated.resources.text_app_detail
+import tweak_alpha.shared.generated.resources.text_app_info_apk_size
+import tweak_alpha.shared.generated.resources.text_app_info_data_dir
+import tweak_alpha.shared.generated.resources.text_app_info_first_install
+import tweak_alpha.shared.generated.resources.text_app_info_last_update
+import tweak_alpha.shared.generated.resources.text_app_info_min_sdk
+import tweak_alpha.shared.generated.resources.text_app_info_package_name
+import tweak_alpha.shared.generated.resources.text_app_info_source_dir
+import tweak_alpha.shared.generated.resources.text_app_info_target_sdk
+import tweak_alpha.shared.generated.resources.text_app_info_version_code
 import tweak_alpha.shared.generated.resources.text_app_manager
 import tweak_alpha.shared.generated.resources.text_app_manager_description
 import tweak_alpha.shared.generated.resources.text_app_uninstall
+import tweak_alpha.shared.generated.resources.text_close
 import tweak_alpha.shared.generated.resources.text_dialog_cancel
 import tweak_alpha.shared.generated.resources.text_dialog_force_stop_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_force_stop_confirm
@@ -150,6 +172,7 @@ import tweak_alpha.shared.generated.resources.text_dialog_warm_tip
 import tweak_alpha.shared.generated.resources.text_enable_app
 import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_force_kill_app
+import tweak_alpha.shared.generated.resources.text_launch
 import tweak_alpha.shared.generated.resources.text_no_native_abi
 import tweak_alpha.shared.generated.resources.text_selected_apps_format
 import tweak_alpha.shared.generated.resources.text_system_apps
@@ -195,11 +218,6 @@ private fun AppManagerContent(
     val pages = remember(viewModel) {
         listOf(
             AppPage(
-                iconRes = Res.drawable.ic_all_apps_fill,
-                titleRes = Res.string.text_all_apps,
-                listState = viewModel.allApps,
-            ),
-            AppPage(
                 iconRes = Res.drawable.ic_system_apps,
                 titleRes = Res.string.text_system_apps,
                 listState = viewModel.systemApps,
@@ -233,7 +251,10 @@ private fun AppManagerContent(
         query = normalizedSearchQuery,
     )
     val subTitle = if (selectMode) {
-        stringResource(Res.string.text_selected_apps_format).format(selectedApps.size, currentAppList.size)
+        stringResource(Res.string.text_selected_apps_format).format(
+            selectedApps.size,
+            currentAppList.size
+        )
     } else {
         buildString {
             append(stringResource(currentAppPage.titleRes))
@@ -301,14 +322,15 @@ private fun AppManagerContent(
             containerColor = MiuixTheme.colorScheme.surface,
         ) { paddingValues ->
 
-            val listPaddingValues = remember(bottomToolBarHeight, paddingValues, direction, topHeight) {
-                PaddingValues(
-                    start = paddingValues.calculateStartPadding(direction),
-                    end = paddingValues.calculateEndPadding(direction),
-                    top = topHeight + 12.dp,
-                    bottom = paddingValues.calculateBottomPadding() + bottomToolBarHeight,
-                )
-            }
+            val listPaddingValues =
+                remember(bottomToolBarHeight, paddingValues, direction, topHeight) {
+                    PaddingValues(
+                        start = paddingValues.calculateStartPadding(direction),
+                        end = paddingValues.calculateEndPadding(direction),
+                        top = topHeight + 12.dp,
+                        bottom = paddingValues.calculateBottomPadding() + bottomToolBarHeight,
+                    )
+                }
 
             AppManagerContentLayout(
                 backdrop = backdrop,
@@ -344,9 +366,13 @@ private fun AppManagerLoadStateEffects(viewModel: AppManagerViewModel) {
 
     viewModel.LoadStateLaunchEffect {
         WatchSnackBarState("forceKillSelectedApps", hostState)
+        WatchSnackBarState("forceKillApp", hostState)
         WatchSnackBarState("unableSelectedApps", hostState)
+        WatchSnackBarState("unableApp", hostState)
         WatchSnackBarState("enableSelectedApps", hostState)
+        WatchSnackBarState("enableApp", hostState)
         WatchSnackBarState("uninstallSelectedApps", hostState)
+        WatchSnackBarState("uninstallApp", hostState)
     }
 }
 
@@ -533,6 +559,8 @@ private fun AppManagerContentLayout(
     direction: LayoutDirection,
     viewModel: AppManagerViewModel,
 ) {
+    val targetAppInfo by viewModel.targetAppInfo.collectAsStateWithLifecycle()
+
     Box {
         HorizontalPager(
             modifier = Modifier.fillMaxSize()
@@ -552,7 +580,7 @@ private fun AppManagerContentLayout(
                 selectedAppsState = viewModel.selectedApps,
                 onTap = { appInfo ->
                     if (!selectMode) {
-                        jumpToAppInfo(appInfo.packageName)
+                        viewModel.setTargetAppInfo(appInfo)
                     } else {
                         viewModel.toggleSelectedAppInfo(appInfo.packageName)
                     }
@@ -598,6 +626,8 @@ private fun AppManagerContentLayout(
             }
         }
     }
+
+    AppInfoDialog(viewModel, targetAppInfo)
 }
 
 @Composable
@@ -610,7 +640,7 @@ private fun BoxScope.BottomToolbar(
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
     val selectedApps by viewModel.selectedApps.collectAsStateWithLifecycle()
     val isEmpty = remember(selectedApps) { selectedApps.isEmpty() }
-    val isUnfreezeAction = currentPosition == 3
+    val isUnfreezeAction = currentPosition == 2
     var forceDialogState by remember { mutableStateOf(false) }
     var iceDialogState by remember { mutableStateOf(false) }
     var uninstallDialogState by remember { mutableStateOf(false) }
@@ -698,33 +728,31 @@ private fun BoxScope.BottomToolbar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
 
-            if (currentPosition != 3) {
-                // 结束进程
-                Block {
-                    Column(
-                        modifier = Modifier.fillMaxSize()
-                            .weight(1f)
-                            .alpha(if (isEmpty) .31f else 1f)
-                            .clickable(
-                                enabled = !isEmpty,
-                            ) {
-                                forceDialogState = true
-                            },
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Close2,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
-                        )
-                        Text(
-                            text = stringResource(Res.string.text_force_kill_app),
-                            style = MiuixTheme.textStyles.footnote1,
-                            color = MiuixTheme.colorScheme.onSurface.copy(.75f)
-                        )
-                    }
+            // 结束进程
+            Block {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                        .weight(1f)
+                        .alpha(if (isEmpty) .31f else 1f)
+                        .clickable(
+                            enabled = !isEmpty,
+                        ) {
+                            forceDialogState = true
+                        },
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Close2,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
+                    )
+                    Text(
+                        text = stringResource(Res.string.text_force_kill_app),
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurface.copy(.75f)
+                    )
                 }
             }
 
@@ -743,7 +771,7 @@ private fun BoxScope.BottomToolbar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(
-                        painter = if (currentPosition == 3) {
+                        painter = if (currentPosition == 2) {
                             painterResource(Res.drawable.ic_sun)
                         } else {
                             painterResource(Res.drawable.ic_unable_app)
@@ -753,7 +781,7 @@ private fun BoxScope.BottomToolbar(
                         tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
                     )
                     Text(
-                        text = if (currentPosition == 3) {
+                        text = if (currentPosition == 2) {
                             stringResource(Res.string.text_enable_app)
                         } else {
                             stringResource(Res.string.text_unable_app)
@@ -765,32 +793,30 @@ private fun BoxScope.BottomToolbar(
             }
 
             // 卸载
-            if (currentPosition >= 2) {
-                Block {
-                    Column(
-                        modifier = Modifier.fillMaxSize()
-                            .weight(1f)
-                            .alpha(if (isEmpty) .31f else 1f)
-                            .clickable(
-                                enabled = !isEmpty,
-                            ) {
-                                uninstallDialogState = true
-                            },
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Delete,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
-                        )
-                        Text(
-                            text = stringResource(Res.string.text_app_uninstall),
-                            style = MiuixTheme.textStyles.footnote1,
-                            color = MiuixTheme.colorScheme.onSurface.copy(.75f)
-                        )
-                    }
+            Block {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                        .weight(1f)
+                        .alpha(if (isEmpty) .31f else 1f)
+                        .clickable(
+                            enabled = !isEmpty,
+                        ) {
+                            uninstallDialogState = true
+                        },
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
+                    )
+                    Text(
+                        text = stringResource(Res.string.text_app_uninstall),
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurface.copy(.75f)
+                    )
                 }
             }
         }
@@ -1035,7 +1061,7 @@ private fun List<AppInfo>.filterByQuery(query: String): List<AppInfo> {
     val normalizedQuery = query.lowercase()
     return filter { appInfo ->
         appInfo.appName.contains(normalizedQuery, ignoreCase = true) ||
-            appInfo.packageName.contains(normalizedQuery, ignoreCase = true)
+                appInfo.packageName.contains(normalizedQuery, ignoreCase = true)
     }
 }
 
@@ -1094,7 +1120,12 @@ private fun AppItem(
                     model = appInfo.iconPath,
                     contentDescription = null,
                     error = null,
-                    modifier = Modifier.clip(Rectangle.copy(cornerRadius = 12.dp))
+                    modifier = Modifier.clip(Rectangle.copy(12.dp))
+                        .border(
+                            width = 1.dp,
+                            shape = Rectangle.copy(12.dp),
+                            color = MiuixTheme.colorScheme.onSurface.copy(.1f)
+                        )
                         .size(48.dp)
                 )
             },
@@ -1137,4 +1168,306 @@ private fun AppItem(
             )
         }
     }
+}
+
+@Composable
+private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
+    var forceDialogState by remember { mutableStateOf(false) }
+    var freezeDialogState by remember { mutableStateOf(false) }
+    var uninstallDialogState by remember { mutableStateOf(false) }
+    val isUnfreezeAction = appInfo?.state != AppState.ENABLED
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(appInfo) {
+        if (appInfo == null) {
+            forceDialogState = false
+            freezeDialogState = false
+            uninstallDialogState = false
+        }
+    }
+
+    ForceStopDialog(
+        show = forceDialogState,
+        onDismissRequest = { forceDialogState = false },
+        onConfirm = {
+            val packageName = appInfo?.packageName ?: return@ForceStopDialog
+            forceDialogState = false
+            viewModel.forceKillApp(packageName)
+        },
+    )
+
+    FreezeActionDialog(
+        show = freezeDialogState,
+        isUnfreezeAction = isUnfreezeAction,
+        onDismissRequest = { freezeDialogState = false },
+        onConfirm = {
+            val info = appInfo ?: return@FreezeActionDialog
+            freezeDialogState = false
+            viewModel.setTargetAppInfo(null)
+            if (isUnfreezeAction) {
+                viewModel.enableApp(info.packageName, info.state)
+            } else {
+                viewModel.freezeApp(info.packageName)
+            }
+        },
+    )
+
+    UninstallDialog(
+        show = uninstallDialogState,
+        onDismissRequest = { uninstallDialogState = false },
+        onConfirm = {
+            val packageName = appInfo?.packageName ?: return@UninstallDialog
+            uninstallDialogState = false
+            viewModel.setTargetAppInfo(null)
+            viewModel.uninstallApp(packageName)
+        },
+    )
+
+    OverlayDialog(
+        show = appInfo != null,
+        title = stringResource(Res.string.text_app_detail),
+        onDismissRequest = { viewModel.setTargetAppInfo(null) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(),
+        ) {
+            appInfo?.also { info ->
+                val apkSize by produceState(initialValue = "--", key1 = info.sourceDir) {
+                    value = Files.length(info.sourceDir).getOrNull()?.formatMemorySize(" ") ?: "--"
+                }
+
+                BasicComponent(
+                    modifier = Modifier.fillMaxWidth(),
+                    startAction = {
+                        AsyncImage(
+                            model = info.iconPath,
+                            contentDescription = null,
+                            modifier = Modifier.clip(Rectangle.copy(12.dp))
+                                .border(
+                                    width = 1.dp,
+                                    shape = Rectangle.copy(12.dp),
+                                    color = MiuixTheme.colorScheme.onSurface.copy(.1f)
+                                )
+                                .size(48.dp),
+                        )
+                    },
+                    endActions = {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    AppsHelper.launch(info.packageName)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColorsPrimary()
+                        ) {
+                            Text(stringResource(Res.string.text_launch))
+                        }
+                    },
+                    title = info.appName,
+                    summary = info.versionName,
+                    insideMargin = PaddingValues()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .weight(1f, false)
+                ) {
+                    AppInfoDetailColumn(
+                        items = listOf(
+                            AppInfoDetailItem(
+                                title = stringResource(Res.string.text_app_info_package_name),
+                                value = info.packageName,
+                            ),
+                            AppInfoDetailItem(
+                                title = stringResource(Res.string.text_app_info_version_code),
+                                value = info.versionCode.toString(),
+                            ),
+                            AppInfoDetailItem(
+                                title = stringResource(Res.string.text_app_info_apk_size),
+                                value = apkSize,
+                            ),
+                            AppInfoDetailItem(
+                                title = stringResource(Res.string.text_app_info_target_sdk),
+                                value = formatAndroidApiLabel(info.targetSdk),
+                            ),
+                            AppInfoDetailItem(
+                                title = stringResource(Res.string.text_app_info_min_sdk),
+                                value = formatAndroidApiLabel(info.minSdk),
+                            ),
+                            AppInfoDetailItem(
+                                title = stringResource(Res.string.text_app_info_data_dir),
+                                value = info.dataDir.ifBlank { "--" },
+                            ),
+                            AppInfoDetailItem(
+                                title = stringResource(Res.string.text_app_info_source_dir),
+                                value = info.sourceDir.ifBlank { "--" },
+                            ),
+                            AppInfoDetailItem(
+                                title = stringResource(Res.string.text_app_info_first_install),
+                                value = formatDateTime(info.firstInstallTime, "yyyy-MM-dd HH:mm:ss"),
+                            ),
+                            AppInfoDetailItem(
+                                title = stringResource(Res.string.text_app_info_last_update),
+                                value = formatDateTime(info.lastUpdateTime, "yyyy-MM-dd HH:mm:ss"),
+                            ),
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { forceDialogState = true },
+                        colors = ButtonDefaults.buttonColorsPrimary(
+                            color = MiuixTheme.colorScheme.primaryContainer,
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.text_force_kill_app)
+                        )
+                    }
+
+                    Button(
+                        onClick = { freezeDialogState = true },
+                        colors = ButtonDefaults.buttonColorsPrimary(
+                            color = MiuixTheme.colorScheme.primaryContainer,
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = when (info.state) {
+                                AppState.ENABLED -> stringResource(Res.string.text_unable_app)
+                                AppState.DISABLED -> stringResource(Res.string.text_enable_app)
+                                AppState.FROZEN -> stringResource(Res.string.text_enable_app)
+                            }
+                        )
+                    }
+
+                    Button(
+                        onClick = { uninstallDialogState = true },
+                        colors = ButtonDefaults.buttonColorsPrimary(
+                            color = MiuixTheme.colorScheme.error.copy(.5f),
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.text_app_uninstall)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = { viewModel.setTargetAppInfo(null) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = stringResource(Res.string.text_close))
+                }
+            }
+        }
+    }
+}
+
+@Immutable
+private data class AppInfoDetailItem(
+    val title: String,
+    val value: String,
+)
+
+@Composable
+private fun AppInfoDetailColumn(items: List<AppInfoDetailItem>) {
+    val titleStyle = MiuixTheme.textStyles.body2
+    val textMeasurer = rememberTextMeasurer()
+    val labelWidth = with(LocalDensity.current) {
+        remember(items, titleStyle) {
+            items.maxOf { item ->
+                textMeasurer.measure(
+                    text = item.title,
+                    style = titleStyle,
+                ).size.width.toDp()
+            }
+        }
+    }
+
+    SelectionContainer {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            items.forEach { item ->
+                AppInfoDetailRow(
+                    title = item.title,
+                    value = item.value,
+                    labelWidth = labelWidth,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppInfoDetailRow(
+    title: String,
+    value: String,
+    labelWidth: Dp,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.width(labelWidth),
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+            maxLines = 1,
+        )
+        Text(
+            text = value,
+            modifier = Modifier.weight(1f),
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun formatAndroidApiLabel(sdk: Int): String {
+    if (sdk <= 0) return "--"
+    return stringResource(
+        Res.string.text_android_api_format,
+        androidReleaseName(sdk),
+        sdk,
+    )
+}
+
+private fun androidReleaseName(sdk: Int): String = when (sdk) {
+    21 -> "5.0"
+    22 -> "5.1"
+    23 -> "6.0"
+    24 -> "7.0"
+    25 -> "7.1"
+    26 -> "8.0"
+    27 -> "8.1"
+    28 -> "9"
+    29 -> "10"
+    30 -> "11"
+    31 -> "12"
+    32 -> "12L"
+    33 -> "13"
+    34 -> "14"
+    35 -> "15"
+    36 -> "16"
+    else -> sdk.toString()
 }
