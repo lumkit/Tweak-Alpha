@@ -16,6 +16,8 @@ expect fun isDebugBuild(): Boolean
 
 expect fun restartApp()
 
+expect fun exitApp()
+
 expect val SDK_INT: Int
 
 expect val SDK_RELEASE: String

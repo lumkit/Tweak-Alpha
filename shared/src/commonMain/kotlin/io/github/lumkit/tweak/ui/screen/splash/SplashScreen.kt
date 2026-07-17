@@ -14,8 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,14 +27,18 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.lumkit.tweak.LocalSnackBarHostState
+import io.github.lumkit.tweak.common.component.AlertDialog
 import io.github.lumkit.tweak.common.component.Logo
 import io.github.lumkit.tweak.common.component.ScreenSurface
+import io.github.lumkit.tweak.common.utils.TweakDataStore
+import io.github.lumkit.tweak.common.utils.exitApp
 import io.github.lumkit.tweak.common.utils.restartApp
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.model.stringResourceByRuntimeMode
 import io.github.lumkit.tweak.model.stringResourceByRuntimeModeDescription
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
@@ -58,6 +64,10 @@ import tweak_alpha.shared.generated.resources.text_restart
 import tweak_alpha.shared.generated.resources.text_root_permisstion_denied
 import tweak_alpha.shared.generated.resources.text_select_runtime_mode
 import tweak_alpha.shared.generated.resources.text_shizuku_permission_denied
+import tweak_alpha.shared.generated.resources.text_user_agreement_confirm
+import tweak_alpha.shared.generated.resources.text_user_agreement_content
+import tweak_alpha.shared.generated.resources.text_user_agreement_disagree
+import tweak_alpha.shared.generated.resources.text_user_agreement_title
 import tweak_alpha.shared.generated.resources.toolkit_tweak
 
 @Composable
@@ -70,11 +80,71 @@ internal fun SplashScreen(
     val runtimeModes = remember { RuntimeMode.entries.filter { it != RuntimeMode.Unknow } }
     val checkLoadingState by viewModel.checkLoadingState.collectAsStateWithLifecycle()
     val runtimeMode by viewModel.runtimeModeState.collectAsStateWithLifecycle()
+    val agreementAccepted by TweakDataStore.hasAcceptedUserAgreementFlow().collectAsStateWithLifecycle(initialValue = false)
 
-    LaunchedEffect(viewModel, runtimeMode) {
-        // 检查运行环境
+    var showAgreementDialog by remember { mutableStateOf(false) }
+    var pendingRuntimeMode by remember { mutableStateOf<RuntimeMode?>(null) }
+
+    // 已同意协议且已选模式：走原有自动检测
+    LaunchedEffect(viewModel, runtimeMode, agreementAccepted) {
+        if (!agreementAccepted) return@LaunchedEffect
         viewModel.checkRuntime {
             navigator.navigate(Screen.Main, true)
+        }
+    }
+
+    // 升级后已有模式但未同意协议：自动弹出协议，同意后继续原模式校验
+    LaunchedEffect(runtimeMode, agreementAccepted) {
+        if (agreementAccepted || showAgreementDialog) return@LaunchedEffect
+        val mode = runtimeMode
+        if (mode == null || mode == RuntimeMode.Unknow) return@LaunchedEffect
+        pendingRuntimeMode = mode
+        showAgreementDialog = true
+    }
+
+    fun proceedWithMode(mode: RuntimeMode) {
+        scope.launch {
+            when (mode) {
+                RuntimeMode.Unknow -> Unit
+                RuntimeMode.Root -> {
+                    if (viewModel.checkRootMode()) {
+                        viewModel.setRuntimeMode(RuntimeMode.Root)
+                        navigator.navigate(Screen.Main, true)
+                    } else {
+                        val result = snackbarHostState.showSnackbar(
+                            getString(Res.string.text_root_permisstion_denied),
+                            actionLabel = getString(Res.string.text_restart),
+                        )
+                        when (result) {
+                            SnackbarResult.Dismissed -> Unit
+                            SnackbarResult.ActionPerformed -> restartApp()
+                        }
+                    }
+                }
+
+                RuntimeMode.Shizuku -> {
+                    if (viewModel.checkShizukuMode()) {
+                        viewModel.setRuntimeMode(RuntimeMode.Shizuku)
+                        navigator.navigate(Screen.Main, true)
+                    } else {
+                        snackbarHostState.showSnackbar(
+                            getString(Res.string.text_shizuku_permission_denied),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun onModeSelected(mode: RuntimeMode) {
+        scope.launch {
+            val accepted = TweakDataStore.hasAcceptedUserAgreementFlow().first()
+            if (accepted) {
+                proceedWithMode(mode)
+            } else {
+                pendingRuntimeMode = mode
+                showAgreementDialog = true
+            }
         }
     }
 
@@ -83,6 +153,34 @@ internal fun SplashScreen(
             modifier = Modifier.fillMaxSize(),
             popupHost = {
                 CheckRuntimeDialog(checkLoadingState)
+                AlertDialog(
+                    show = showAgreementDialog,
+                    title = stringResource(Res.string.text_user_agreement_title),
+                    summary = stringResource(Res.string.text_user_agreement_content),
+                    confirmText = stringResource(Res.string.text_user_agreement_confirm),
+                    cancelText = stringResource(Res.string.text_user_agreement_disagree),
+                    confirmCountdownSeconds = 10,
+                    confirmSkipClickCount = 5,
+                    summaryScrollable = true,
+                    dismissOnOutsideOrBack = false,
+                    onDismissRequest = { },
+                    onConfirm = {
+                        scope.launch {
+                            TweakDataStore.setHasAcceptedUserAgreement(true)
+                            showAgreementDialog = false
+                            val mode = pendingRuntimeMode
+                            pendingRuntimeMode = null
+                            if (mode != null) {
+                                proceedWithMode(mode)
+                            }
+                        }
+                    },
+                    onCancel = {
+                        showAgreementDialog = false
+                        pendingRuntimeMode = null
+                        exitApp()
+                    },
+                )
             },
             containerColor = Color.Transparent
         ) {
@@ -115,7 +213,13 @@ internal fun SplashScreen(
                     style = MiuixTheme.textStyles.footnote2,
                 )
 
-                if ((runtimeMode == null || runtimeMode == RuntimeMode.Unknow) && !checkLoadingState) {
+                // 未同意协议时始终展示模式列表（避免升级用户因已有模式而卡住空白页）
+                val showModeList = !checkLoadingState && (
+                    !agreementAccepted ||
+                        runtimeMode == null ||
+                        runtimeMode == RuntimeMode.Unknow
+                    )
+                if (showModeList) {
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Column(
@@ -136,26 +240,7 @@ internal fun SplashScreen(
                                         },
                                         title = stringResourceByRuntimeMode(mode),
                                         description = stringResourceByRuntimeModeDescription(mode),
-                                        action = {
-                                            scope.launch {
-                                                if (viewModel.checkRootMode()) {
-                                                    viewModel.setRuntimeMode(RuntimeMode.Root)
-                                                    navigator.navigate(Screen.Main, true)
-                                                } else {
-                                                    val result = snackbarHostState.showSnackbar(
-                                                        getString(Res.string.text_root_permisstion_denied),
-                                                        actionLabel = getString(Res.string.text_restart),
-                                                    )
-
-                                                    when (result) {
-                                                        SnackbarResult.Dismissed -> Unit
-                                                        SnackbarResult.ActionPerformed -> {
-                                                            restartApp()
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        action = { onModeSelected(mode) },
                                     )
                                 }
 
@@ -169,16 +254,7 @@ internal fun SplashScreen(
                                         },
                                         title = stringResourceByRuntimeMode(mode),
                                         description = stringResourceByRuntimeModeDescription(mode),
-                                        action = {
-                                            scope.launch {
-                                                if (viewModel.checkShizukuMode()) {
-                                                    viewModel.setRuntimeMode(RuntimeMode.Shizuku)
-                                                    navigator.navigate(Screen.Main, true)
-                                                } else {
-                                                    snackbarHostState.showSnackbar(getString(Res.string.text_shizuku_permission_denied))
-                                                }
-                                            }
-                                        }
+                                        action = { onModeSelected(mode) },
                                     )
                                 }
                             }

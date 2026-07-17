@@ -49,6 +49,8 @@ object TweakDataStore {
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
     // 是否申请过通知权限
     private val hasRequestNotificationPermission = booleanPreferencesKey("has_request_notification_permission")
+    // 是否已同意使用协议
+    private val hasAcceptedUserAgreement = booleanPreferencesKey("has_accepted_user_agreement")
 
     /**
      * 电池信息显示类型，0 - 显示功率，1显示电流
@@ -191,6 +193,18 @@ object TweakDataStore {
             it.toMutablePreferences().also { preferences ->
                 preferences[hasRequestNotificationPermission] = true
 
+            }
+        }
+    }
+
+    fun hasAcceptedUserAgreementFlow(): Flow<Boolean> = preferences.data.map {
+        it[hasAcceptedUserAgreement] ?: false
+    }
+
+    suspend fun setHasAcceptedUserAgreement(accepted: Boolean = true) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[hasAcceptedUserAgreement] = accepted
             }
         }
     }

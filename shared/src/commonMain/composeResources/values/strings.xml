@@ -7,6 +7,10 @@
     <string name="text_root_mode_description">可使用全部功能</string>
     <string name="text_shizuku_mode_description">可使用部分功能</string>
     <string name="text_checking_runtime">检测运行环境中...</string>
+    <string name="text_user_agreement_title">使用协议</string>
+    <string name="text_user_agreement_confirm">同意协议</string>
+    <string name="text_user_agreement_disagree">退出软件</string>
+    <string name="text_user_agreement_content">欢迎使用 Tweak（以下简称「本软件」）。在选择运行模式并继续使用前，请仔细阅读并理解本协议。点击「已知晓协议并同意」即表示您已阅读、理解并同意本协议全部内容。\n\n一、软件定位与功能范围\n本软件是面向 Android 设备的系统工具箱，可在 Root 或 Shizuku 等授权环境下提供设备信息查看、应用管理、文件访问、系统参数调整、线刷/刷机辅助、性能监控等功能。具体可用能力取决于您选择的运行模式、设备机型、系统版本及已授予的权限。\n\n二、高风险功能特别提示\n本软件包含可能影响系统稳定性与数据安全的高危能力，例如但不限于：系统分区读写与刷写、Bootloader / Fastboot 相关操作、权限提升、应用冻结/卸载、修改系统配置等。误操作可能导致设备无法开机、数据丢失、保修失效或其他不可逆后果。请仅在充分了解操作含义、已完成必要备份、并确认设备与固件匹配的前提下使用。\n\n三、权限与使用方式\n部分功能需要 Root、Shizuku、USB 调试、无障碍、悬浮窗或存储访问等权限。您应自行确认授权来源合法、可信，并知悉相关权限可能带来的安全与隐私风险。请勿将本软件用于未授权访问、破坏系统安全机制或任何违法违规用途。\n\n四、免责声明\n本软件按「现状」提供，开发者不对因使用或无法使用本软件而导致的任何直接或间接损失承担责任，包括但不限于设备损坏、数据丢失、系统异常、业务中断等。您应自行承担使用高危功能的全部风险。若您不具备相应技术能力，请勿使用相关功能。\n\n五、协议更新\n本协议可能随软件版本更新而调整。继续使用即视为接受更新后的协议内容。\n\n请谨慎操作，对自己的设备与数据负责。</string>
     <string name="text_root_permisstion_denied">权限被拒绝，重启App后再试</string>
     <string name="text_shizuku_permission_denied">Shizuku权限被拒绝，请检查Shizuku是否运行</string>
     <string name="text_restart">重启</string>

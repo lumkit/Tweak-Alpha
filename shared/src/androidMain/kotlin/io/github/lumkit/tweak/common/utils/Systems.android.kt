@@ -49,6 +49,11 @@ actual fun restartApp() {
     exitProcess(0)
 }
 
+actual fun exitApp() {
+    Process.killProcess(Process.myPid())
+    exitProcess(0)
+}
+
 actual val SDK_INT: Int
     get() = Build.VERSION.SDK_INT
 
