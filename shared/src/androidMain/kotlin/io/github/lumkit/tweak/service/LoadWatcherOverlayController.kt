@@ -204,7 +204,8 @@ class LoadWatcherViewModel : BaseViewModel() {
         val memoryFreq = DeviceMemoryInfoUtils.getMemoryFreq()
         val cpuTemperature = DeviceTemperatureUtils.getAverageCpuTemperature()
         val gpuMemoryUsage = GpuUtils.getMemoryUsage()
-        val fpsText = FpsUtils.getCurrentFpsText()
+        val fps = FpsUtils.getCurrentFps()
+        val fpsText = fps.takeIf { it > 0f }?.let { "%.1f".format(it) }
         val moreInfo = buildMoreInfo(
             memoryInfo = memoryInfo,
             memoryFreq = memoryFreq,
@@ -227,7 +228,7 @@ class LoadWatcherViewModel : BaseViewModel() {
             batteryTemperature = batterySnapshot.temperatureCelsius ?: 0f,
             moreInfo = moreInfo,
             fpsText = fpsText,
-            fpsRatio = FpsUtils.getCurrentFps() / getDeviceScreenRefreshRate(),
+            fpsRatio = fps / getDeviceScreenRefreshRate(),
         )
     }
 
