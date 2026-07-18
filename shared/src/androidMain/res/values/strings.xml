@@ -48,4 +48,9 @@
     <!-- LineFlashService -->
     <string name="channel_line_flash">线刷服务</string>
     <string name="channel_line_flash_description">显示线刷解压、校验与刷写进度</string>
+
+    <!-- ExtractApkService -->
+    <string name="channel_extract_apk">安装包提取</string>
+    <string name="channel_extract_apk_description">显示安装包提取进度</string>
+    <string name="text_extract_apk_notification_title">正在提取安装包</string>
 </resources>

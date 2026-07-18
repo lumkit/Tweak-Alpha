@@ -18,6 +18,7 @@ import io.github.lumkit.tweak.common.Const
 import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
+import io.github.lumkit.tweak.model.asNativeFileBackend
 import io.github.lumkit.tweak.sharednative.NativeFileBundles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -424,50 +425,93 @@ actual object AppsHelper {
             removePackage(packageName)
         }
 
-    actual suspend fun extractApk(packageName: String, targetDir: String): AppOperationResult =
-        withContext(Dispatchers.IO) {
-            val info = _apps.value.find { it.packageName == packageName }
-                ?: return@withContext AppOperationResult.Failure("未找到应用：$packageName")
+    actual suspend fun extractApk(
+        packageName: String,
+        targetDir: String,
+        onProgress: ((copiedBytes: Long, totalBytes: Long, fileName: String) -> Unit)?,
+    ): AppOperationResult = withContext(Dispatchers.IO) {
+        val info = _apps.value.find { it.packageName == packageName }
+            ?: return@withContext AppOperationResult.Failure("未找到应用：$packageName")
 
-            val appInfo = runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    application.packageManager.getApplicationInfo(
-                        packageName,
-                        PackageManager.ApplicationInfoFlags.of(0L),
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    application.packageManager.getApplicationInfo(packageName, 0)
-                }
-            }.getOrNull()
-
-            val sources = buildList {
-                val base = appInfo?.sourceDir ?: info.sourceDir
-                if (base.isNotBlank()) add(base)
-                appInfo?.splitSourceDirs?.forEach { if (!it.isNullOrBlank()) add(it) }
-            }
-            if (sources.isEmpty()) {
-                return@withContext AppOperationResult.Failure("未找到 APK 源文件")
-            }
-
-            val destDir = "${targetDir.trimEnd('/')}/$packageName"
-            val commands = buildList {
-                add("mkdir -p '$destDir'")
-                sources.forEach { source ->
-                    add("cp -f '$source' '$destDir/'")
-                }
-            }
-            val output = runCatching { ReusableShells.execSync(commands) }
-                .getOrElse { return@withContext AppOperationResult.Failure(it.message ?: "提取失败") }
-
-            if (output.contains("error", ignoreCase = true) ||
-                output.contains("No such file", ignoreCase = true)
-            ) {
-                AppOperationResult.Failure(output.ifBlank { "提取失败" })
+        val appInfo = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                application.packageManager.getApplicationInfo(
+                    packageName,
+                    PackageManager.ApplicationInfoFlags.of(0L),
+                )
             } else {
-                AppOperationResult.Success
+                @Suppress("DEPRECATION")
+                application.packageManager.getApplicationInfo(packageName, 0)
             }
+        }.getOrNull()
+
+        val sources = buildList {
+            val base = appInfo?.sourceDir ?: info.sourceDir
+            if (base.isNotBlank()) add(base)
+            appInfo?.splitSourceDirs?.forEach { if (!it.isNullOrBlank()) add(it) }
         }
+        if (sources.isEmpty()) {
+            return@withContext AppOperationResult.Failure("未找到 APK 源文件")
+        }
+
+        val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        val backend = runtimeMode.asNativeFileBackend()
+        if (backend == NativeFileBackend.User) {
+            return@withContext AppOperationResult.Failure("当前运行模式不支持特权文件提取")
+        }
+
+        val destDir = targetDir.trimEnd('/')
+        Files.mkdirs(destDir).getOrNull()
+            ?: return@withContext AppOperationResult.Failure("无法创建目标目录：$destDir")
+
+        val totalBytes = sources.sumOf { path ->
+            Files.length(path).getOrNull()?.coerceAtLeast(0L) ?: 0L
+        }.coerceAtLeast(1L)
+
+        var copiedBytes = 0L
+        val buffer = ByteArray(64 * 1024)
+        var lastFileName = ""
+        try {
+            for (source in sources) {
+                val fileName = buildExtractedApkFileName(
+                    appName = info.appName.ifBlank { packageName },
+                    versionName = info.versionName,
+                    versionCode = info.versionCode,
+                    sourcePath = source,
+                    sourceCount = sources.size,
+                )
+                lastFileName = fileName
+                val destPath = destDir joinPath fileName
+                onProgress?.invoke(copiedBytes, totalBytes, fileName)
+
+                openPrivilegedReadOnlyFd(backend, source).use { readPfd ->
+                    openPrivilegedWriteOnlyFd(
+                        backend = backend,
+                        path = destPath,
+                        create = true,
+                        truncate = true,
+                    ).use { writePfd ->
+                        android.os.ParcelFileDescriptor.AutoCloseInputStream(readPfd).use { input ->
+                            android.os.ParcelFileDescriptor.AutoCloseOutputStream(writePfd).use { output ->
+                                while (true) {
+                                    val read = input.read(buffer)
+                                    if (read <= 0) break
+                                    output.write(buffer, 0, read)
+                                    copiedBytes += read
+                                    onProgress?.invoke(copiedBytes, totalBytes, fileName)
+                                }
+                                output.flush()
+                            }
+                        }
+                    }
+                }
+            }
+            onProgress?.invoke(totalBytes, totalBytes, lastFileName)
+            AppOperationResult.Success
+        } catch (throwable: Throwable) {
+            AppOperationResult.Failure(throwable.message ?: "提取失败")
+        }
+    }
 
     actual suspend fun setDisabled(packageName: String, disabled: Boolean): AppOperationResult {
         val command = if (disabled) "pm disable $packageName" else "pm enable $packageName"
@@ -639,6 +683,50 @@ private fun String.toAppAbi(): AppAbi? {
         normalized.startsWith("riscv64") -> AppAbi.RISCV64
         else -> null
     }
+}
+
+/**
+ * 生成提取 APK 文件名：`【应用名】-【版本名称（版本号）】.后缀`
+ * 多 APK（split）时，非 base 包在版本段后追加原 split 标识以免重名。
+ */
+private fun buildExtractedApkFileName(
+    appName: String,
+    versionName: String,
+    versionCode: Long,
+    sourcePath: String,
+    sourceCount: Int,
+): String {
+    val safeName = sanitizeExtractFileNameComponent(appName)
+    val safeVersion = sanitizeExtractFileNameComponent(
+        versionName.ifBlank { versionCode.toString() },
+    )
+    val stem = "$safeName-$safeVersion($versionCode)"
+    val originalName = sourcePath.substringAfterLast('/').ifBlank { "base.apk" }
+    val extension = originalName.substringAfterLast('.', missingDelimiterValue = "apk")
+        .ifBlank { "apk" }
+    if (sourceCount <= 1) {
+        return "$stem.$extension"
+    }
+    val originalStem = originalName.substringBeforeLast('.', originalName)
+    if (originalStem.equals("base", ignoreCase = true)) {
+        return "$stem.$extension"
+    }
+    val splitLabel = originalStem
+        .removePrefix("split_")
+        .let(::sanitizeExtractFileNameComponent)
+    return "$stem-$splitLabel.$extension"
+}
+
+private fun sanitizeExtractFileNameComponent(value: String): String {
+    return value.map { ch ->
+        when {
+            ch.code < 32 || ch in "\\/:*?\"<>|" -> '_'
+            else -> ch
+        }
+    }.joinToString("")
+        .trim()
+        .trim('.')
+        .ifBlank { "unknown" }
 }
 
 private fun String.toAppAbiFromPath(): AppAbi? {

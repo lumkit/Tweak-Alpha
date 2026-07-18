@@ -124,10 +124,18 @@ expect object AppsHelper {
     /**
      * 提取应用 APK 到指定目录（含 split APK）。
      *
+     * 通过特权 Binder FD 流式拷贝，并回调进度。
+     * 文件直接写入 [targetDir]，命名为 `【应用名】-【版本名称（版本号）】.后缀`。
+     *
      * @param packageName 目标包名
      * @param targetDir 目标目录绝对路径
+     * @param onProgress 已拷贝字节 / 总字节 / 当前文件名
      */
-    suspend fun extractApk(packageName: String, targetDir: String): AppOperationResult
+    suspend fun extractApk(
+        packageName: String,
+        targetDir: String,
+        onProgress: ((copiedBytes: Long, totalBytes: Long, fileName: String) -> Unit)? = null,
+    ): AppOperationResult
 
     /**
      * 设置应用禁用/启用状态。

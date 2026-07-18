@@ -282,6 +282,29 @@ object TweakDataStore {
             }
         }
     }
+
+    private val apkExportDirKey = stringPreferencesKey("apk_export_dir")
+
+    /**
+     * APK 提取目录；未设置时回落到公共 Download 目录。
+     */
+    fun apkExportDirFlow(): Flow<String> = preferences.data.map {
+        it[apkExportDirKey]?.takeIf(String::isNotBlank) ?: DEFAULT_APK_EXPORT_DIR
+    }
+
+    suspend fun apkExportDir(): String {
+        return apkExportDirFlow().firstOrNull() ?: DEFAULT_APK_EXPORT_DIR
+    }
+
+    suspend fun setApkExportDir(path: String) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[apkExportDirKey] = path.trim()
+            }
+        }
+    }
+
+    const val DEFAULT_APK_EXPORT_DIR = "/storage/emulated/0/Download"
 }
 
 data class FpsSourceConfig(

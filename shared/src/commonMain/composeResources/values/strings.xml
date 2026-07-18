@@ -280,4 +280,19 @@
     <string name="text_android_api_format">Android %1$s（API %2$d）</string>
     <string name="text_close">关闭</string>
     <string name="text_launch">启动</string>
+    <string name="text_export_apk">提取安装包</string>
+    <string name="text_apk_export_dir">安装包提取目录</string>
+    <string name="text_apk_export_dir_description">提取 APK 时保存到此文件夹</string>
+    <string name="text_extract_apk_running">正在提取安装包...</string>
+    <string name="text_extract_apk_progress_format">%1$d% · %2$s</string>
+    <string name="text_extract_apk_task_label">当前：%1$s（%2$d/%3$d）</string>
+    <string name="text_extract_apk_task_progress">任务进度 %1$d%</string>
+    <string name="text_extract_apk_overall_progress">总进度 %1$d%</string>
+    <string name="text_extract_apk_success">已提取到：%1$s</string>
+    <string name="text_extract_apk_failed">提取失败：%1$s</string>
+    <string name="text_extract_apk_batch_success">已提取 %1$d 个应用到：%2$s</string>
+    <string name="text_extract_apk_batch_partial">成功 %1$d 个，失败 %2$d 个，目录：%3$s</string>
+    <string name="text_extract_apk_batch_failed">全部提取失败</string>
+    <string name="text_extract_apk_already_running">已有提取任务进行中</string>
+    <string name="text_extract_apk_run_in_background">后台运行</string>
 </resources>

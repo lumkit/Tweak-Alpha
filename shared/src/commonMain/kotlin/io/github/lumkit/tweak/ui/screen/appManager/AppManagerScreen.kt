@@ -72,6 +72,9 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -119,6 +122,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.InputField
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
@@ -133,6 +137,8 @@ import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Close2
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.MoveFile
+import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -170,6 +176,13 @@ import tweak_alpha.shared.generated.resources.text_dialog_unfreeze_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_uninstall_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_warm_tip
 import tweak_alpha.shared.generated.resources.text_enable_app
+import tweak_alpha.shared.generated.resources.text_export_apk
+import tweak_alpha.shared.generated.resources.text_extract_apk_overall_progress
+import tweak_alpha.shared.generated.resources.text_extract_apk_progress_format
+import tweak_alpha.shared.generated.resources.text_extract_apk_run_in_background
+import tweak_alpha.shared.generated.resources.text_extract_apk_running
+import tweak_alpha.shared.generated.resources.text_extract_apk_task_label
+import tweak_alpha.shared.generated.resources.text_extract_apk_task_progress
 import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_force_kill_app
 import tweak_alpha.shared.generated.resources.text_launch
@@ -276,6 +289,7 @@ private fun AppManagerContent(
         onExitSelection = viewModel::cleanSelectedPackageNames,
     )
     AppManagerLoadStateEffects(viewModel)
+    AppManagerExtractEffects()
     AppManagerResumeSyncEffect(
         lifecycleOwner = lifecycleOwner,
         onResume = viewModel::syncAppsOnResume,
@@ -284,6 +298,7 @@ private fun AppManagerContent(
         loadingState = loadingState,
         loadingTextRes = loadingTextRes,
     )
+    ExtractApkProgressDialog()
 
     ScreenSurface {
         Scaffold(
@@ -373,6 +388,19 @@ private fun AppManagerLoadStateEffects(viewModel: AppManagerViewModel) {
         WatchSnackBarState("enableApp", hostState)
         WatchSnackBarState("uninstallSelectedApps", hostState)
         WatchSnackBarState("uninstallApp", hostState)
+        WatchSnackBarState("extractApk", hostState)
+    }
+}
+
+@Composable
+private fun AppManagerExtractEffects() {
+    val hostState = LocalSnackBarHostState.current
+    val extractState by ExtractApkSession.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(extractState.snackbarMessage) {
+        val message = extractState.snackbarMessage?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
+        hostState.showSnackbar(message)
+        ExtractApkSession.consumeSnackbarMessage()
     }
 }
 
@@ -426,6 +454,100 @@ private fun AppManagerLoadingDialog(
                 text = stringResource(loadingTextRes),
                 style = MiuixTheme.textStyles.main
             )
+        }
+    }
+}
+
+@Composable
+private fun ExtractApkProgressDialog() {
+    val extractState by ExtractApkSession.state.collectAsStateWithLifecycle()
+    val totalCount = extractState.totalCount.coerceAtLeast(1)
+    val currentIndex = (extractState.currentIndex + 1).coerceIn(1, totalCount)
+    val showDialog = extractState.showDialog
+
+    WindowDialog(
+        show = showDialog,
+        enableWindowDim = true,
+        onDismissRequest = null,
+    ) {
+        // 后注册同系 handler，吞掉预测返回，避免弹窗被手势动画带偏/关闭
+        val blockBackState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
+        NavigationBackHandler(
+            state = blockBackState,
+            isBackEnabled = showDialog,
+            onBackCompleted = { },
+        )
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(Res.string.text_extract_apk_running),
+                style = MiuixTheme.textStyles.main,
+            )
+            Text(
+                text = stringResource(
+                    Res.string.text_extract_apk_task_label,
+                    extractState.currentAppName.ifBlank { "--" },
+                    currentIndex,
+                    totalCount,
+                ),
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = stringResource(
+                        Res.string.text_extract_apk_task_progress,
+                        extractState.taskProgress,
+                    ),
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                )
+                LinearProgressIndicator(
+                    progress = extractState.taskProgress / 100f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = stringResource(
+                        Res.string.text_extract_apk_overall_progress,
+                        extractState.overallProgress,
+                    ),
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                )
+                LinearProgressIndicator(
+                    progress = extractState.overallProgress / 100f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Text(
+                text = extractState.message.ifBlank {
+                    stringResource(
+                        Res.string.text_extract_apk_progress_format,
+                        extractState.taskProgress,
+                        extractState.currentFile.ifBlank { "--" },
+                    )
+                },
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+            )
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = ExtractApkSession::dismissDialog,
+            ) {
+                Text(text = stringResource(Res.string.text_extract_apk_run_in_background))
+            }
         }
     }
 }
@@ -814,6 +936,34 @@ private fun BoxScope.BottomToolbar(
                     )
                     Text(
                         text = stringResource(Res.string.text_app_uninstall),
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurface.copy(.75f)
+                    )
+                }
+            }
+
+            // 提取安装包
+            Block {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                        .weight(1f)
+                        .alpha(if (isEmpty) .31f else 1f)
+                        .clickable(
+                            enabled = !isEmpty,
+                        ) {
+                            viewModel.extractSelectedApps()
+                        },
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.MoveFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
+                    )
+                    Text(
+                        text = stringResource(Res.string.text_export_apk),
                         style = MiuixTheme.textStyles.footnote1,
                         color = MiuixTheme.colorScheme.onSurface.copy(.75f)
                     )
@@ -1253,15 +1403,42 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
                         )
                     },
                     endActions = {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    AppsHelper.launch(info.packageName)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColorsPrimary()
+                        TooltipBox(
+                            text = stringResource(Res.string.text_launch) + info.appName,
+                            enabled = info.state == AppState.ENABLED
                         ) {
-                            Text(stringResource(Res.string.text_launch))
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        AppsHelper.launch(info.packageName)
+                                    }
+                                },
+                                enabled = info.state == AppState.ENABLED,
+                                modifier = Modifier.alpha(if (info.state == AppState.ENABLED) 1f else .21f)
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Play,
+                                    contentDescription = null,
+                                )
+                            }
+                        }
+
+                        TooltipBox(
+                            text = stringResource(Res.string.text_export_apk),
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.extractApk(
+                                        packageName = info.packageName,
+                                        appName = info.appName,
+                                    )
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.MoveFile,
+                                    contentDescription = null,
+                                )
+                            }
                         }
                     },
                     title = info.appName,

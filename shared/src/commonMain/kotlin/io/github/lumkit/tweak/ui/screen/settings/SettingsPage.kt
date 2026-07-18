@@ -49,6 +49,8 @@ import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
+import io.github.lumkit.tweak.ui.screen.filePicker.FilePickerAction
+import io.github.lumkit.tweak.ui.screen.filePicker.rememberFilePickerLauncher
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
@@ -73,6 +75,8 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_logo_qq
 import tweak_alpha.shared.generated.resources.text_about
+import tweak_alpha.shared.generated.resources.text_apk_export_dir
+import tweak_alpha.shared.generated.resources.text_apk_export_dir_description
 import tweak_alpha.shared.generated.resources.text_app_version
 import tweak_alpha.shared.generated.resources.text_auto_start
 import tweak_alpha.shared.generated.resources.text_auto_start_description
@@ -379,6 +383,25 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                         notificationLauncher.requestNotificationPermission()
                     }
                 }
+            )
+        }
+
+        // 安装包提取目录
+        Block {
+            val exportDir by TweakDataStore.apkExportDirFlow().collectAsStateWithLifecycle(TweakDataStore.DEFAULT_APK_EXPORT_DIR)
+            val folderPicker = rememberFilePickerLauncher { paths ->
+                val path = paths.firstOrNull()?.takeIf(String::isNotBlank) ?: return@rememberFilePickerLauncher
+                viewModel.setApkExportDir(path)
+            }
+
+            ArrowPreference(
+                title = stringResource(Res.string.text_apk_export_dir),
+                summary = exportDir.ifBlank {
+                    stringResource(Res.string.text_apk_export_dir_description)
+                },
+                onClick = {
+                    folderPicker.launch(FilePickerAction.Folder)
+                },
             )
         }
     }

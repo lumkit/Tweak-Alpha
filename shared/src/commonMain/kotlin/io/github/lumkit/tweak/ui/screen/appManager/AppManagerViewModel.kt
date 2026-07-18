@@ -2,10 +2,12 @@ package io.github.lumkit.tweak.ui.screen.appManager
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.feature.commitStartExtractApk
 import io.github.lumkit.tweak.common.utils.AppInfo
 import io.github.lumkit.tweak.common.utils.AppOperationResult
 import io.github.lumkit.tweak.common.utils.AppState
 import io.github.lumkit.tweak.common.utils.AppsHelper
+import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,6 +21,7 @@ import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.text_app_uninstall
 import tweak_alpha.shared.generated.resources.text_dialog_running_task
 import tweak_alpha.shared.generated.resources.text_enable_app
+import tweak_alpha.shared.generated.resources.text_extract_apk_already_running
 import tweak_alpha.shared.generated.resources.text_force_app_failed
 import tweak_alpha.shared.generated.resources.text_force_app_partial_success
 import tweak_alpha.shared.generated.resources.text_force_app_success
@@ -356,6 +359,62 @@ class AppManagerViewModel: BaseViewModel() {
 
     fun setTargetAppInfo(info: AppInfo?){
         _targetAppInfo.value = info
+    }
+
+    /**
+     * 启动单个应用的安装包提取。
+     */
+    fun extractApk(packageName: String, appName: String) = suspendLaunch(
+        id = "extractApk",
+    ) {
+        startExtractApk(
+            listOf(
+                ExtractApkTask(
+                    packageName = packageName,
+                    appName = appName,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * 多选批量提取安装包：串行执行，共用一个进度 Dialog。
+     */
+    fun extractSelectedApps() = suspendLaunch(
+        id = "extractApk",
+    ) {
+        val packages = consumeSelectedPackages()
+        if (packages.isEmpty()) {
+            return@suspendLaunch
+        }
+        val appsByPackage = AppsHelper.apps.value.associateBy { it.packageName }
+        val tasks = packages.map { packageName ->
+            val info = appsByPackage[packageName]
+            ExtractApkTask(
+                packageName = packageName,
+                appName = info?.appName?.takeIf(String::isNotBlank) ?: packageName,
+            )
+        }
+        startExtractApk(tasks)
+    }
+
+    private suspend fun BaseViewModel.LoadStateCoroutineScope.startExtractApk(
+        tasks: List<ExtractApkTask>,
+    ) {
+        if (tasks.isEmpty()) {
+            return
+        }
+        if (ExtractApkSession.isRunning()) {
+            success(getString(Res.string.text_extract_apk_already_running))
+            return
+        }
+        val targetDir = TweakDataStore.apkExportDir()
+        setTargetAppInfo(null)
+        commitStartExtractApk(
+            tasks = tasks,
+            targetDir = targetDir,
+        )
+        success()
     }
 
     /**
