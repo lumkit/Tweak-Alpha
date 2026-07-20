@@ -197,8 +197,8 @@ object TweakDataStore {
         }
     }
 
-    fun hasAcceptedUserAgreementFlow(): Flow<Boolean> = preferences.data.map {
-        it[hasAcceptedUserAgreement] ?: false
+    fun hasAcceptedUserAgreementFlow(): Flow<Boolean?> = preferences.data.map {
+        it[hasAcceptedUserAgreement]
     }
 
     suspend fun setHasAcceptedUserAgreement(accepted: Boolean = true) {

@@ -38,7 +38,7 @@ import io.github.lumkit.tweak.model.stringResourceByRuntimeMode
 import io.github.lumkit.tweak.model.stringResourceByRuntimeModeDescription
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
@@ -80,14 +80,14 @@ internal fun SplashScreen(
     val runtimeModes = remember { RuntimeMode.entries.filter { it != RuntimeMode.Unknow } }
     val checkLoadingState by viewModel.checkLoadingState.collectAsStateWithLifecycle()
     val runtimeMode by viewModel.runtimeModeState.collectAsStateWithLifecycle()
-    val agreementAccepted by TweakDataStore.hasAcceptedUserAgreementFlow().collectAsStateWithLifecycle(initialValue = false)
+    val agreementAccepted by TweakDataStore.hasAcceptedUserAgreementFlow().collectAsStateWithLifecycle(initialValue = null)
 
     var showAgreementDialog by remember { mutableStateOf(false) }
     var pendingRuntimeMode by remember { mutableStateOf<RuntimeMode?>(null) }
 
     // 已同意协议且已选模式：走原有自动检测
     LaunchedEffect(viewModel, runtimeMode, agreementAccepted) {
-        if (!agreementAccepted) return@LaunchedEffect
+        if (agreementAccepted == null || agreementAccepted == false) return@LaunchedEffect
         viewModel.checkRuntime {
             navigator.navigate(Screen.Main, true)
         }
@@ -95,7 +95,7 @@ internal fun SplashScreen(
 
     // 升级后已有模式但未同意协议：自动弹出协议，同意后继续原模式校验
     LaunchedEffect(runtimeMode, agreementAccepted) {
-        if (agreementAccepted || showAgreementDialog) return@LaunchedEffect
+        if (agreementAccepted == true || showAgreementDialog) return@LaunchedEffect
         val mode = runtimeMode
         if (mode == null || mode == RuntimeMode.Unknow) return@LaunchedEffect
         pendingRuntimeMode = mode
@@ -138,7 +138,7 @@ internal fun SplashScreen(
 
     fun onModeSelected(mode: RuntimeMode) {
         scope.launch {
-            val accepted = TweakDataStore.hasAcceptedUserAgreementFlow().first()
+            val accepted = TweakDataStore.hasAcceptedUserAgreementFlow().firstOrNull() ?: false
             if (accepted) {
                 proceedWithMode(mode)
             } else {
@@ -215,7 +215,7 @@ internal fun SplashScreen(
 
                 // 未同意协议时始终展示模式列表（避免升级用户因已有模式而卡住空白页）
                 val showModeList = !checkLoadingState && (
-                    !agreementAccepted ||
+                    agreementAccepted == null || agreementAccepted == false ||
                         runtimeMode == null ||
                         runtimeMode == RuntimeMode.Unknow
                     )
