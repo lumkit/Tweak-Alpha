@@ -151,21 +151,22 @@ object ProcessUtilLite {
         }
         return runCatching {
             val name = columns[1]
-            if (isExcluded(name)) {
+            val command = columns[2]
+            if (isExcluded(name, command)) {
                 return null
             }
             ProcessInfo(
                 cpu = columns[0].toFloat(),
                 name = name,
-                command = columns[2],
+                command = command,
                 pid = columns[3].toInt(),
                 user = columns.getOrElse(4) { "" },
             )
         }.getOrNull()
     }
 
-    private fun isExcluded(name: String): Boolean {
-        return name in staticExcludes || name == packageName
+    private fun isExcluded(name: String, command: String): Boolean {
+        return name in staticExcludes || isSelfAppProcess(name, command)
     }
 
     private fun String.shellArg(): String = "'${replace("'", "'\\''")}'"

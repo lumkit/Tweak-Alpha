@@ -423,7 +423,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         launch(Dispatchers.IO) {
             _topProcessState.value = ProcessUtilLite.getAllProcess()
                 .sortedByDescending { it.cpu }
-                .take(100)
+                .take(15)
                 .map { info ->
                     val cpu = info.cpu.coerceAtLeast(0f)
                     TopProcessVo(

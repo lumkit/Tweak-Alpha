@@ -31,6 +31,7 @@ import io.github.lumkit.tweak.ui.screen.feature.FeatureRegistry
 import io.github.lumkit.tweak.ui.screen.filePicker.FilePickerScreen
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordDetailScreen
 import io.github.lumkit.tweak.ui.screen.main.MainScreen
+import io.github.lumkit.tweak.ui.screen.processManager.ProcessManagerContent
 import io.github.lumkit.tweak.ui.screen.settings.OpenSourceScreen
 import io.github.lumkit.tweak.ui.screen.splash.SplashScreen
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -117,9 +118,19 @@ private fun AppRoute(
                 MainScreen()
             }
             featureProviders.onEach { featureProvider ->
-                entry(featureProvider.feature.route) {
-                    featureProvider.Content()
+                when (val route = featureProvider.feature.route) {
+                    is Screen.ProcessManager -> Unit
+                    else -> entry(route) {
+                        featureProvider.Content()
+                    }
                 }
+            }
+
+            entry<Screen.ProcessManager> {
+                ProcessManagerContent(
+                    scrollToPackage = it.scrollToPackage,
+                    scrollToPid = it.scrollToPid,
+                )
             }
 
             entry<Screen.FpsRecordDetail> {

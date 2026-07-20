@@ -28,6 +28,18 @@ sealed class Screen: NavKey {
     @Serializable
     data object AppManager: Screen()
 
+    /**
+     * 进程管理。
+     *
+     * @param scrollToPackage 进入后滚动定位的包名（可为空）
+     * @param scrollToPid 进入后优先按 PID 定位（-1 表示忽略）
+     */
+    @Serializable
+    data class ProcessManager(
+        val scrollToPackage: String = "",
+        val scrollToPid: Int = -1,
+    ) : Screen()
+
     @Serializable
     data object FlashRom : Screen()
 

@@ -69,6 +69,7 @@ import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
 import io.github.lumkit.tweak.navigation.LocalNavigator
+import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.service.OverlayMonitor
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.Dispatchers
@@ -182,8 +183,13 @@ fun InfoPage() {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item {
-                    CpuInfoContent {
-
+                    CpuInfoContent { vo ->
+                        navigator.navigate(
+                            Screen.ProcessManager(
+                                scrollToPackage = vo.packageName,
+                                scrollToPid = vo.pid,
+                            )
+                        )
                     }
                 }
 

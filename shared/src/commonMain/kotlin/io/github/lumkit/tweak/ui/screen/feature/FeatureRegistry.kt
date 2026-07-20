@@ -6,6 +6,7 @@ import io.github.lumkit.tweak.ui.screen.appManager.AppManagerProvider
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureCategory
 import io.github.lumkit.tweak.ui.screen.flashRom.FlashRomProvider
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordingProvider
+import io.github.lumkit.tweak.ui.screen.processManager.ProcessManagerProvider
 import io.github.lumkit.tweak.ui.screen.updateSys.UpdateSystemProvider
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.text_advanced_modules
@@ -55,6 +56,7 @@ object FeatureRegistry {
                 title = Res.string.text_app,
                 features = setOf(
                     AppManagerProvider,
+                    ProcessManagerProvider,
                 )
             )
         )

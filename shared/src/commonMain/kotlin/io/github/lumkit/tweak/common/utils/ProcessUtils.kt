@@ -126,14 +126,14 @@ object ProcessUtils {
         }
         return runCatching {
             val name = columns[3]
-            if (isExcluded(name)) {
-                return null
-            }
             val command = columns.getOrElse(6) { "" }
             val cmdline = if (command.isNotEmpty() && row.contains(command)) {
                 row.substring(row.indexOf(command) + command.length).trim()
             } else {
                 ""
+            }
+            if (isExcluded(name, command, cmdline)) {
+                return null
             }
             ProcessInfo(
                 cpu = columns[0].toFloat(),
@@ -148,8 +148,8 @@ object ProcessUtils {
         }.getOrNull()
     }
 
-    private fun isExcluded(name: String): Boolean {
-        return name in staticExcludes || name == packageName
+    private fun isExcluded(name: String, command: String, cmdline: String): Boolean {
+        return name in staticExcludes || isSelfAppProcess(name, command, cmdline)
     }
 
     private fun str2Long(str: String): Long {
