@@ -10,6 +10,7 @@ import io.github.lumkit.tweak.common.utils.CpuLoadUtils
 import io.github.lumkit.tweak.common.utils.DeviceMemoryInfoUtils
 import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.common.utils.GpuUtils
+import io.github.lumkit.tweak.common.utils.ProcessUtilLite
 import io.github.lumkit.tweak.common.utils.StorageUtils
 import io.github.lumkit.tweak.common.utils.formatCurrent
 import io.github.lumkit.tweak.common.utils.formatMemorySize
@@ -18,6 +19,8 @@ import io.github.lumkit.tweak.common.utils.formatVoltage
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -42,6 +45,8 @@ import kotlin.uuid.Uuid
 expect fun isAppInForeground(): Boolean
 
 object DeviceInfoViewModel : BaseViewModel() {
+
+    private const val TAG = "DeviceInfoViewModel"
 
     @Serializable
     data class CpuInfoModel(
@@ -128,6 +133,39 @@ object DeviceInfoViewModel : BaseViewModel() {
         val freeText: String,
     )
 
+    /**
+     * 进程占用 TOP 项（供设备信息页展示）。
+     * [iconPath] 仅 Android 应用进程有缓存路径，原生进程为空，UI 自行兜底图标。
+     */
+    @Immutable
+    @Serializable
+    data class TopProcessVo(
+        val pid: Int,
+        /**
+         * 展示用名称：`应用标签:进程名`。
+         * 例如进程名为 `com.android.chrome:root0` 时显示 `Chrome:root0`；
+         * 无子进程后缀时为 `微信:com.tencent.mm`。
+         */
+        val name: String,
+        /**
+         * 用于跳转进程管理页并定位的包名。
+         * Android 应用进程为去掉 `:xxx` 后的包名；原生进程为空。
+         */
+        val packageName: String,
+        /** 原始进程名（包名或可执行名，可能含 `:子进程`） */
+        val processName: String,
+        /** 展示名：应用标签优先，否则 [processName] */
+        val displayName: String,
+        /** AppsHelper 图标缓存路径 */
+        val iconPath: String,
+        /** CPU 占用原始百分比（多核下可能 >100） */
+        val cpu: Float,
+        /** 0~1，供进度条；按 100% 归一并截断 */
+        val cpuLoad: Float,
+        val cpuText: String,
+        val isAndroidProcess: Boolean,
+    )
+
     val cpuFrequencyUtil = CpuFrequencyUtil()
     private val cpuLoadUtils = CpuLoadUtils()
 
@@ -149,11 +187,21 @@ object DeviceInfoViewModel : BaseViewModel() {
     private val _moreInfoState = MutableStateFlow<MoreInfoModel?>(null)
     val moreInfoState = _moreInfoState.asStateFlow()
 
+    private val _topProcessState = MutableStateFlow<List<TopProcessVo>>(emptyList())
+    val topProcessState = _topProcessState.asStateFlow()
+
+    private val _topProcessSupportState  = MutableStateFlow(false)
+    val topProcessSupportState = _topProcessSupportState.asStateFlow()
+
     init {
         viewModelScope.launch {
             _loadingState.value = false
             // 初始化GPU是否支持
             _gpuSupported.value = GpuUtils.canReadGpuInfo()
+            // 是否支持进程查询
+            launch(Dispatchers.IO) {
+                _topProcessSupportState.value = ProcessUtilLite.supported()
+            }
 
             while (isActive) {
                 // 后台时跳过采样，仅等待
@@ -171,6 +219,10 @@ object DeviceInfoViewModel : BaseViewModel() {
                 updateGpuInfo()
                 // 更新更多信息
                 updateMoreInfo()
+                // 更新进程 TOP15
+                if (_topProcessSupportState.value) {
+                    updateTopProcesses()
+                }
 
                 val loadingTime = Clock.System.now().toEpochMilliseconds() - tag
                 logD("loadingTime: $loadingTime", "DeviceInfoViewModel")
@@ -365,5 +417,46 @@ object DeviceInfoViewModel : BaseViewModel() {
             battery = batteryModel,
             storage = storage,
         )
+    }
+
+    private fun CoroutineScope.updateTopProcesses() {
+        launch(Dispatchers.IO) {
+            _topProcessState.value = ProcessUtilLite.getAllProcess()
+                .sortedByDescending { it.cpu }
+                .take(100)
+                .map { info ->
+                    val cpu = info.cpu.coerceAtLeast(0f)
+                    TopProcessVo(
+                        pid = info.pid,
+                        name = buildTopProcessName(info.displayName, info.name),
+                        packageName = if (info.isAndroidProcess) info.appPackageName else "",
+                        processName = info.name,
+                        displayName = info.displayName,
+                        iconPath = info.iconPath,
+                        cpu = cpu,
+                        cpuLoad = (cpu / 100f).coerceIn(0f, 1f),
+                        cpuText = "%.1f%%".format(cpu),
+                        isAndroidProcess = info.isAndroidProcess,
+                    )
+                }
+        }
+    }
+
+    /**
+     * 生成 `AppLabel:process` 形式。
+     * - 有 `:子进程` 时只保留后缀（`Chrome:root0`）
+     * - 否则为 `标签:完整进程名`（`微信:com.tencent.mm`）
+     */
+    private fun buildTopProcessName(displayName: String, processName: String): String {
+        val process = processName.trim()
+        val label = displayName.trim().ifBlank { process }
+        if (process.isEmpty()) {
+            return label
+        }
+        val processPart = process.substringAfter(':', missingDelimiterValue = process)
+        if (label == process || label == processPart) {
+            return label
+        }
+        return "$label:$processPart"
     }
 }

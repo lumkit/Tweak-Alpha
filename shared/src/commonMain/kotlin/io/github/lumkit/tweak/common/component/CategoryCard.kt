@@ -26,11 +26,12 @@ fun CategoryCard(
     title: String,
     modifier: Modifier = Modifier,
     subTitle: String = "",
+    pressFeedbackType: PressFeedbackType = PressFeedbackType.Sink,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        pressFeedbackType = PressFeedbackType.Sink,
+        pressFeedbackType = pressFeedbackType,
         colors = CardDefaults.defaultColors(
             color = MiuixTheme.colorScheme.surfaceContainer
         )

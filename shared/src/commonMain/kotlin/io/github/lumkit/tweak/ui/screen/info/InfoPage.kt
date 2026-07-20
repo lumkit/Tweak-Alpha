@@ -1,9 +1,12 @@
 package io.github.lumkit.tweak.ui.screen.info
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -44,11 +49,15 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.shapes.Rectangle
+import com.kyant.shapes.copy
 import io.github.lumkit.tweak.common.component.CategoryCard
 import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.TopBar
@@ -59,11 +68,13 @@ import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
+import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.service.OverlayMonitor
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.DropdownImpl
@@ -86,8 +97,10 @@ import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.ic_process_linux
 import tweak_alpha.shared.generated.resources.nav_home
 import tweak_alpha.shared.generated.resources.text_battery
 import tweak_alpha.shared.generated.resources.text_cpu_state
@@ -123,6 +136,7 @@ fun InfoPage() {
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
     val backdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
+    val navigator = LocalNavigator.current
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -168,7 +182,9 @@ fun InfoPage() {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item {
-                    CpuInfoContent()
+                    CpuInfoContent {
+
+                    }
                 }
 
                 item {
@@ -222,8 +238,12 @@ fun InfoPage() {
 }
 
 @Composable
-private fun CpuInfoContent() {
+private fun CpuInfoContent(
+    onTopProcessTap: (DeviceInfoViewModel.TopProcessVo) -> Unit,
+) {
     val cpuState by DeviceInfoViewModel.cpuInfoState.collectAsStateWithLifecycle()
+    val topProcessSupport by DeviceInfoViewModel.topProcessSupportState.collectAsStateWithLifecycle()
+    val topProcessVo by DeviceInfoViewModel.topProcessState.collectAsStateWithLifecycle()
     val chartState = rememberChartState()
 
     val listener: (DeviceInfoViewModel.CpuInfoModel) -> Unit = remember {
@@ -245,33 +265,77 @@ private fun CpuInfoContent() {
         subTitle = stringResource(Res.string.text_cpu_state_description).format(
             cpuState?.coreLoadText ?: "N/A", cpuState?.coreTemperatureText ?: "N/A"
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        pressFeedbackType = PressFeedbackType.None,
     ) {
-        Box(
+        Row(
             modifier = Modifier.fillMaxWidth()
-                .height(64.dp),
+                .height(
+                    if (topProcessSupport) {
+                        120.dp
+                    } else {
+                        64.dp
+                    }
+                ).animateContentSize()
         ) {
 
-            LintStackChart(
-                modifier = Modifier.fillMaxSize()
-                    .alpha(.4f),
-                state = chartState,
-            )
-
-            Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            AnimatedVisibility(
+                visible = topProcessSupport,
+                modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = cpuState?.socName ?: "N/A",
-                    color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-                    style = MiuixTheme.textStyles.footnote1,
+                Row {
+                    Box(
+                        modifier = Modifier.fillMaxSize()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (topProcessVo.isNotEmpty()) {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(topProcessVo) {
+                                    TopProcessItem(it, onTopProcessTap)
+                                }
+                            }
+                        } else {
+                            InfiniteProgressIndicator()
+                        }
+                    }
+
+                    VerticalDivider(
+                        modifier = Modifier.fillMaxHeight()
+                            .padding(8.dp)
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier.fillMaxWidth()
+                    .fillMaxHeight()
+                    .weight(1f),
+            ) {
+
+                LintStackChart(
+                    modifier = Modifier.fillMaxSize()
+                        .alpha(.4f),
+                    state = chartState,
                 )
-                Text(
-                    text = "Cores ${cpuState?.coreCluster}",
-                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                    style = MiuixTheme.textStyles.body2,
-                )
+
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = cpuState?.socName ?: "N/A",
+                        color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                        style = MiuixTheme.textStyles.footnote1,
+                    )
+                    Text(
+                        text = "Cores ${cpuState?.coreCluster}",
+                        color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                        style = MiuixTheme.textStyles.body2,
+                    )
+                }
             }
         }
 
@@ -281,6 +345,59 @@ private fun CpuInfoContent() {
         )
 
         CpuCoreContent()
+    }
+}
+
+@Composable
+private fun TopProcessItem(
+    topProcessVo: DeviceInfoViewModel.TopProcessVo,
+    onTap: (DeviceInfoViewModel.TopProcessVo) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clip(Rectangle.copy(cornerRadius = 4.dp))
+            .clickable {
+                onTap(topProcessVo)
+            }
+            .padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        AsyncImage(
+            model = topProcessVo.iconPath,
+            contentDescription = null,
+            error = painterResource(Res.drawable.ic_process_linux),
+            modifier = Modifier.clip(Rectangle.copy(4.dp))
+                .border(
+                    width = .5.dp,
+                    shape = Rectangle.copy(4.dp),
+                    color = MiuixTheme.colorScheme.onSurface.copy(.1f)
+                )
+                .size(16.dp)
+        )
+
+        Text(
+            text = topProcessVo.displayName,
+            color = MiuixTheme.colorScheme.onSurface.copy(.75f),
+            style = MiuixTheme.textStyles.footnote2.copy(
+                fontSize = 10.sp,
+                lineHeight = 10.sp,
+            ),
+            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
+            modifier = Modifier.weight(1f),
+        )
+
+        Text(
+            text = topProcessVo.cpuText,
+            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+            style = MiuixTheme.textStyles.footnote2.copy(
+                fontSize = 8.sp,
+                lineHeight = 8.sp,
+            ),
+            overflow = TextOverflow.Clip,
+            softWrap = false,
+        )
     }
 }
 
@@ -338,13 +455,19 @@ private fun FlowRowScope.CpuCoreItem(core: DeviceInfoViewModel.CoreInfoModel) {
         Text(
             text = core.currentFreq,
             color = MiuixTheme.colorScheme.onSurface.copy(.7f),
-            style = MiuixTheme.textStyles.body2,
+            style = MiuixTheme.textStyles.body2.copy(
+                fontSize = 10.sp,
+                lineHeight = 10.sp
+            ),
         )
 
         Text(
             text = "${core.minFreq}~${core.maxFreq}",
             color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-            style = MiuixTheme.textStyles.footnote2,
+            style = MiuixTheme.textStyles.footnote2.copy(
+                fontSize = 10.sp,
+                lineHeight = 10.sp
+            ),
         )
     }
 }
@@ -785,17 +908,6 @@ private fun RowScope.Actions() {
             Icon(
                 imageVector = MiuixIcons.Backup,
                 contentDescription = null
-            )
-        }
-
-        val actions = remember {
-            listOf(
-                RebootAction(
-                    text = Res.string.text_overlay_load,
-                    onTap = {
-
-                    }
-                ),
             )
         }
 

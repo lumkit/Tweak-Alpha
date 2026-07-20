@@ -17,7 +17,7 @@
     <string name="nav_home">面板</string>
     <string name="nav_category">功能</string>
     <string name="nav_settings">设置</string>
-    <string name="text_cpu_state">CPU状态</string>
+    <string name="text_cpu_state">CPU与进程</string>
     <string name="text_cpu_state_description">负载：%s     温度：%s</string>
     <string name="text_memory_state">内存状态</string>
     <string name="text_total_memory">总内存</string>
