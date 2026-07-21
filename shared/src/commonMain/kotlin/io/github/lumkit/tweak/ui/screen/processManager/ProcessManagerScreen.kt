@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -605,11 +606,12 @@ private fun ProcessDetailDialog(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth()
                             .weight(1f)
                             .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         DetailRow(stringResource(Res.string.text_process_pid), info.pid.toString())
                         DetailRow(stringResource(Res.string.text_process_cpu), "%.1f%%".format(info.cpu))
@@ -619,8 +621,8 @@ private fun ProcessDetailDialog(
                         DetailRow(stringResource(Res.string.text_process_command), info.command)
                         DetailRow(stringResource(Res.string.text_process_cmdline), info.cmdline)
                         DetailRow(stringResource(Res.string.text_process_cpuset), info.cpuSet)
-                        DetailRow(stringResource(Res.string.text_process_cgroup), info.cGroup)
                         DetailRow(stringResource(Res.string.text_process_oom_adj), info.oomAdj)
+                        DetailRow(stringResource(Res.string.text_process_cgroup), info.cGroup)
                         DetailRow(stringResource(Res.string.text_process_oom_score_adj), info.oomScoreAdj)
                         Spacer(modifier = Modifier.height(4.dp))
                     }
@@ -694,7 +696,7 @@ private fun ConfirmActionDialog(
 
 @Composable
 private fun DetailRow(label: String, value: String) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column {
         Text(
             text = label,
             color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.45f),
