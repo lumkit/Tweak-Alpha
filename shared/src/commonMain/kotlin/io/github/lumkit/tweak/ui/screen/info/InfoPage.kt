@@ -1,8 +1,6 @@
 package io.github.lumkit.tweak.ui.screen.info
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -26,12 +24,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,6 +56,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
 import io.github.lumkit.tweak.common.component.CategoryCard
+import io.github.lumkit.tweak.common.component.ChartState
 import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
@@ -129,15 +127,15 @@ import tweak_alpha.shared.generated.resources.text_used_load
 @Composable
 fun InfoPage() {
     val loadState by DeviceInfoViewModel.loadingState.collectAsStateWithLifecycle()
-    val blurDp by animateDpAsState(
-        targetValue = if (loadState) 0.dp else 15.dp,
-        animationSpec = tween(durationMillis = 400)
-    )
     val direction = LocalLayoutDirection.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
     val backdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
     val navigator = LocalNavigator.current
+    val alpha by animateFloatAsState(
+        targetValue = if (loadState) 0f else .5f,
+        animationSpec = tween(durationMillis = 400)
+    )
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -168,11 +166,13 @@ fun InfoPage() {
                     .padding(padding)
                     .fillMaxSize()
                     .overScrollVertical()
-                    .then(if (blurDp > 0.dp) {
-                        Modifier.blur(blurDp)
-                    } else {
-                        Modifier
-                    })
+                    .then(
+                        if (alpha > 0f) {
+                            Modifier.blur(24.dp * alpha)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .nestedScroll(scrollBehavior.nestedScrollConnection),
                 contentPadding = PaddingValues(
                     start = 16.dp,
@@ -182,7 +182,7 @@ fun InfoPage() {
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item {
+                item(key = "cpu") {
                     CpuInfoContent { vo ->
                         navigator.navigate(
                             Screen.ProcessManager(
@@ -193,24 +193,19 @@ fun InfoPage() {
                     }
                 }
 
-                item {
+                item(key = "memory") {
                     MemoryInfoContent()
                 }
 
-                item {
+                item(key = "gpu") {
                     GpuInfoContent()
                 }
 
-                item {
+                item(key = "more") {
                     MoreInfoContent()
                 }
             }
         }
-
-        val alpha by animateFloatAsState(
-            targetValue = if (loadState) 0f else .5f,
-            animationSpec = tween(durationMillis = 400)
-        )
 
         if (alpha > 0f) {
             Box(
@@ -251,7 +246,6 @@ private fun CpuInfoContent(
     val topProcessSupport by DeviceInfoViewModel.topProcessSupportState.collectAsStateWithLifecycle()
     val enableProcessInfo by DeviceInfoViewModel.enabledProcessInfo.collectAsStateWithLifecycle()
     val enableProcessInfoState = topProcessSupport && enableProcessInfo
-    val topProcessVo by DeviceInfoViewModel.topProcessState.collectAsStateWithLifecycle()
     val chartState = rememberChartState()
 
     val listener: (DeviceInfoViewModel.CpuInfoModel) -> Unit = remember {
@@ -284,45 +278,19 @@ private fun CpuInfoContent(
                     } else {
                         64.dp
                     }
-                ).animateContentSize()
+                )
         ) {
-
-            AnimatedVisibility(
+            // 独立订阅进程列表，CPU 采样重组时尽量跳过该子树
+            TopProcessPanel(
                 visible = enableProcessInfoState,
-                modifier = Modifier.weight(1f)
-            ) {
-                Row {
-                    Box(
-                        modifier = Modifier.fillMaxSize()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (topProcessVo.isNotEmpty()) {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(topProcessVo) {
-                                    TopProcessItem(it, onTopProcessTap)
-                                }
-                            }
-                        } else {
-                            InfiniteProgressIndicator()
-                        }
-                    }
-
-                    VerticalDivider(
-                        modifier = Modifier.fillMaxHeight()
-                            .padding(8.dp)
-                    )
-                }
-            }
+                onTopProcessTap = onTopProcessTap,
+            )
 
             Box(
                 modifier = Modifier.fillMaxWidth()
                     .fillMaxHeight()
                     .weight(1f),
             ) {
-
                 LintStackChart(
                     modifier = Modifier.fillMaxSize()
                         .alpha(.4f),
@@ -353,6 +321,44 @@ private fun CpuInfoContent(
         )
 
         CpuCoreContent()
+    }
+}
+
+@Composable
+private fun RowScope.TopProcessPanel(
+    visible: Boolean,
+    onTopProcessTap: (DeviceInfoViewModel.TopProcessVo) -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = Modifier.weight(1f)
+    ) {
+        val topProcessVo by DeviceInfoViewModel.topProcessState.collectAsStateWithLifecycle()
+        Row {
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                if (topProcessVo.isNotEmpty()) {
+                    // 固定高度短列表，避免嵌套 LazyColumn 与外层抢测量
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        topProcessVo.forEach { process ->
+                            key(process.pid) {
+                                TopProcessItem(process, onTopProcessTap)
+                            }
+                        }
+                    }
+                } else {
+                    InfiniteProgressIndicator()
+                }
+            }
+
+            VerticalDivider(
+                modifier = Modifier.fillMaxHeight()
+                    .padding(8.dp)
+            )
+        }
     }
 }
 
@@ -412,7 +418,8 @@ private fun TopProcessItem(
 @Composable
 private fun CpuCoreContent() {
     val cpuState by DeviceInfoViewModel.cpuInfoState.collectAsStateWithLifecycle()
-    val columns by remember { derivedStateOf { cpuState?.cpuStates?.size?.div(2) ?: 4 } }
+    val cpuStates = cpuState?.cpuStates.orEmpty()
+    val columns = (cpuStates.size / 2).coerceAtLeast(1)
 
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -420,17 +427,24 @@ private fun CpuCoreContent() {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        cpuState?.cpuStates?.forEach { core ->
-            CpuCoreItem(core)
+        cpuStates.forEach { core ->
+            // 仅按核心编号保活 chart 状态；sampleId 变化仍会驱动重组
+            key(core.number) {
+                CpuCoreItem(core)
+            }
         }
     }
 }
 
 @Composable
 private fun FlowRowScope.CpuCoreItem(core: DeviceInfoViewModel.CoreInfoModel) {
-    val chartState = rememberChartState()
+    // 核图历史不必像总览那样长，降低每周期重算成本
+    val chartState = rememberChartState(
+        initialStates = List(24) { ChartState(0f) },
+    )
 
-    LaunchedEffect(core) {
+    // 随采样周期重组时推入负载（sampleId 保证每次都重组）
+    SideEffect {
         chartState.push(core.load)
     }
 
@@ -484,9 +498,10 @@ private fun FlowRowScope.CpuCoreItem(core: DeviceInfoViewModel.CoreInfoModel) {
 private fun MemoryInfoContent() {
     val memoryState by DeviceInfoViewModel.memoryInfoState.collectAsStateWithLifecycle()
 
-    val load by animateFloatAsState(targetValue = memoryState?.totalUsed ?: 0f)
-    val memoryLoad by animateFloatAsState(targetValue = memoryState?.memoryUsed ?: 0f)
-    val swapLoad by animateFloatAsState(targetValue = memoryState?.swapUsed ?: 0f)
+    // 高频采样下不做进度动画，避免 Debug 下动画帧叠加卡顿
+    val load = memoryState?.totalUsed ?: 0f
+    val memoryLoad = memoryState?.memoryUsed ?: 0f
+    val swapLoad = memoryState?.swapUsed ?: 0f
 
     val loadColor by animatedColorAsUsed(load)
     val memoryLoadColor by animatedColorAsUsed(memoryLoad)
@@ -649,7 +664,7 @@ private fun GpuInfoContent() {
         }
     }
     val gpuInfoModel by DeviceInfoViewModel.gpuInfoState.collectAsStateWithLifecycle()
-    val load by animateFloatAsState(targetValue = gpuInfoModel?.load ?: 0f)
+    val load = gpuInfoModel?.load ?: 0f
     val loadColor by animatedColorAsUsed(load)
     val gpuSupportedState by DeviceInfoViewModel.gpuSupported.collectAsStateWithLifecycle()
 
@@ -760,7 +775,7 @@ private fun MoreInfoContent() {
 private fun FlowRowScope.BatteryContent(
     batteryModel: DeviceInfoViewModel.BatteryInfoModel?,
 ) {
-    val load by animateFloatAsState(targetValue = batteryModel?.capacity ?: 0f)
+    val load = batteryModel?.capacity ?: 0f
     val loadColor by animatedColorAsBattery(load)
 
     CategoryCard(
@@ -832,7 +847,7 @@ private fun FlowRowScope.BatteryContent(
 private fun FlowRowScope.StorageContent(
     storageModel: DeviceInfoViewModel.StorageInfoModel?,
 ) {
-    val load by animateFloatAsState(targetValue = storageModel?.usedLoad ?: 0f)
+    val load = storageModel?.usedLoad ?: 0f
     val loadColor by animatedColorAsUsed(load)
 
     CategoryCard(

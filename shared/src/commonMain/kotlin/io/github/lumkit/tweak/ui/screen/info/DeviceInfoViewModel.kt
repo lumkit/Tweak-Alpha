@@ -38,10 +38,9 @@ import org.jetbrains.compose.resources.getString
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.text_gpu_load_format
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * 判断应用是否处于前台
@@ -64,7 +63,9 @@ object DeviceInfoViewModel : BaseViewModel() {
         val socName: String,
     )
 
-    @OptIn(ExperimentalUuidApi::class)
+    /**
+     * [sampleId] 每个采样周期递增，保证 CpuCore 在 Debug/Release 下都会按周期重组绘制。
+     */
     @Immutable
     @Serializable
     data class CoreInfoModel(
@@ -75,7 +76,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         val minFreq: String,
         val maxFreq: String,
         val enabled: Boolean,
-        private val uuid: String = Uuid.random().toHexString()
+        val sampleId: Long = 0L,
     )
 
     @Immutable
@@ -172,6 +173,13 @@ object DeviceInfoViewModel : BaseViewModel() {
 
     val cpuFrequencyUtil = CpuFrequencyUtil()
     private val cpuLoadUtils = CpuLoadUtils()
+    private val sampleIdGenerator = AtomicLong(0L)
+    private var cachedSoc: AndroidSoc? = null
+    private var cachedSocName: String? = null
+    private var cachedClusterText: String? = null
+    /** coreIndex -> (minFreqText, maxFreqText) */
+    private val cachedCoreFreqRange = HashMap<Int, Pair<String, String>>()
+    private var coreFreqRangeRefreshCountdown = 0
 
     private val _loadingState = MutableStateFlow(false)
     val loadingState = _loadingState.asStateFlow()
@@ -206,7 +214,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         )
 
     init {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.Default) {
             _loadingState.value = false
             // 初始化GPU是否支持
             _gpuSupported.value = GpuUtils.canReadGpuInfo()
@@ -219,17 +227,17 @@ object DeviceInfoViewModel : BaseViewModel() {
                 }
 
                 val tag = Clock.System.now().toEpochMilliseconds()
-                // 更新CPU信息
-                updateCpuInfo()
-                // 更新内存信息
-                updateMemoryInfo()
-                // 更新GPU信息
-                updateGpuInfo()
-                // 更新更多信息
-                updateMoreInfo()
+                coroutineScope {
+                    launch { updateCpuInfo() }
+                    launch { updateMemoryInfo() }
+                    launch { updateGpuInfo() }
+                    launch { updateMoreInfo() }
+                }
 
                 val loadingTime = Clock.System.now().toEpochMilliseconds() - tag
-                logD("loadingTime: $loadingTime", TAG)
+                if (loadingTime > 200L) {
+                    logD("loadingTime: $loadingTime", TAG)
+                }
 
                 _loadingState.value = true
                 delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
@@ -257,7 +265,9 @@ object DeviceInfoViewModel : BaseViewModel() {
                     }
 
                     val loadingTime = Clock.System.now().toEpochMilliseconds() - tag
-                    logD("process info loadingTime: $loadingTime", TAG)
+                    if (loadingTime > 200L) {
+                        logD("process info loadingTime: $loadingTime", TAG)
+                    }
 
                     delay(GlobalViewModel.processInfoUpdateTimeState.value.milliseconds)
                 }
@@ -278,54 +288,82 @@ object DeviceInfoViewModel : BaseViewModel() {
     private suspend fun updateCpuInfo() = coroutineScope {
         val coreCountDeferred = async { cpuFrequencyUtil.getCoreCount() }
         val cpuLoadDeferred = async { cpuLoadUtils.getCpuLoad() }
-        val clusterInfoDeferred = async { cpuFrequencyUtil.getClusterInfo() }
-        val socDeferred = async { CpuCodenameUtils.getSocByCpuMode() }
+        val clusterTextDeferred = async {
+            cachedClusterText ?: cpuFrequencyUtil.getClusterInfo().joinToString(separator = "+") {
+                it.size.toString()
+            }.also { cachedClusterText = it }
+        }
+        val socDeferred = async {
+            cachedSoc ?: CpuCodenameUtils.getSocByCpuMode().also { cachedSoc = it }
+        }
+        val socNameDeferred = async {
+            cachedSocName ?: (socDeferred.await()?.name ?: CpuCodenameUtils.getCpuCodename())
+                .also { cachedSocName = it }
+        }
         val cpuTemperatureDeferred =
             async { DeviceTemperatureUtils.getAverageCpuTemperature() ?: 25f }
 
         val coreCount = coreCountDeferred.await()
         val cpuLoad = cpuLoadDeferred.await()
+        val refreshFreqRange = coreFreqRangeRefreshCountdown <= 0
+        if (refreshFreqRange) {
+            coreFreqRangeRefreshCountdown = 20
+        } else {
+            coreFreqRangeRefreshCountdown--
+        }
+        val sampleId = sampleIdGenerator.incrementAndGet()
+
         val cpuStates = (0 until coreCount)
             .map { coreIndex ->
                 async {
                     val coreName = "cpu$coreIndex"
                     val currentFreqDeferred =
                         async { cpuFrequencyUtil.getCurrentFrequency(coreName) }
-                    val maxFreqDeferred =
-                        async { cpuFrequencyUtil.getCurrentMaxFrequency(coreName) }
-                    val minFreqDeferred =
-                        async { cpuFrequencyUtil.getCurrentMinFrequency(coreName) }
                     val onlineDeferred = async { cpuFrequencyUtil.getCoreOnlineState(coreIndex) }
+                    val freqRangeDeferred = async {
+                        val cached = cachedCoreFreqRange[coreIndex]
+                        if (!refreshFreqRange && cached != null) {
+                            cached
+                        } else {
+                            val minFreqDeferred =
+                                async { cpuFrequencyUtil.getCurrentMinFrequency(coreName) }
+                            val maxFreqDeferred =
+                                async { cpuFrequencyUtil.getCurrentMaxFrequency(coreName) }
+                            (formatFreq(minFreqDeferred.await(), "") to
+                                formatFreq(maxFreqDeferred.await())).also {
+                                cachedCoreFreqRange[coreIndex] = it
+                            }
+                        }
+                    }
 
                     val load = cpuLoad[coreIndex]?.toFloat() ?: 0f
+                    val freqRange = freqRangeDeferred.await()
                     CoreInfoModel(
                         number = coreIndex,
                         load = load.div(100f),
                         loadText = "%d%%".format(load.toInt()),
                         currentFreq = formatFreq(currentFreqDeferred.await()),
-                        minFreq = formatFreq(minFreqDeferred.await(), ""),
-                        maxFreq = formatFreq(maxFreqDeferred.await()),
+                        minFreq = freqRange.first,
+                        maxFreq = freqRange.second,
                         enabled = onlineDeferred.await(),
+                        sampleId = sampleId,
                     )
                 }
             }
             .awaitAll()
 
-        val clusterInfo = clusterInfoDeferred.await()
         val coreLoad = cpuLoad[-1]?.toFloat() ?: 0f
         val soc = socDeferred.await()
         val socTemperature = cpuTemperatureDeferred.await()
         val cpuInfoModel = CpuInfoModel(
-            coreCluster = clusterInfo.joinToString(separator = "+") {
-                it.size.toString()
-            },
+            coreCluster = clusterTextDeferred.await(),
             coreLoad = coreLoad.div(100f),
             coreLoadText = "%d%%".format(coreLoad.toInt()),
             coreTemperature = socTemperature,
             coreTemperatureText = "%.1f°C".format(socTemperature),
             cpuStates = cpuStates,
             soc = soc,
-            socName = soc?.name ?: CpuCodenameUtils.getCpuCodename()
+            socName = socNameDeferred.await(),
         )
         _cpuInfoState.value = cpuInfoModel
         cpuInfoListenerList.forEach {

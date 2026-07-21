@@ -234,7 +234,7 @@ private fun BottomNavBar(
                     targetValue = if (isSelected) {
                         MiuixTheme.colorScheme.primary
                     } else {
-                        MiuixTheme.colorScheme.onSurface.copy(.31f)
+                        MiuixTheme.colorScheme.onSurface.copy(.75f)
                     }
                 )
 
