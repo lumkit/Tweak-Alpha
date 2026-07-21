@@ -10,6 +10,11 @@ import kotlinx.coroutines.flow.stateIn
 
 object GlobalViewModel: BaseViewModel() {
 
+    /**
+     * 用于手动初始化单例
+     */
+    fun create(){}
+
     val runtimeModeState = TweakDataStore.runtimeModeFlow()
         .distinctUntilChanged()
         .stateIn(
@@ -36,4 +41,30 @@ object GlobalViewModel: BaseViewModel() {
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = (TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_LEVEL * TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_RANGE).toLong()
         )
+
+    val processInfoUpdateTimeState = TweakDataStore.processInfoUpdateTimeFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TweakDataStore.DEFAULT_PROCESS_INFO_UPDATE_TIME
+        )
+
+    val enabledBlur = TweakDataStore.enableBlurFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val enabledLiquidGlass = TweakDataStore.floatNavBarEnableLiquidGlassFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val enabledFloatNavBar = TweakDataStore.enableFloatNavigationBarFlow()
 }

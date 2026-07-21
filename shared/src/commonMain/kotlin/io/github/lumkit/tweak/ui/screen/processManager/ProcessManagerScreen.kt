@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -49,15 +48,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.SmallTopAppBar
+import io.github.lumkit.tweak.common.component.glassBlur
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.model.ProcessInfo
@@ -481,28 +476,8 @@ private fun ProcessFilterToolbar(
     }
 
     Row(
-        modifier = Modifier.drawBackdrop(
-            backdrop = backdrop,
-            shape = {
-                RoundedCornerShape(0.dp)
-            },
-            effects = {
-                if (advancedBackdropEffectSupported) {
-                    vibrancy()
-                    blur(8f.dp.toPx())
-                    lens(8f.dp.toPx(), 8f.dp.toPx())
-                }
-            },
-            shadow = { Shadow(radius = 0.dp) },
-            onDrawSurface = {
-                if (advancedBackdropEffectSupported) {
-                    drawRect(background.copy(.4f))
-                } else {
-                    drawRect(background)
-                }
-            },
-            highlight = { null }
-        ).background(
+        modifier = Modifier.glassBlur(backdrop)
+            .background(
             if (advancedBackdropEffectSupported) {
                 MiuixTheme.colorScheme.surfaceContainer.copy(.5f)
             } else {

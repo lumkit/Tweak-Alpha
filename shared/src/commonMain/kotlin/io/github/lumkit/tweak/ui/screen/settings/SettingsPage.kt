@@ -35,7 +35,6 @@ import io.github.lumkit.tweak.common.component.Logo
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_CODE
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_NAME
-import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.hasNotificationPermission
 import io.github.lumkit.tweak.common.utils.isIgnoringBatteryOptimizations
 import io.github.lumkit.tweak.common.utils.jumpToAppInfo
@@ -82,6 +81,10 @@ import tweak_alpha.shared.generated.resources.text_auto_start
 import tweak_alpha.shared.generated.resources.text_auto_start_description
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list_description
+import tweak_alpha.shared.generated.resources.text_float_navigation_bar
+import tweak_alpha.shared.generated.resources.text_float_navigation_bar_description
+import tweak_alpha.shared.generated.resources.text_float_navigation_bar_enable_liquidity
+import tweak_alpha.shared.generated.resources.text_float_navigation_bar_enable_liquidity_description
 import tweak_alpha.shared.generated.resources.text_framework
 import tweak_alpha.shared.generated.resources.text_framework_mode
 import tweak_alpha.shared.generated.resources.text_framework_mode_description
@@ -92,11 +95,15 @@ import tweak_alpha.shared.generated.resources.text_github
 import tweak_alpha.shared.generated.resources.text_github_web
 import tweak_alpha.shared.generated.resources.text_join_qq
 import tweak_alpha.shared.generated.resources.text_jump_to_app_info
+import tweak_alpha.shared.generated.resources.text_navigation_bar_enable_blur
+import tweak_alpha.shared.generated.resources.text_navigation_bar_enable_blur_description
 import tweak_alpha.shared.generated.resources.text_notification_permission
 import tweak_alpha.shared.generated.resources.text_notification_permission_denied
 import tweak_alpha.shared.generated.resources.text_open_sources
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick_description
+import tweak_alpha.shared.generated.resources.text_process_info_overview
+import tweak_alpha.shared.generated.resources.text_process_info_overview_description
 import tweak_alpha.shared.generated.resources.text_qq_url
 import tweak_alpha.shared.generated.resources.text_settings
 import tweak_alpha.shared.generated.resources.text_theme
@@ -108,7 +115,6 @@ import tweak_alpha.shared.generated.resources.text_theme_monet_dark
 import tweak_alpha.shared.generated.resources.text_theme_monet_light
 import tweak_alpha.shared.generated.resources.text_theme_monet_system
 import tweak_alpha.shared.generated.resources.text_theme_system
-import kotlin.math.roundToInt
 
 @Preview
 @Composable
@@ -156,7 +162,7 @@ fun SettingsPage(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                ThemeContent()
+                ThemeContent(viewModel)
             }
 
             item {
@@ -210,17 +216,14 @@ val RuntimeMode.stringResource: StringResource
     }
 
 @Composable
-private fun ThemeContent() {
-    val scope = rememberCoroutineScope()
-
+private fun ThemeContent(viewModel: SettingsViewModel) {
     SettingsPreferenceGroup(
         modifier = Modifier.fillMaxWidth(),
         title = stringResource(Res.string.text_theme),
     ) {
         // 主题
         Block {
-            val selected by TweakDataStore.themeModeFlow()
-                .collectAsStateWithLifecycle(ColorSchemeMode.System)
+            val selected by viewModel.themeMode.collectAsStateWithLifecycle()
             val modes = remember {
                 ColorSchemeMode.entries
             }
@@ -231,11 +234,55 @@ private fun ThemeContent() {
                 items = modes.map { stringResource(it.stringResource) },
                 selectedIndex = selected.ordinal,
                 onSelectedIndexChange = {
-                    scope.launch {
-                        TweakDataStore.setThemeMode(modes[it])
-                    }
+                    viewModel.setThemeMode(modes[it])
                 }
             )
+        }
+
+        // 全局高斯模糊
+        Block {
+            val enabled by viewModel.enableBlur.collectAsStateWithLifecycle()
+
+            SwitchPreference(
+                title = stringResource(Res.string.text_navigation_bar_enable_blur),
+                summary = stringResource(Res.string.text_navigation_bar_enable_blur_description),
+                checked = enabled,
+                onCheckedChange = {
+                    viewModel.setEnableBlur(it)
+                }
+            )
+        }
+
+        // 悬浮底部导航栏
+        val enabledFloatNavBar by viewModel.enableFloatNavigationBar.collectAsStateWithLifecycle()
+
+        Block {
+            SwitchPreference(
+                title = stringResource(Res.string.text_float_navigation_bar),
+                summary = stringResource(Res.string.text_float_navigation_bar_description),
+                checked = enabledFloatNavBar,
+                onCheckedChange = {
+                    viewModel.setEnableFloatNavigationBar(it)
+                }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = enabledFloatNavBar,
+        ) {
+            // 液态玻璃
+            Block {
+                val enabled by viewModel.floatNavigationBarEnableLiquidity.collectAsStateWithLifecycle()
+
+                SwitchPreference(
+                    title = stringResource(Res.string.text_float_navigation_bar_enable_liquidity),
+                    summary = stringResource(Res.string.text_float_navigation_bar_enable_liquidity_description),
+                    checked = enabled,
+                    onCheckedChange = {
+                        viewModel.setFloatNavigationBarEnableLiquidity(it)
+                    }
+                )
+            }
         }
     }
 }
@@ -246,9 +293,7 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         viewModel.updateNotificationPermission(it)
-        scope.launch {
-            TweakDataStore.setHasRequestNotificationPermission()
-        }
+        viewModel.setHasRequestNotificationPermission()
     }
     val snackBarHostState = LocalSnackBarHostState.current
 
@@ -279,7 +324,7 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
     ) {
         // 运行模式
         Block {
-            val selected by TweakDataStore.runtimeModeFlow().collectAsStateWithLifecycle(RuntimeMode.Unknow)
+            val selected by viewModel.runtimeMode.collectAsStateWithLifecycle()
             val modes = remember { RuntimeMode.entries.filter { it != RuntimeMode.Unknow } }
             val selectedIndex = remember(selected) { modes.indexOf(selected).coerceIn(modes.indices) }
 
@@ -291,8 +336,7 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                 onSelectedIndexChange = {
                     val newModel = modes[it]
                     val oldMode = selected
-                    scope.launch {
-                        TweakDataStore.setRuntimeMode(newModel)
+                    viewModel.setRuntimeMode(newModel) {
                         if (newModel != oldMode) {
                             restartApp()
                         }
@@ -303,17 +347,12 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
 
         // 面板刷新间隔
         Block {
-            val level by TweakDataStore.infoUpdateTimeSpanFlow()
-                .collectAsStateWithLifecycle(TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_LEVEL)
+            val level by viewModel.infoUpdateTimeSpanLevel.collectAsStateWithLifecycle()
             val tick by GlobalViewModel.infoUpdateTimeSpanMillisecondsState.collectAsStateWithLifecycle()
 
             SliderPreference(
                 value = level.toFloat(),
-                onValueChange = {
-                    scope.launch {
-                        TweakDataStore.setInfoUpdateTimeSpan(it.roundToInt())
-                    }
-                },
+                onValueChange = viewModel::setInfoUpdateTimeSpan,
                 title = stringResource(Res.string.text_panel_refresh_tick),
                 summary = stringResource(Res.string.text_panel_refresh_tick_description)
                     .format(tick),
@@ -323,20 +362,28 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
             )
         }
 
+        // 进程信息概览
+        Block {
+            val enabled by viewModel.enableProcessInfoOverview.collectAsStateWithLifecycle()
+
+            SwitchPreference(
+                title = stringResource(Res.string.text_process_info_overview),
+                summary = stringResource(Res.string.text_process_info_overview_description),
+                checked = enabled,
+                onCheckedChange = viewModel::setEnableProcessInfoOverview,
+            )
+        }
+
         // 自启动
         Block {
-            val autoStart by TweakDataStore.autoStartAppSwitchFlow().collectAsStateWithLifecycle(false)
+            val autoStart by viewModel.autoStartApp.collectAsStateWithLifecycle()
             val isIgnoringBatteryOptimizations by viewModel.isIgnoringBatteryOptimizations.collectAsStateWithLifecycle()
 
             SwitchPreference(
                 title = stringResource(Res.string.text_auto_start),
                 summary = stringResource(Res.string.text_auto_start_description),
                 checked = autoStart,
-                onCheckedChange = {
-                    scope.launch {
-                        TweakDataStore.setAutoStartAppSwitch(it)
-                    }
-                }
+                onCheckedChange = viewModel::setAutoStartApp,
             )
 
             AnimatedVisibility(
@@ -358,7 +405,7 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
         // 通知权限
         Block {
             val hasNotificationPermission by viewModel.notificationPermission.collectAsStateWithLifecycle()
-            val hasRequest by TweakDataStore.hasRequestNotificationPermission().collectAsStateWithLifecycle(false)
+            val hasRequest by viewModel.hasRequestNotificationPermission.collectAsStateWithLifecycle()
 
             SwitchPreference(
                 title = stringResource(Res.string.text_notification_permission),
@@ -388,7 +435,7 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
 
         // 安装包提取目录
         Block {
-            val exportDir by TweakDataStore.apkExportDirFlow().collectAsStateWithLifecycle(TweakDataStore.DEFAULT_APK_EXPORT_DIR)
+            val exportDir by viewModel.apkExportDir.collectAsStateWithLifecycle()
             val folderPicker = rememberFilePickerLauncher { paths ->
                 val path = paths.firstOrNull()?.takeIf(String::isNotBlank) ?: return@rememberFilePickerLauncher
                 viewModel.setApkExportDir(path)

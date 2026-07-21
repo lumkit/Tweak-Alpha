@@ -36,7 +36,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -78,11 +77,6 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
 import io.github.lumkit.tweak.LocalSnackBarHostState
@@ -90,6 +84,7 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.component.Block
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.SmallTopAppBar
+import io.github.lumkit.tweak.common.component.glassBlur
 import io.github.lumkit.tweak.common.utils.AppInfo
 import io.github.lumkit.tweak.common.utils.AppState
 import io.github.lumkit.tweak.common.utils.AppsHelper
@@ -808,28 +803,7 @@ private fun BoxScope.BottomToolbar(
     Row(
         modifier = Modifier.fillMaxWidth()
             .align(Alignment.BottomCenter)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = {
-                    RoundedCornerShape(0.dp)
-                },
-                effects = {
-                    if (advancedBackdropEffectSupported) {
-                        vibrancy()
-                        blur(8f.dp.toPx())
-                        lens(8f.dp.toPx(), 8f.dp.toPx())
-                    }
-                },
-                shadow = { Shadow(radius = 0.dp) },
-                onDrawSurface = {
-                    if (advancedBackdropEffectSupported) {
-                        drawRect(background.copy(.4f))
-                    } else {
-                        drawRect(background)
-                    }
-                },
-                highlight = { null }
-            )
+            .glassBlur(backdrop)
             .background(
                 if (advancedBackdropEffectSupported) {
                     MiuixTheme.colorScheme.surfaceContainer.copy(.5f)

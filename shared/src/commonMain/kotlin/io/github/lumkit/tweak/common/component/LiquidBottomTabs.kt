@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.util.lerp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
@@ -52,6 +54,7 @@ import com.kyant.shapes.Capsule
 import io.github.lumkit.tweak.common.utils.DampedDragAnimation
 import io.github.lumkit.tweak.common.utils.InteractiveHighlight
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
+import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
@@ -67,17 +70,19 @@ fun LiquidBottomTabs(
     backdrop: Backdrop,
     tabsCount: Int,
     modifier: Modifier = Modifier,
+    shape: Shape = Capsule(),
     content: @Composable RowScope.() -> Unit
 ) {
+    val enableBlur by GlobalViewModel.enabledBlur.collectAsStateWithLifecycle()
+    val enabledLiquidGlass by GlobalViewModel.enabledLiquidGlass.collectAsStateWithLifecycle()
     val supportsAdvancedEffects = remember { isAdvancedBackdropEffectSupported() }
     val accentColor = MiuixTheme.colorScheme.primary
-    val containerColor = if (supportsAdvancedEffects) {
+    val containerColor = if (supportsAdvancedEffects && enableBlur) {
         MiuixTheme.colorScheme.surfaceContainer.copy(0.4f)
     } else {
         MiuixTheme.colorScheme.surfaceContainer
     }
     val contentColor = MiuixTheme.colorScheme.onSurface
-
     val tabsBackdrop = rememberLayerBackdrop()
 
     BoxWithConstraints(
@@ -112,7 +117,7 @@ fun LiquidBottomTabs(
                 valueRange = 0f..(tabsCount - 1).toFloat(),
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
-                pressedScale = if (supportsAdvancedEffects) 78f / 56f else 1f,
+                pressedScale = if (supportsAdvancedEffects && enabledLiquidGlass) 78f / 56f else 1f,
                 onDragStarted = {},
                 onDragStopped = {
                     val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
@@ -174,27 +179,50 @@ fun LiquidBottomTabs(
                 }
                 .drawBackdrop(
                     backdrop = backdrop,
-                    shape = { Capsule() },
+                    shape = { shape },
                     effects = {
-                        vibrancy()
-                        blur(8f.dp.toPx())
-                        lens(24f.dp.toPx(), 24f.dp.toPx())
+                        if (enabledLiquidGlass && enableBlur) {
+                            vibrancy()
+                        }
+                        if (enableBlur) {
+                            blur(8f.dp.toPx())
+                        }
+                        if (enabledLiquidGlass && enableBlur) {
+                            lens(24f.dp.toPx(), 24f.dp.toPx())
+                        }
                     },
                     layerBlock = {
-                        val progress = dampedDragAnimation.pressProgress
-                        val scale = lerp(1f, 1f + 16f.dp.toPx() / size.width, progress)
-                        scaleX = scale
-                        scaleY = scale
+                        if (enabledLiquidGlass) {
+                            val progress = dampedDragAnimation.pressProgress
+                            val scale = lerp(1f, 1f + 16f.dp.toPx() / size.width, progress)
+                            scaleX = scale
+                            scaleY = scale
+                        }
                     },
                     onDrawSurface = { drawRect(containerColor) }
                 )
-                .then(interactiveHighlight.modifier)
+                .then(
+                    if (enabledLiquidGlass) {
+                        interactiveHighlight.modifier
+                    } else Modifier
+                )
         } else {
             Modifier
                 .graphicsLayer {
                     translationX = panelOffset
                 }
-                .clip(Capsule())
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { shape },
+                    effects = {
+                    },
+                    shadow = {
+                        Shadow(radius = 24.dp)
+                    },
+                    layerBlock = {},
+                    onDrawSurface = { drawRect(containerColor) }
+                )
+                .clip(shape = shape)
                 .background(containerColor)
         }
 
@@ -209,7 +237,7 @@ fun LiquidBottomTabs(
 
         CompositionLocalProvider(
             LocalLiquidBottomTabScale provides {
-                if (supportsAdvancedEffects) {
+                if (supportsAdvancedEffects && enabledLiquidGlass) {
                     lerp(1f, 1.2f, dampedDragAnimation.pressProgress)
                 } else {
                     1f
@@ -220,23 +248,37 @@ fun LiquidBottomTabs(
                 Modifier
                     .drawBackdrop(
                         backdrop = backdrop,
-                        shape = { Capsule() },
+                        shape = { shape },
                         effects = {
                             val progress = dampedDragAnimation.pressProgress
-                            vibrancy()
-                            blur(8f.dp.toPx())
-                            lens(
-                                24f.dp.toPx() * progress,
-                                24f.dp.toPx() * progress
-                            )
+                            if (enableBlur && enabledLiquidGlass) {
+                                vibrancy()
+                            }
+                            if (enableBlur) {
+                                blur(8f.dp.toPx())
+                            }
+                            if (enableBlur && enabledLiquidGlass) {
+                                lens(
+                                    24f.dp.toPx() * progress,
+                                    24f.dp.toPx() * progress
+                                )
+                            }
                         },
                         highlight = {
-                            val progress = dampedDragAnimation.pressProgress
-                            Highlight.Default.copy(alpha = progress)
+                            if (enabledLiquidGlass) {
+                                val progress = dampedDragAnimation.pressProgress
+                                Highlight.Default.copy(alpha = progress)
+                            } else null
                         },
                         onDrawSurface = { drawRect(containerColor) }
                     )
-                    .then(interactiveHighlight.modifier)
+                    .then(
+                        if (enabledLiquidGlass) {
+                            interactiveHighlight.modifier
+                        } else {
+                            Modifier
+                        }
+                    )
             } else {
                 Modifier
             }
@@ -263,39 +305,51 @@ fun LiquidBottomTabs(
             Modifier
                 .drawBackdrop(
                     backdrop = rememberCombinedBackdrop(backdrop, tabsBackdrop),
-                    shape = { Capsule() },
+                    shape = { shape },
                     effects = {
-                        val progress = dampedDragAnimation.pressProgress
-                        lens(
-                            10f.dp.toPx() * progress,
-                            14f.dp.toPx() * progress,
-                            chromaticAberration = true
-                        )
+                        if (enabledLiquidGlass) {
+                            val progress = dampedDragAnimation.pressProgress
+                            lens(
+                                10f.dp.toPx() * progress,
+                                14f.dp.toPx() * progress,
+                                chromaticAberration = true
+                            )
+                        }
                     },
                     highlight = {
-                        val progress = dampedDragAnimation.pressProgress
-                        Highlight.Default.copy(alpha = progress)
+                        if (enabledLiquidGlass) {
+                            val progress = dampedDragAnimation.pressProgress
+                            Highlight.Default.copy(alpha = progress)
+                        } else null
                     },
                     shadow = {
-                        val progress = dampedDragAnimation.pressProgress
-                        Shadow(alpha = progress)
+                        if (enabledLiquidGlass) {
+                            val progress = dampedDragAnimation.pressProgress
+                            Shadow(alpha = progress)
+                        } else Shadow.Default
                     },
                     innerShadow = {
-                        val progress = dampedDragAnimation.pressProgress
-                        InnerShadow(
-                            radius = 8f.dp * progress,
-                            alpha = progress
-                        )
+                        if (enabledLiquidGlass) {
+                            val progress = dampedDragAnimation.pressProgress
+                            InnerShadow(
+                                radius = 8f.dp * progress,
+                                alpha = progress
+                            )
+                        } else null
                     },
                     layerBlock = {
-                        scaleX = dampedDragAnimation.scaleX
-                        scaleY = dampedDragAnimation.scaleY
-                        val velocity = dampedDragAnimation.velocity / 10f
-                        scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
-                        scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                        if (enabledLiquidGlass) {
+                            scaleX = dampedDragAnimation.scaleX
+                            scaleY = dampedDragAnimation.scaleY
+                            val velocity = dampedDragAnimation.velocity / 10f
+                            scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                            scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                        }
                     },
                     onDrawSurface = {
-                        val progress = dampedDragAnimation.pressProgress
+                        val progress = if (enabledLiquidGlass) {
+                            dampedDragAnimation.pressProgress
+                        } else 0f
                         drawRect(
                             contentColor.copy(0.1f),
                             alpha = 1f - progress
@@ -303,12 +357,16 @@ fun LiquidBottomTabs(
                         drawRect(contentColor.copy(alpha = 0.03f * progress))
                     }
                 )
-                .then(interactiveHighlight.gestureModifier)
+                .then(
+                    if (enabledLiquidGlass) {
+                        interactiveHighlight.gestureModifier
+                    } else Modifier
+                )
         } else {
             Modifier
                 .drawBackdrop(
                     backdrop = tabsBackdrop,
-                    shape = { Capsule() },
+                    shape = { shape },
                     effects = {},
                     onDrawSurface = {
                         val progress = dampedDragAnimation.pressProgress

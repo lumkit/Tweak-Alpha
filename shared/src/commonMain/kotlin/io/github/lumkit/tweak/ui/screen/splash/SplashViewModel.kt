@@ -18,6 +18,10 @@ class SplashViewModel: BaseViewModel() {
 
     val runtimeModeState = GlobalViewModel.runtimeModeState
 
+    init {
+        GlobalViewModel.create()
+    }
+
     suspend fun setRuntimeMode(runtimeMode: RuntimeMode) {
         TweakDataStore.setRuntimeMode(runtimeMode)
     }

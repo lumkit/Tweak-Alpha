@@ -249,6 +249,8 @@ private fun CpuInfoContent(
 ) {
     val cpuState by DeviceInfoViewModel.cpuInfoState.collectAsStateWithLifecycle()
     val topProcessSupport by DeviceInfoViewModel.topProcessSupportState.collectAsStateWithLifecycle()
+    val enableProcessInfo by DeviceInfoViewModel.enabledProcessInfo.collectAsStateWithLifecycle()
+    val enableProcessInfoState = topProcessSupport && enableProcessInfo
     val topProcessVo by DeviceInfoViewModel.topProcessState.collectAsStateWithLifecycle()
     val chartState = rememberChartState()
 
@@ -277,7 +279,7 @@ private fun CpuInfoContent(
         Row(
             modifier = Modifier.fillMaxWidth()
                 .height(
-                    if (topProcessSupport) {
+                    if (enableProcessInfoState) {
                         120.dp
                     } else {
                         64.dp
@@ -286,7 +288,7 @@ private fun CpuInfoContent(
         ) {
 
             AnimatedVisibility(
-                visible = topProcessSupport,
+                visible = enableProcessInfoState,
                 modifier = Modifier.weight(1f)
             ) {
                 Row {

@@ -37,6 +37,12 @@ object TweakDataStore {
     // 主题相关
     private val themeModeKey = intPreferencesKey("theme_mode")
     private val backgroundImagePath = stringPreferencesKey("background_image_path")
+    // 是否启用悬浮导航栏
+    private val enableFloatNavigationBar = booleanPreferencesKey("enable_float_navigation_bar")
+    // 是否启用全局模糊效果
+    private val enableBlur = booleanPreferencesKey("enable_blur")
+    // 悬浮导航栏是否启用液态玻璃效果
+    private val floatNavBarEnableLiquidGlass = booleanPreferencesKey("float_nav_bar_enable_liquid_glass")
 
     // Shell相关
     private val shellTimeoutKey = longPreferencesKey("shell_timeout")
@@ -45,12 +51,15 @@ object TweakDataStore {
 
     // Settings相关
     private val infoUpdateTimeSpan = intPreferencesKey("info_update_time_span")
+    // 进程信息更新时间间隔
+    private val processInfoUpdateTime = longPreferencesKey("process_info_update_time")
     // 自动启动应用开关
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
     // 是否申请过通知权限
     private val hasRequestNotificationPermission = booleanPreferencesKey("has_request_notification_permission")
     // 是否已同意使用协议
     private val hasAcceptedUserAgreement = booleanPreferencesKey("has_accepted_user_agreement")
+    private val infoPageEnabledProcessInfo = booleanPreferencesKey("info_page_enabled_process_info")
 
     /**
      * 电池信息显示类型，0 - 显示功率，1显示电流
@@ -94,6 +103,42 @@ object TweakDataStore {
         }
     }
 
+    fun enableFloatNavigationBarFlow(): Flow<Boolean> = preferences.data.map {
+        it[enableFloatNavigationBar] ?: true
+    }
+
+    fun enableBlurFlow(): Flow<Boolean> = preferences.data.map {
+        it[enableBlur] ?: true
+    }
+
+    fun floatNavBarEnableLiquidGlassFlow(): Flow<Boolean> = preferences.data.map {
+        it[floatNavBarEnableLiquidGlass] ?: true
+    }
+
+    suspend fun setFloatNavigationBarEnabled(enabled: Boolean) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[enableFloatNavigationBar] = enabled
+            }
+        }
+    }
+
+    suspend fun setBlurEnabled(enabled: Boolean) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[enableBlur] = enabled
+            }
+        }
+    }
+
+    suspend fun setFloatNavBarEnableLiquidGlassEnabled(enabled: Boolean) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[floatNavBarEnableLiquidGlass] = enabled
+            }
+        }
+    }
+
     private const val DEFAULT_S_TIMEOUT_MILLISECONDS = 15_000L
 
     fun shellTimeoutFlow(): Flow<Long> = preferences.data.map {
@@ -131,6 +176,7 @@ object TweakDataStore {
 
     const val DEFAULT_INFO_UPDATE_TIME_SP_LEVEL = 2
     const val DEFAULT_INFO_UPDATE_TIME_SP_RANGE = 500f
+    const val DEFAULT_PROCESS_INFO_UPDATE_TIME = 3000L
 
     fun infoUpdateTimeSpanFlow(): Flow<Int> = preferences.data.map {
         it[infoUpdateTimeSpan] ?: DEFAULT_INFO_UPDATE_TIME_SP_LEVEL
@@ -140,6 +186,19 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[infoUpdateTimeSpan] = span
+            }
+        }
+    }
+
+    // 进程信息更新时间间隔
+    fun processInfoUpdateTimeFlow(): Flow<Long> = preferences.data.map {
+        it[processInfoUpdateTime] ?: DEFAULT_PROCESS_INFO_UPDATE_TIME
+    }
+
+    suspend fun setProcessInfoUpdateTime(span: Long) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[processInfoUpdateTime] = span
             }
         }
     }
@@ -305,6 +364,18 @@ object TweakDataStore {
     }
 
     const val DEFAULT_APK_EXPORT_DIR = "/storage/emulated/0/Download"
+
+    fun infoPageEnabledProcessInfoFlow(): Flow<Boolean> = preferences.data.map {
+        it[infoPageEnabledProcessInfo] ?: true
+    }
+
+    suspend fun setInfoPageEnabledProcessInfo(enabled: Boolean) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[infoPageEnabledProcessInfo] = enabled
+            }
+        }
+    }
 }
 
 data class FpsSourceConfig(

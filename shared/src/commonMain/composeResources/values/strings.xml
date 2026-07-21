@@ -325,4 +325,12 @@
     <string name="text_extract_apk_batch_failed">全部提取失败</string>
     <string name="text_extract_apk_already_running">已有提取任务进行中</string>
     <string name="text_extract_apk_run_in_background">后台运行</string>
+    <string name="text_float_navigation_bar">悬浮底部导航栏</string>
+    <string name="text_float_navigation_bar_description">启用类似IOS风格的悬浮底部导航栏</string>
+    <string name="text_navigation_bar_enable_blur">高斯模糊</string>
+    <string name="text_navigation_bar_enable_blur_description">启用全局高斯模糊效果</string>
+    <string name="text_float_navigation_bar_enable_liquidity">液态玻璃</string>
+    <string name="text_float_navigation_bar_enable_liquidity_description">启用悬浮底部导航栏液态玻璃效果</string>
+    <string name="text_process_info_overview">进程信息概览</string>
+    <string name="text_process_info_overview_description">启用面板页TOP15进程信息概览</string>
 </resources>

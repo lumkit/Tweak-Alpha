@@ -12,6 +12,7 @@ import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.common.utils.GpuUtils
 import io.github.lumkit.tweak.common.utils.ProcessUtilLite
 import io.github.lumkit.tweak.common.utils.StorageUtils
+import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.formatCurrent
 import io.github.lumkit.tweak.common.utils.formatMemorySize
 import io.github.lumkit.tweak.common.utils.formatPower
@@ -26,7 +27,10 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -193,15 +197,19 @@ object DeviceInfoViewModel : BaseViewModel() {
     private val _topProcessSupportState  = MutableStateFlow(false)
     val topProcessSupportState = _topProcessSupportState.asStateFlow()
 
+    val enabledProcessInfo = TweakDataStore.infoPageEnabledProcessInfoFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     init {
         viewModelScope.launch {
             _loadingState.value = false
             // 初始化GPU是否支持
             _gpuSupported.value = GpuUtils.canReadGpuInfo()
-            // 是否支持进程查询
-            launch(Dispatchers.IO) {
-                _topProcessSupportState.value = ProcessUtilLite.supported()
-            }
 
             while (isActive) {
                 // 后台时跳过采样，仅等待
@@ -219,16 +227,40 @@ object DeviceInfoViewModel : BaseViewModel() {
                 updateGpuInfo()
                 // 更新更多信息
                 updateMoreInfo()
-                // 更新进程 TOP15
-                if (_topProcessSupportState.value) {
-                    updateTopProcesses()
-                }
 
                 val loadingTime = Clock.System.now().toEpochMilliseconds() - tag
-                logD("loadingTime: $loadingTime", "DeviceInfoViewModel")
+                logD("loadingTime: $loadingTime", TAG)
 
                 _loadingState.value = true
                 delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
+            }
+        }
+
+        viewModelScope.launch {
+            // 是否支持进程查询
+            launch(Dispatchers.IO) {
+                _topProcessSupportState.value = ProcessUtilLite.supported()
+            }
+
+            enabledProcessInfo.collect { enabled ->
+                while (isActive && enabled) {
+                    // 后台时跳过采样，仅等待
+                    if (!isAppInForeground()) {
+                        delay(1000.milliseconds)
+                        continue
+                    }
+
+                    val tag = Clock.System.now().toEpochMilliseconds()
+                    // 更新进程 TOP15
+                    if (_topProcessSupportState.value) {
+                        updateTopProcesses()
+                    }
+
+                    val loadingTime = Clock.System.now().toEpochMilliseconds() - tag
+                    logD("process info loadingTime: $loadingTime", TAG)
+
+                    delay(GlobalViewModel.processInfoUpdateTimeState.value.milliseconds)
+                }
             }
         }
     }

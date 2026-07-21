@@ -7,7 +7,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -22,11 +21,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.LayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.shadow.Shadow
 import io.github.lumkit.tweak.ThemeViewModel
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
@@ -132,27 +126,6 @@ private fun Topbar(
             background
         },
         modifier = Modifier.fillMaxWidth()
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = {
-                    RoundedCornerShape(0.dp)
-                },
-                effects = {
-                    if (advancedBackdropEffectSupported) {
-                        vibrancy()
-                        blur(8f.dp.toPx())
-                        lens(8f.dp.toPx(), 8f.dp.toPx())
-                    }
-                },
-                shadow = { Shadow(radius = 0.dp) },
-                onDrawSurface = {
-                    if (advancedBackdropEffectSupported) {
-                        drawRect(background.copy(.4f))
-                    } else {
-                        drawRect(background)
-                    }
-                },
-                highlight = { null }
-            )
+            .glassBlur(backdrop)
     )
 }
