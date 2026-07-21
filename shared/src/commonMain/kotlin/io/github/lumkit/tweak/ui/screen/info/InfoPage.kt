@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.ui.screen.info
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -66,6 +67,7 @@ import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
+import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.service.OverlayMonitor
@@ -161,6 +163,15 @@ fun InfoPage() {
                 )
             }
 
+            val enabledFloatNavBar by GlobalViewModel.enabledFloatNavBar.collectAsStateWithLifecycle()
+            val navBarBottomPadding by animateDpAsState(
+                targetValue = if (enabledFloatNavBar) {
+                    28.dp
+                } else {
+                    16.dp
+                }
+            )
+
             LazyColumn(
                 modifier = Modifier.layerBackdrop(backdrop)
                     .padding(padding)
@@ -178,7 +189,7 @@ fun InfoPage() {
                     start = 16.dp,
                     end = 16.dp,
                     top = it.calculateTopPadding() + 16.dp,
-                    bottom = it.calculateBottomPadding() + NavigationBarHeight + 28.dp,
+                    bottom = it.calculateBottomPadding() + NavigationBarHeight + navBarBottomPadding,
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

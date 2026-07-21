@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 object GlobalViewModel: BaseViewModel() {
 
@@ -67,4 +68,16 @@ object GlobalViewModel: BaseViewModel() {
         )
 
     val enabledFloatNavBar = TweakDataStore.enableFloatNavigationBarFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    init {
+        viewModelScope.launch {
+            enabledFloatNavBar.collect {  }
+        }
+    }
 }

@@ -54,6 +54,7 @@ import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.ui.screen.feature.FeaturePage
 import io.github.lumkit.tweak.ui.screen.info.InfoPage
 import io.github.lumkit.tweak.ui.screen.settings.SettingsPage
+import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -108,8 +109,7 @@ private fun BoxScope.NavBar(
 ) {
     val density = LocalDensity.current
     val contentColor = MiuixTheme.colorScheme.onSurface
-    val enabledFloatNavBar by GlobalViewModel.enabledFloatNavBar.collectAsStateWithLifecycle(true)
-    val currentPage = pagerState.currentPage
+    val enabledFloatNavBar by GlobalViewModel.enabledFloatNavBar.collectAsStateWithLifecycle()
 
     AnimatedContent(
         targetState = enabledFloatNavBar,
@@ -136,7 +136,7 @@ private fun BoxScope.NavBar(
     ) { enabled ->
         if (enabled) {
             LiquidBottomTabs(
-                selectedTabIndex = { currentPage },
+                selectedTabIndex = { pagerState.currentPage },
                 onTabSelected = { index, isUserChange ->
                     if (isUserChange) {
                         onTabSelected(index)
@@ -203,7 +203,7 @@ private fun BoxScope.NavBar(
             BottomNavBar(
                 modifier = Modifier.fillMaxWidth()
                     .glassBlur(backdrop, shadow = Shadow(radius = 4.dp)),
-                currentPage = currentPage,
+                currentPage = pagerState.currentPage,
                 pageSize = viewModel.pagerCount,
                 onTabSelected = onTabSelected,
             )
@@ -224,7 +224,7 @@ private fun BottomNavBar(
         Row(
             modifier = Modifier.fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .height(56.dp),
+                .height(NavigationBarHeight),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             repeat(pageSize) { index ->

@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.ui.screen.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -147,6 +148,15 @@ fun SettingsPage(
             )
         }
 
+        val enabledFloatNavBar by GlobalViewModel.enabledFloatNavBar.collectAsStateWithLifecycle()
+        val navBarBottomPadding by animateDpAsState(
+            targetValue = if (enabledFloatNavBar) {
+                28.dp
+            } else {
+                16.dp
+            }
+        )
+
         LazyColumn(
             modifier = Modifier.layerBackdrop(backdrop)
                 .padding(padding)
@@ -157,7 +167,7 @@ fun SettingsPage(
                 start = 16.dp,
                 end = 16.dp,
                 top = it.calculateTopPadding() + 16.dp,
-                bottom = it.calculateBottomPadding() + NavigationBarHeight + 28.dp,
+                bottom = it.calculateBottomPadding() + NavigationBarHeight + navBarBottomPadding,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

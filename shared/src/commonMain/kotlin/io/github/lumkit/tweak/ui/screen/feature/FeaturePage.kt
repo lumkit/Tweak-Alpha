@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.ui.screen.feature
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,6 +90,15 @@ fun FeaturePage() {
             )
         }
 
+        val enabledFloatNavBar by GlobalViewModel.enabledFloatNavBar.collectAsStateWithLifecycle()
+        val navBarBottomPadding by animateDpAsState(
+            targetValue = if (enabledFloatNavBar) {
+                28.dp
+            } else {
+                16.dp
+            }
+        )
+
         LazyColumn(
             modifier = Modifier.layerBackdrop(backdrop)
                 .padding(padding)
@@ -99,7 +109,7 @@ fun FeaturePage() {
                 start = 16.dp,
                 end = 16.dp,
                 top = it.calculateTopPadding() + 16.dp,
-                bottom = it.calculateBottomPadding() + NavigationBarHeight + 28.dp,
+                bottom = it.calculateBottomPadding() + NavigationBarHeight + navBarBottomPadding,
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
