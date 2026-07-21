@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -82,6 +81,8 @@ import com.kyant.shapes.copy
 import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.component.Block
+import io.github.lumkit.tweak.common.component.BottomNavigationBar
+import io.github.lumkit.tweak.common.component.BottomNavigationBarItem
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.SmallTopAppBar
 import io.github.lumkit.tweak.common.component.glassBlur
@@ -100,6 +101,7 @@ import io.github.lumkit.tweak.ui.screen.feature.FeatureProvider
 import io.github.lumkit.tweak.ui.screen.feature.model.Capability
 import io.github.lumkit.tweak.ui.screen.feature.model.Feature
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
+import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -112,7 +114,6 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox
-import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
@@ -318,16 +319,6 @@ private fun AppManagerContent(
                     topHeight = it.height
                 }
             },
-            floatingToolbar = {
-                AppManagerFloatingToolbar(
-                    selectMode = selectMode,
-                    pages = pages,
-                    pagerState = pager,
-                    onToolBarHeight = {
-                        bottomToolBarHeight = it
-                    }
-                )
-            },
             floatingToolbarPosition = ToolbarPosition.BottomCenter,
             containerColor = MiuixTheme.colorScheme.surface,
         ) { paddingValues ->
@@ -338,7 +329,7 @@ private fun AppManagerContent(
                         start = paddingValues.calculateStartPadding(direction),
                         end = paddingValues.calculateEndPadding(direction),
                         top = topHeight + 12.dp,
-                        bottom = paddingValues.calculateBottomPadding() + bottomToolBarHeight,
+                        bottom = bottomToolBarHeight,
                     )
                 }
 
@@ -353,7 +344,9 @@ private fun AppManagerContent(
                 scrollBehavior = scrollBehavior,
                 direction = direction,
                 viewModel = viewModel,
-            )
+            ) {
+                bottomToolBarHeight = it
+            }
         }
     }
 }
@@ -393,7 +386,8 @@ private fun AppManagerExtractEffects() {
     val extractState by ExtractApkSession.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(extractState.snackbarMessage) {
-        val message = extractState.snackbarMessage?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
+        val message =
+            extractState.snackbarMessage?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
         hostState.showSnackbar(message)
         ExtractApkSession.consumeSnackbarMessage()
     }
@@ -646,18 +640,41 @@ private fun AppManagerSelectionAction(viewModel: AppManagerViewModel) {
 }
 
 @Composable
-private fun AppManagerFloatingToolbar(
-    selectMode: Boolean,
+private fun AppManagerNavBar(
+    backdrop: LayerBackdrop,
     pages: List<AppPage>,
     pagerState: PagerState,
     onToolBarHeight: (Dp) -> Unit,
 ) {
-    Column {
-        AnimatedVisibility(visible = !selectMode) {
-            FloatingToolBar(
-                pages = pages,
-                pagerState = pagerState,
-                onToolBarHeight = onToolBarHeight,
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val background = MiuixTheme.colorScheme.surface
+    val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
+
+    BottomNavigationBar(
+        modifier = Modifier.onSizeChanged {
+            onToolBarHeight(with(density) { it.height.toDp() })
+        }
+            .glassBlur(backdrop)
+            .background(
+                if (advancedBackdropEffectSupported) {
+                    MiuixTheme.colorScheme.surfaceContainer.copy(.5f)
+                } else {
+                    background
+                }
+            )
+    ) {
+        pages.onEachIndexed { index, page ->
+            BottomNavigationBarItem(
+                currentPage = pagerState.currentPage,
+                index = index,
+                iconPainter = painterResource(page.iconRes),
+                title = stringResource(page.titleRes),
+                onTabSelected = {
+                    scope.launch {
+                        pagerState.animateScrollToPage(it)
+                    }
+                },
             )
         }
     }
@@ -675,6 +692,7 @@ private fun AppManagerContentLayout(
     scrollBehavior: ScrollBehavior,
     direction: LayoutDirection,
     viewModel: AppManagerViewModel,
+    onToolBarHeight: (Dp) -> Unit,
 ) {
     val targetAppInfo by viewModel.targetAppInfo.collectAsStateWithLifecycle()
 
@@ -739,6 +757,39 @@ private fun AppManagerContentLayout(
                     backdrop = backdrop,
                     viewModel = viewModel,
                     currentPosition = currentPage,
+                    onToolBarHeight = onToolBarHeight,
+                )
+            }
+        }
+
+        AnimatedContent(
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            targetState = !selectMode,
+            transitionSpec = {
+                if (targetState) {
+                    slideInVertically(
+                        initialOffsetY = { it }
+                    ) togetherWith slideOutVertically(
+                        targetOffsetY = { -it / 4 }
+                    )
+                } else {
+                    slideInVertically(
+                        initialOffsetY = { -it / 4 }
+                    ) togetherWith slideOutVertically(
+                        targetOffsetY = { it }
+                    )
+                }.using(
+                    SizeTransform(clip = false)
+                )
+            }
+        ) { visible ->
+            if (visible) {
+                AppManagerNavBar(
+                    backdrop = backdrop,
+                    pages = pages,
+                    pagerState = pagerState,
+                    onToolBarHeight = onToolBarHeight,
                 )
             }
         }
@@ -752,6 +803,7 @@ private fun BoxScope.BottomToolbar(
     backdrop: LayerBackdrop,
     viewModel: AppManagerViewModel,
     currentPosition: Int,
+    onToolBarHeight: (Dp) -> Unit,
 ) {
     val background = MiuixTheme.colorScheme.surface
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
@@ -761,6 +813,7 @@ private fun BoxScope.BottomToolbar(
     var forceDialogState by remember { mutableStateOf(false) }
     var iceDialogState by remember { mutableStateOf(false) }
     var uninstallDialogState by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
 
     ForceStopDialog(
         show = forceDialogState,
@@ -811,11 +864,14 @@ private fun BoxScope.BottomToolbar(
                     background
                 }
             )
+            .onSizeChanged {
+                onToolBarHeight(with(density) { it.height.toDp() })
+            }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .height(72.dp)
+                .height(NavigationBarHeight)
                 .clickable(
                     indication = null,
                     interactionSource = null,
@@ -1044,75 +1100,12 @@ private fun DialogActionButtons(
     }
 }
 
-@Composable
-private fun FloatingToolBar(
-    pagerState: PagerState,
-    pages: List<AppPage>,
-    onToolBarHeight: (Dp) -> Unit,
-) {
-    val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
-
-    FloatingToolbar(
-        modifier = Modifier.onSizeChanged {
-            onToolBarHeight(with(density) { it.height.toDp() })
-        }
-    ) {
-        NavToolbar(
-            pages,
-            pagerState,
-        ) {
-            scope.launch {
-                pagerState.animateScrollToPage(it)
-            }
-        }
-    }
-}
-
 @Immutable
 private data class AppPage(
     val iconRes: DrawableResource,
     val titleRes: StringResource,
     val listState: StateFlow<List<AppInfo>>,
 )
-
-@Composable
-private fun NavToolbar(
-    list: List<AppPage>,
-    pagerState: PagerState,
-    onTabSelected: (Int) -> Unit
-) {
-    Row(
-        modifier = Modifier.padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) { // 或 Column
-        list.onEachIndexed { index, page ->
-            val color by animateColorAsState(
-                targetValue = if (pagerState.currentPage == index) {
-                    MiuixTheme.colorScheme.primary
-                } else {
-                    MiuixTheme.colorScheme.onSurface.copy(.31f)
-                },
-                label = "color-$index"
-            )
-
-            TooltipBox(text = stringResource(page.titleRes)) {
-                IconButton(
-                    onClick = {
-                        onTabSelected(index)
-                    }
-                ) {
-                    Icon(
-                        painter = painterResource(page.iconRes),
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        tint = color
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun AppItems(
@@ -1145,7 +1138,7 @@ private fun AppItems(
             start = paddingValues.calculateStartPadding(direction) + 16.dp,
             top = paddingValues.calculateTopPadding(),
             end = paddingValues.calculateEndPadding(direction) + 16.dp,
-            bottom = paddingValues.calculateBottomPadding() + 16.dp
+            bottom = paddingValues.calculateBottomPadding() + 12.dp
         ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -1459,7 +1452,10 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
                             ),
                             AppInfoDetailItem(
                                 title = stringResource(Res.string.text_app_info_first_install),
-                                value = formatDateTime(info.firstInstallTime, "yyyy-MM-dd HH:mm:ss"),
+                                value = formatDateTime(
+                                    info.firstInstallTime,
+                                    "yyyy-MM-dd HH:mm:ss"
+                                ),
                             ),
                             AppInfoDetailItem(
                                 title = stringResource(Res.string.text_app_info_last_update),

@@ -2,26 +2,17 @@ package io.github.lumkit.tweak.ui.screen.main
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -32,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalDensity
@@ -42,7 +32,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.shadow.Shadow
-import com.kyant.shapes.Capsule
+import io.github.lumkit.tweak.common.component.BottomNavigationBar
+import io.github.lumkit.tweak.common.component.BottomNavigationBarItem
 import io.github.lumkit.tweak.common.component.LiquidBottomTab
 import io.github.lumkit.tweak.common.component.LiquidBottomTabs
 import io.github.lumkit.tweak.common.component.ScreenSurface
@@ -56,11 +47,9 @@ import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.ui.screen.feature.FeaturePage
 import io.github.lumkit.tweak.ui.screen.info.InfoPage
 import io.github.lumkit.tweak.ui.screen.settings.SettingsPage
-import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
-import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -220,53 +209,18 @@ private fun BottomNavBar(
     pageSize: Int,
     onTabSelected: (Int) -> Unit,
 ) {
-    Row(
-        modifier = modifier,
+    BottomNavigationBar(
+        modifier = modifier
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .height(NavigationBarHeight),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Spacer(modifier = Modifier.width(28.dp))
-            repeat(pageSize) { index ->
-                val page = remember(index) { MainPages.entries[index] }
-                val isSelected = index == currentPage
-                val contentColor by animateColorAsState(
-                    targetValue = if (isSelected) {
-                        MiuixTheme.colorScheme.primary
-                    } else {
-                        MiuixTheme.colorScheme.onSurface.copy(.75f)
-                    }
-                )
-
-                Column(
-                    modifier = Modifier.padding(4.dp)
-                        .clip(Capsule())
-                        .fillMaxSize()
-                        .weight(1f)
-                        .clickable {
-                            onTabSelected(index)
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        painter = painterResource(page.iconRes),
-                        contentDescription = null,
-                        tint = contentColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-
-                    Text(
-                        text = stringResource(page.titleRes),
-                        color = contentColor,
-                        style = MiuixTheme.textStyles.body2,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(28.dp))
+        repeat(pageSize) { index ->
+            val page = remember(index) { MainPages.entries[index] }
+            BottomNavigationBarItem(
+                currentPage = currentPage,
+                index = index,
+                iconPainter = painterResource(page.iconRes),
+                title = stringResource(page.titleRes),
+                onTabSelected = onTabSelected,
+            )
         }
     }
 }
