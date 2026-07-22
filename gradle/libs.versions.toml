@@ -22,6 +22,7 @@ shizuku = "13.1.5"
 room = "2.8.4"
 sqlite = "2.7.0"
 ksp = "2.3.9"
+reorderable = "3.1.0"
 
 [libraries]
 android-gradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
@@ -63,6 +64,7 @@ shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizu
 androidx-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

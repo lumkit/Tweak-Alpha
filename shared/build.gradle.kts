@@ -78,6 +78,9 @@ kotlin {
             implementation(libs.androidx.room.runtime)
             implementation(libs.androidx.sqlite.bundled)
 
+            // reorderable
+            implementation(libs.reorderable)
+
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

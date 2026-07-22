@@ -113,6 +113,12 @@ class OpenSourceViewModel : BaseViewModel() {
                 url = "https://developer.android.com/guide/navigation/navigation-3",
             ),
             LicenseBean(
+                title = "Reorderable",
+                author = "Calvin Lung",
+                tip = "Reorder items in Lists and Grids in Jetpack Compose and Compose Multiplatform with drag and drop. Version 3.1.0",
+                url = "https://github.com/Calvin-LL/Reorderable",
+            ),
+            LicenseBean(
                 title = "Shizuku API",
                 author = "RikkaApps",
                 tip = "Shizuku API is the API provided by Shizuku and Sui. With Shizuku API, you can call your Java or JNI code with root or shell identity. Version 13.1.5",

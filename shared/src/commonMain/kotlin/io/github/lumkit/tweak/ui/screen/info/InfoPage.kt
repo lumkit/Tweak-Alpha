@@ -25,8 +25,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -41,8 +44,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -62,6 +67,8 @@ import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
 import io.github.lumkit.tweak.common.shell.ReusableShells
+import io.github.lumkit.tweak.common.utils.DEFAULT_INFO_PAGE_ITEM_ORDER
+import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
@@ -73,10 +80,13 @@ import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.service.OverlayMonitor
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -126,6 +136,18 @@ import tweak_alpha.shared.generated.resources.text_total_memory
 import tweak_alpha.shared.generated.resources.text_total_memory_used
 import tweak_alpha.shared.generated.resources.text_used_load
 
+private enum class InfoPageSection(val key: String) {
+    Cpu("cpu"),
+    Memory("memory"),
+    Gpu("gpu"),
+    More("more"),
+    ;
+
+    companion object {
+        fun fromKey(key: String): InfoPageSection? = entries.find { it.key == key }
+    }
+}
+
 @Composable
 fun InfoPage() {
     val loadState by DeviceInfoViewModel.loadingState.collectAsStateWithLifecycle()
@@ -134,10 +156,29 @@ fun InfoPage() {
     val backdrop = rememberLayerBackdropColor()
     val backdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
     val navigator = LocalNavigator.current
-    val alpha by animateFloatAsState(
+    val scope = rememberCoroutineScope()
+    val hapticFeedback = LocalHapticFeedback.current
+    val overlayAlpha by animateFloatAsState(
         targetValue = if (loadState) 0f else .5f,
         animationSpec = tween(durationMillis = 400)
     )
+
+    var sectionOrder by remember { mutableStateOf(DEFAULT_INFO_PAGE_ITEM_ORDER) }
+    LaunchedEffect(Unit) {
+        sectionOrder = TweakDataStore.infoPageItemOrderFlow().first()
+    }
+
+    val lazyListState = rememberLazyListState()
+    val reorderableLazyListState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        val newOrder = sectionOrder.toMutableList().apply {
+            add(to.index, removeAt(from.index))
+        }
+        sectionOrder = newOrder
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+        scope.launch {
+            TweakDataStore.setInfoPageItemOrder(newOrder)
+        }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -178,13 +219,14 @@ fun InfoPage() {
                     .fillMaxSize()
                     .overScrollVertical()
                     .then(
-                        if (alpha > 0f) {
-                            Modifier.blur(24.dp * alpha)
+                        if (overlayAlpha > 0f) {
+                            Modifier.blur(24.dp * overlayAlpha)
                         } else {
                             Modifier
                         }
                     )
                     .nestedScroll(scrollBehavior.nestedScrollConnection),
+                state = lazyListState,
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
@@ -193,32 +235,55 @@ fun InfoPage() {
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item(key = "cpu") {
-                    CpuInfoContent { vo ->
-                        navigator.navigate(
-                            Screen.ProcessManager(
-                                scrollToPackage = vo.packageName,
-                                scrollToPid = vo.pid,
-                            )
+                items(
+                    items = sectionOrder,
+                    key = { it },
+                ) { sectionKey ->
+                    ReorderableItem(
+                        state = reorderableLazyListState,
+                        key = sectionKey,
+                    ) { isDragging ->
+                        val dragAlpha by animateFloatAsState(
+                            targetValue = if (isDragging) 0.92f else 1f,
+                            animationSpec = tween(durationMillis = 120),
                         )
+                        Box(
+                            modifier = Modifier
+                                .graphicsLayer { alpha = dragAlpha }
+                                .longPressDraggableHandle(
+                                    onDragStarted = {
+                                        hapticFeedback.performHapticFeedback(
+                                            HapticFeedbackType.GestureThresholdActivate,
+                                        )
+                                    },
+                                    onDragStopped = {
+                                        hapticFeedback.performHapticFeedback(
+                                            HapticFeedbackType.GestureEnd,
+                                        )
+                                    },
+                                ),
+                        ) {
+                            when (InfoPageSection.fromKey(sectionKey)) {
+                                InfoPageSection.Cpu -> CpuInfoContent { vo ->
+                                    navigator.navigate(
+                                        Screen.ProcessManager(
+                                            scrollToPackage = vo.packageName,
+                                            scrollToPid = vo.pid,
+                                        )
+                                    )
+                                }
+                                InfoPageSection.Memory -> MemoryInfoContent()
+                                InfoPageSection.Gpu -> GpuInfoContent()
+                                InfoPageSection.More -> MoreInfoContent()
+                                null -> Unit
+                            }
+                        }
                     }
-                }
-
-                item(key = "memory") {
-                    MemoryInfoContent()
-                }
-
-                item(key = "gpu") {
-                    GpuInfoContent()
-                }
-
-                item(key = "more") {
-                    MoreInfoContent()
                 }
             }
         }
 
-        if (alpha > 0f) {
+        if (overlayAlpha > 0f) {
             Box(
                 modifier = Modifier.fillMaxSize()
                     .then(
@@ -231,7 +296,7 @@ fun InfoPage() {
                             Modifier
                         }
                     )
-                    .alpha(alpha)
+                    .alpha(overlayAlpha)
                     .background(
                         color = if (backdropEffectSupported) {
                             Color.Transparent

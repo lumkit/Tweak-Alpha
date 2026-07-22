@@ -60,6 +60,7 @@ object TweakDataStore {
     // 是否已同意使用协议
     private val hasAcceptedUserAgreement = booleanPreferencesKey("has_accepted_user_agreement")
     private val infoPageEnabledProcessInfo = booleanPreferencesKey("info_page_enabled_process_info")
+    private val infoPageItemOrderKey = stringPreferencesKey("info_page_item_order")
     private val processManagerFilterModeKey = intPreferencesKey("process_manager_filter_mode")
 
     /**
@@ -378,6 +379,19 @@ object TweakDataStore {
         }
     }
 
+    fun infoPageItemOrderFlow(): Flow<List<String>> = preferences.data.map {
+        normalizeInfoPageItemOrder(it[infoPageItemOrderKey])
+    }
+
+    suspend fun setInfoPageItemOrder(order: List<String>) {
+        val normalized = normalizeInfoPageItemOrder(order.joinToString(","))
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[infoPageItemOrderKey] = normalized.joinToString(",")
+            }
+        }
+    }
+
     fun processManagerFilterModeOrdinalFlow(): Flow<Int> = preferences.data.map {
         it[processManagerFilterModeKey] ?: 0
     }
@@ -389,6 +403,29 @@ object TweakDataStore {
             }
         }
     }
+}
+
+/**
+ * 信息页卡片顺序：保留已知 key 的相对顺序，并补齐缺失项。
+ */
+val DEFAULT_INFO_PAGE_ITEM_ORDER = listOf("cpu", "memory", "gpu", "more")
+
+fun normalizeInfoPageItemOrder(raw: String?): List<String> {
+    val defaults = DEFAULT_INFO_PAGE_ITEM_ORDER
+    val known = defaults.toSet()
+    val parsed = raw
+        ?.split(',')
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() && it in known }
+        ?.distinct()
+        .orEmpty()
+        .toMutableList()
+    defaults.forEach { key ->
+        if (key !in parsed) {
+            parsed.add(key)
+        }
+    }
+    return parsed
 }
 
 data class FpsSourceConfig(
