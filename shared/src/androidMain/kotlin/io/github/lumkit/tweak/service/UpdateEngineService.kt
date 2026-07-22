@@ -26,7 +26,6 @@ import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.NavigationIntent
-import io.github.lumkit.tweak.model.NavigationIntentTargetScreen
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.shared.R
@@ -37,7 +36,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import kotlin.math.roundToInt
 
 class UpdateEngineService: BaseService() {
@@ -419,24 +417,12 @@ class UpdateEngineService: BaseService() {
         notificationManager.notify(NOTIFICATION_ID + id, notification)
     }
 
-    private val json by lazy {
-        Json {
-            ignoreUnknownKeys = true
-            encodeDefaults = true
-        }
-    }
-
     private fun createPendingIntentForSystemUpdate(): PendingIntent {
-        val navIntent = NavigationIntent(
-            targetScreen = NavigationIntentTargetScreen.UpdateSystem,
-            screenJson = json.encodeToString(Screen.UpdateSystem)
-        )
-
-        val intentJson = json.encodeToString(navIntent)
+        val intentJson = NavigationIntent.encode(Screen.UpdateSystem)
 
         val intent = Intent(this, MainActivity::class.java).apply {
             action = ConstCommon.Navigation.ACTION_DEEPLINK_SELF
-            putExtra("nav_intent", intentJson)
+            putExtra(ConstCommon.Navigation.EXTRA_NAV_INTENT, intentJson)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP
         }

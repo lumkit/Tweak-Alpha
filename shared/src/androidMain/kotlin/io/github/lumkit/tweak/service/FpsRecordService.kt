@@ -52,7 +52,6 @@ import io.github.lumkit.tweak.common.utils.SnapToEdgeTouchProvider
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.model.NavigationIntent
-import io.github.lumkit.tweak.model.NavigationIntentTargetScreen
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordServiceViewModel
 import io.github.lumkit.tweak.ui.theme.colorBusy
@@ -61,7 +60,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -239,13 +237,6 @@ class FpsRecordService : BaseService() {
     )
 }
 
-private val json by lazy {
-    Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
-}
-
 @Composable
 private fun ComposeOverlayHelper.FpsRecordContent() {
     val viewModel = FpsRecordServiceViewModel
@@ -372,16 +363,11 @@ private fun PreferenceContent(helper: ComposeOverlayHelper) {
                 .size(22.dp)
                 .padding(2.dp)
                 .clickable {
-                    val navIntent = NavigationIntent(
-                        targetScreen = NavigationIntentTargetScreen.FpsRecord,
-                        screenJson = json.encodeToString(Screen.FpsRecord)
-                    )
-
-                    val intentJson = json.encodeToString(navIntent)
+                    val intentJson = NavigationIntent.encode(Screen.FpsRecord)
 
                     val intent = Intent(context, MainActivity::class.java).apply {
                         action = ConstCommon.Navigation.ACTION_DEEPLINK_SELF
-                        putExtra("nav_intent", intentJson)
+                        putExtra(ConstCommon.Navigation.EXTRA_NAV_INTENT, intentJson)
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                                 Intent.FLAG_ACTIVITY_CLEAR_TOP
                     }

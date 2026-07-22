@@ -29,10 +29,14 @@ class Navigator(val state: NavigationState){
             state.topLevelRoute = route
         } else {
             val navKeys = state.backStacks[state.topLevelRoute] ?: return
-            // 比较栈顶页面的类型，避免同类型页面重复添加
             val lastRoute = navKeys.lastOrNull()
-            if (lastRoute == null || lastRoute::class != route::class) {
-                navKeys.add(route)
+            when {
+                lastRoute == null || lastRoute::class != route::class -> navKeys.add(route)
+                // 同类型但参数不同（如 ProcessManager 定位包名）时替换栈顶
+                lastRoute != route -> {
+                    navKeys.removeLastOrNull()
+                    navKeys.add(route)
+                }
             }
         }
     }

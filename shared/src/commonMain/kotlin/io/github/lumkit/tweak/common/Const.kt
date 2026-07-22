@@ -11,7 +11,13 @@ expect object Const {
 
 object ConstCommon {
     object Navigation {
-        const val ACTION_DEEPLINK_SELF = "ACTION_DEEPLINK_SELF"
+        const val ACTION_DEEPLINK_SELF = "io.github.lumkit.tweak.ACTION_DEEPLINK_SELF"
+        const val EXTRA_NAV_INTENT = "nav_intent"
+        /** adb 简易跳转：`--es route ProcessManager` */
+        const val EXTRA_ROUTE = "route"
+        const val EXTRA_SCROLL_TO_PACKAGE = "scrollToPackage"
+        const val EXTRA_SCROLL_TO_PID = "scrollToPid"
+        const val EXTRA_ID = "id"
     }
 
     object Path {

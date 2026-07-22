@@ -8,13 +8,21 @@ import io.github.lumkit.tweak.navigation.Screen
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
-object NavigationViewModel: BaseViewModel() {
+object NavigationViewModel : BaseViewModel() {
 
     private val json by lazy {
         Json {
             ignoreUnknownKeys = true
             encodeDefaults = true
+            classDiscriminator = "type"
         }
+    }
+
+    fun navigate(screen: Screen) {
+        if (!screen.isDeeplinkNavigable()) {
+            return
+        }
+        navigate(NavigationIntent.of(screen))
     }
 
     fun navigate(intent: NavigationIntent) = suspendLaunch(
@@ -48,31 +56,19 @@ object NavigationViewModel: BaseViewModel() {
 
     private fun navHandle(loadState: LoadState, navigator: Navigator) {
         when (loadState) {
-            is LoadState.Failure -> Unit
-            is LoadState.Loading -> Unit
+            is LoadState.Failure,
+            is LoadState.Loading,
+            -> Unit
             is LoadState.Success -> {
                 val intent = runCatching {
                     json.decodeFromString<NavigationIntent>(loadState.message ?: "{}")
                 }.getOrNull() ?: return
 
-                // 跳转导航
-                when (intent.targetScreen) {
-
-                    NavigationIntentTargetScreen.UpdateSystem -> {
-                        val route = json.decodeFromString<Screen.UpdateSystem>(intent.screenJson)
-                        navigator.singleTop(route)
-                    }
-
-                    NavigationIntentTargetScreen.FpsRecord -> {
-                        val route = json.decodeFromString<Screen.FpsRecord>(intent.screenJson)
-                        navigator.singleTop(route)
-                    }
-
-                    NavigationIntentTargetScreen.FlashRom -> {
-                        val route = json.decodeFromString<Screen.FlashRom>(intent.screenJson)
-                        navigator.singleTop(route)
-                    }
+                val screen = NavigationIntent.decodeScreen(intent.screenJson) ?: return
+                if (!screen.isDeeplinkNavigable()) {
+                    return
                 }
+                navigator.singleTop(screen)
             }
         }
     }

@@ -28,7 +28,6 @@ import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.common.utils.startSmartService
 import io.github.lumkit.tweak.model.NavigationIntent
-import io.github.lumkit.tweak.model.NavigationIntentTargetScreen
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.shared.R
 import io.github.lumkit.tweak.ui.screen.flashRom.FlashRomViewModel
@@ -42,7 +41,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.getString
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.text_flash_device_lost
@@ -357,22 +355,11 @@ class LineFlashService : BaseService() {
         notificationManager.notify(NOTIFICATION_ID + 1, notification)
     }
 
-    private val json by lazy {
-        Json {
-            ignoreUnknownKeys = true
-            encodeDefaults = true
-        }
-    }
-
     private fun mainPendingIntent(): PendingIntent {
-        val navIntent = NavigationIntent(
-            targetScreen = NavigationIntentTargetScreen.FlashRom,
-            screenJson = json.encodeToString(Screen.FlashRom),
-        )
-        val intentJson = json.encodeToString(navIntent)
+        val intentJson = NavigationIntent.encode(Screen.FlashRom)
         val intent = Intent(this, MainActivity::class.java).apply {
             action = ConstCommon.Navigation.ACTION_DEEPLINK_SELF
-            putExtra("nav_intent", intentJson)
+            putExtra(ConstCommon.Navigation.EXTRA_NAV_INTENT, intentJson)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         return PendingIntent.getActivity(
