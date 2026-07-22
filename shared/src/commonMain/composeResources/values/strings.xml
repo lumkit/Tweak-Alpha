@@ -155,6 +155,7 @@
     <string name="text_process_sort_cpu">按 CPU</string>
     <string name="text_process_sort_res">按内存</string>
     <string name="text_process_sort_pid">按 PID</string>
+    <string name="text_process_sort_none">不排序</string>
     <string name="text_process_detail">进程详情</string>
     <string name="text_process_kill">结束进程</string>
     <string name="text_process_stop_app">强行停止应用</string>

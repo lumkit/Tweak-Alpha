@@ -32,6 +32,7 @@ import io.github.lumkit.tweak.common.component.Logo
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.exitApp
+import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.restartApp
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.model.stringResourceByRuntimeMode
@@ -95,11 +96,14 @@ internal fun SplashScreen(
 
     // 升级后已有模式但未同意协议：自动弹出协议，同意后继续原模式校验
     LaunchedEffect(runtimeMode, agreementAccepted) {
+        logD("agreementAccepted=$agreementAccepted")
         if (agreementAccepted == true || showAgreementDialog) return@LaunchedEffect
         val mode = runtimeMode
         if (mode == null || mode == RuntimeMode.Unknow) return@LaunchedEffect
         pendingRuntimeMode = mode
-        showAgreementDialog = true
+        if (agreementAccepted != true) {
+            showAgreementDialog = true
+        }
     }
 
     fun proceedWithMode(mode: RuntimeMode) {

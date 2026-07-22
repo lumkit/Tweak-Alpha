@@ -64,6 +64,7 @@
         <activity
             android:exported="true"
             android:name=".MainActivity"
+            android:excludeFromRecents="true"
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

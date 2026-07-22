@@ -115,6 +115,7 @@ import tweak_alpha.shared.generated.resources.text_process_oom_adj
 import tweak_alpha.shared.generated.resources.text_process_oom_score_adj
 import tweak_alpha.shared.generated.resources.text_process_pid
 import tweak_alpha.shared.generated.resources.text_process_sort_cpu
+import tweak_alpha.shared.generated.resources.text_process_sort_none
 import tweak_alpha.shared.generated.resources.text_process_sort_pid
 import tweak_alpha.shared.generated.resources.text_process_sort_res
 import tweak_alpha.shared.generated.resources.text_process_stop_app
@@ -408,12 +409,13 @@ private fun ProcessManagerTopBar(
                 stringResource(Res.string.text_process_sort_cpu),
                 stringResource(Res.string.text_process_sort_res),
                 stringResource(Res.string.text_process_sort_pid),
+                stringResource(Res.string.text_process_sort_none),
             )
             val selectedSortIndex = when (sortMode) {
                 ProcessSortMode.Cpu -> 0
                 ProcessSortMode.Res -> 1
                 ProcessSortMode.Pid -> 2
-                ProcessSortMode.Default -> 0
+                ProcessSortMode.None -> 3
             }
             TabRowWithContour(
                 tabs = sortTabs,
@@ -423,7 +425,8 @@ private fun ProcessManagerTopBar(
                         when (index) {
                             0 -> ProcessSortMode.Cpu
                             1 -> ProcessSortMode.Res
-                            else -> ProcessSortMode.Pid
+                            2 -> ProcessSortMode.Pid
+                            else -> ProcessSortMode.None
                         }
                     )
                 },

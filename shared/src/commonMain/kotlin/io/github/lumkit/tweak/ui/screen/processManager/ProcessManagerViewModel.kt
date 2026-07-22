@@ -29,7 +29,8 @@ enum class ProcessSortMode {
     Cpu,
     Res,
     Pid,
-    Default,
+    /** 保持采样原始顺序，不额外排序 */
+    None,
 }
 
 class ProcessManagerViewModel : BaseViewModel() {
@@ -66,12 +67,14 @@ class ProcessManagerViewModel : BaseViewModel() {
         _sortMode,
         _searchQuery,
     ) { list, filter, sort, query ->
-        list
+        val filtered = list
             .asSequence()
             .filter { matchesFilter(it, filter) }
             .filter { matchesQuery(it, query) }
-            .sortedWith(sortComparator(sort))
-            .toList()
+        when (sort) {
+            ProcessSortMode.None -> filtered.toList()
+            else -> filtered.sortedWith(sortComparator(sort)).toList()
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -220,7 +223,7 @@ class ProcessManagerViewModel : BaseViewModel() {
             ProcessSortMode.Cpu -> compareByDescending { it.cpu }
             ProcessSortMode.Res -> compareByDescending { it.res }
             ProcessSortMode.Pid -> compareByDescending { it.pid }
-            ProcessSortMode.Default -> compareBy { it.pid }
+            ProcessSortMode.None -> compareBy { 0 }
         }
     }
 }
