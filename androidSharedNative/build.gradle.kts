@@ -59,6 +59,14 @@ android {
         aidl = true
     }
 
+    // cmake POST_BUILD 会把 tweakd 拷到此处，以 libtweakd.so 打进 AAR
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDir("src/main/jniLibs")
+            assets.srcDir("src/main/assets")
+        }
+    }
+
     dependencies {
         implementation(libs.androidx.activity.compose)
         compileOnly(libs.libsu.core)

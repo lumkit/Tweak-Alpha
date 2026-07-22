@@ -60,6 +60,7 @@ object TweakDataStore {
     // 是否已同意使用协议
     private val hasAcceptedUserAgreement = booleanPreferencesKey("has_accepted_user_agreement")
     private val infoPageEnabledProcessInfo = booleanPreferencesKey("info_page_enabled_process_info")
+    private val processManagerFilterModeKey = intPreferencesKey("process_manager_filter_mode")
 
     /**
      * 电池信息显示类型，0 - 显示功率，1显示电流
@@ -256,8 +257,8 @@ object TweakDataStore {
         }
     }
 
-    fun hasAcceptedUserAgreementFlow(): Flow<Boolean?> = preferences.data.map {
-        it[hasAcceptedUserAgreement]
+    fun hasAcceptedUserAgreementFlow(): Flow<Boolean> = preferences.data.map {
+        it[hasAcceptedUserAgreement] ?: false
     }
 
     suspend fun setHasAcceptedUserAgreement(accepted: Boolean = true) {
@@ -373,6 +374,18 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[infoPageEnabledProcessInfo] = enabled
+            }
+        }
+    }
+
+    fun processManagerFilterModeOrdinalFlow(): Flow<Int> = preferences.data.map {
+        it[processManagerFilterModeKey] ?: 0
+    }
+
+    suspend fun setProcessManagerFilterModeOrdinal(ordinal: Int) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[processManagerFilterModeKey] = ordinal
             }
         }
     }

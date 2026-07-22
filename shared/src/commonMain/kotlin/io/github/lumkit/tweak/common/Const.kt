@@ -27,5 +27,12 @@ object ConstCommon {
         const val LINE_FLASH_DIR = "$TWEAK_ALPHA_ROOT/line_flash"
 
         fun lineFlashSession(sessionId: String): String = "$LINE_FLASH_DIR/$sessionId"
+
+        /** 特权 native daemon 工作区 */
+        const val DAEMON_DIR = "$TWEAK_ALPHA_ROOT/daemon"
+        const val DAEMON_BIN = "$DAEMON_DIR/tweakd"
+        const val DAEMON_PID = "$DAEMON_DIR/tweakd.pid"
+        const val DAEMON_SOCK = "$DAEMON_DIR/tweakd.sock"
+        const val DAEMON_LOG = "$DAEMON_DIR/tweakd.log"
     }
 }

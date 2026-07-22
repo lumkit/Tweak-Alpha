@@ -36,3 +36,4 @@ google-services.json
 /temp/
 /tmp/**
 /docs/
+/androidSharedNative/src/main/jniLibs/

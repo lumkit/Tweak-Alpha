@@ -20,7 +20,9 @@ import org.jetbrains.compose.resources.getString
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.text_app_uninstall
 import tweak_alpha.shared.generated.resources.text_dialog_running_task
+import tweak_alpha.shared.generated.resources.text_disable_app
 import tweak_alpha.shared.generated.resources.text_enable_app
+import tweak_alpha.shared.generated.resources.text_enable_disabled_app
 import tweak_alpha.shared.generated.resources.text_extract_apk_already_running
 import tweak_alpha.shared.generated.resources.text_force_app_failed
 import tweak_alpha.shared.generated.resources.text_force_app_partial_success
@@ -53,6 +55,9 @@ class AppManagerViewModel: BaseViewModel() {
 
     private val _unabledApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val unabledApps = _unabledApps.asStateFlow()
+
+    private val _disabledApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    val disabledApps = _disabledApps.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -87,7 +92,8 @@ class AppManagerViewModel: BaseViewModel() {
                 _allApps.value = it.filter { info -> info.state == AppState.ENABLED }
                 _userApps.value = it.filter { info -> info.isSystemApp.not() && info.state == AppState.ENABLED }
                 _systemApps.value = it.filter { info -> info.isSystemApp && info.state == AppState.ENABLED }
-                _unabledApps.value = it.filter { info -> info.state != AppState.ENABLED }
+                _unabledApps.value = it.filter { info -> info.state == AppState.FROZEN }
+                _disabledApps.value = it.filter { info -> info.state == AppState.DISABLED }
                 _selectableAppPackageNames.value = it.map { info -> info.packageName }.toSet()
             }
         }
@@ -291,7 +297,34 @@ class AppManagerViewModel: BaseViewModel() {
         val summary = runBatchOperation(selectedApps) { packageName ->
             restoreApp(packageName, stateByPackage[packageName])
         }
-        success(buildBatchOperationMessage(getString(Res.string.text_enable_app), summary))
+        val actionName = if (selectedApps.all { stateByPackage[it] == AppState.DISABLED }) {
+            getString(Res.string.text_enable_disabled_app)
+        } else {
+            getString(Res.string.text_enable_app)
+        }
+        success(buildBatchOperationMessage(actionName, summary))
+    }
+
+    fun disableSelectedApps() = suspendLaunch(
+        id = "disableSelectedApps",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        val selectedApps = consumeSelectedPackages()
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+
+        if (selectedApps.isEmpty()) {
+            success()
+            return@suspendLaunch
+        }
+
+        val summary = runBatchOperation(selectedApps) { packageName ->
+            AppsHelper.setDisabled(packageName, disabled = true)
+        }
+        success(buildBatchOperationMessage(getString(Res.string.text_disable_app), summary))
     }
 
     fun freezeApp(packageName: String) = suspendLaunch(
@@ -309,6 +342,21 @@ class AppManagerViewModel: BaseViewModel() {
         success(buildBatchOperationMessage(getString(Res.string.text_unable_app), summary))
     }
 
+    fun disableApp(packageName: String) = suspendLaunch(
+        id = "disableApp",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+        val summary = runBatchOperation(listOf(packageName)) { pkg ->
+            AppsHelper.setDisabled(pkg, disabled = true)
+        }
+        success(buildBatchOperationMessage(getString(Res.string.text_disable_app), summary))
+    }
+
     fun enableApp(packageName: String, state: AppState) = suspendLaunch(
         id = "enableApp",
         complete = {
@@ -321,7 +369,12 @@ class AppManagerViewModel: BaseViewModel() {
         val summary = runBatchOperation(listOf(packageName)) { pkg ->
             restoreApp(pkg, state)
         }
-        success(buildBatchOperationMessage(getString(Res.string.text_enable_app), summary))
+        val actionName = if (state == AppState.DISABLED) {
+            getString(Res.string.text_enable_disabled_app)
+        } else {
+            getString(Res.string.text_enable_app)
+        }
+        success(buildBatchOperationMessage(actionName, summary))
     }
 
     fun uninstallSelectedApps() = suspendLaunch(

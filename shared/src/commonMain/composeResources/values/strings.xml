@@ -181,8 +181,11 @@
     <string name="text_abi_32">32位</string>
     <string name="text_abi_64">64位</string>
     <string name="text_unabled_apps">被冻结</string>
+    <string name="text_disabled_apps">被禁用</string>
     <string name="text_unable_app">冻结</string>
     <string name="text_enable_app">解冻</string>
+    <string name="text_disable_app">禁用</string>
+    <string name="text_enable_disabled_app">启用</string>
     <string name="text_app_uninstall">卸载</string>
     <string name="text_force_kill_app">结束进程</string>
     <string name="text_dialog_warm_tip">温馨提示</string>
@@ -191,6 +194,8 @@
     <string name="text_dialog_force_stop_app_summary">是否强制停止所选App的所属进程？部分App停止后可能会影响系统稳定性，如已了解风险，点击确认停止按钮以继续</string>
     <string name="text_dialog_freeze_app_summary">是否冻结所选App？冻结后应用将无法正常启动，部分系统应用被冻结后可能影响系统功能，请确认已了解风险后继续</string>
     <string name="text_dialog_unfreeze_app_summary">是否解冻所选App？解冻后应用将恢复可用状态，如无需继续限制该应用，可点击确认解冻按钮继续</string>
+    <string name="text_dialog_disable_app_summary">是否禁用所选App？禁用后应用将无法启动，部分系统应用被禁用后可能影响系统功能，请确认已了解风险后继续</string>
+    <string name="text_dialog_enable_disabled_app_summary">是否启用所选App？启用后应用将恢复可用状态，如无需继续限制该应用，可点击确认启用按钮继续</string>
     <string name="text_dialog_uninstall_app_summary">是否卸载所选App？卸载后应用数据与安装包可能被一并移除，部分系统应用卸载失败属于正常现象，请确认后继续</string>
     <string name="text_dialog_loading">加载中...</string>
     <string name="text_dialog_running_task">执行中...</string>

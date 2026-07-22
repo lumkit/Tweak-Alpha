@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.ui.screen.processManager
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.ProcessUtils
+import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.ProcessInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -87,10 +89,20 @@ class ProcessManagerViewModel : BaseViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             _supported.value = ProcessUtils.supported()
         }
+        viewModelScope.launch {
+            val ordinal = TweakDataStore.processManagerFilterModeOrdinalFlow().first()
+            _filterMode.value = ProcessFilterMode.entries.getOrNull(ordinal)
+                ?: ProcessFilterMode.AndroidUser
+        }
     }
 
-    fun setFilterMode(mode: ProcessFilterMode) {
+    fun setFilterMode(mode: ProcessFilterMode, persist: Boolean = true) {
         _filterMode.value = mode
+        if (persist) {
+            viewModelScope.launch {
+                TweakDataStore.setProcessManagerFilterModeOrdinal(mode.ordinal)
+            }
+        }
     }
 
     fun setSortMode(mode: ProcessSortMode) {

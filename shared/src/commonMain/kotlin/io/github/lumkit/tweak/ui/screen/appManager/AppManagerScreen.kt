@@ -141,6 +141,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.window.WindowDialog
 import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.ic_disable
 import tweak_alpha.shared.generated.resources.ic_ice_app
 import tweak_alpha.shared.generated.resources.ic_module
 import tweak_alpha.shared.generated.resources.ic_sun
@@ -165,13 +166,18 @@ import tweak_alpha.shared.generated.resources.text_app_manager_description
 import tweak_alpha.shared.generated.resources.text_app_uninstall
 import tweak_alpha.shared.generated.resources.text_close
 import tweak_alpha.shared.generated.resources.text_dialog_cancel
+import tweak_alpha.shared.generated.resources.text_dialog_disable_app_summary
+import tweak_alpha.shared.generated.resources.text_dialog_enable_disabled_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_force_stop_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_force_stop_confirm
 import tweak_alpha.shared.generated.resources.text_dialog_freeze_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_unfreeze_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_uninstall_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_warm_tip
+import tweak_alpha.shared.generated.resources.text_disable_app
+import tweak_alpha.shared.generated.resources.text_disabled_apps
 import tweak_alpha.shared.generated.resources.text_enable_app
+import tweak_alpha.shared.generated.resources.text_enable_disabled_app
 import tweak_alpha.shared.generated.resources.text_export_apk
 import tweak_alpha.shared.generated.resources.text_extract_apk_overall_progress
 import tweak_alpha.shared.generated.resources.text_extract_apk_progress_format
@@ -240,6 +246,11 @@ private fun AppManagerContent(
                 iconRes = Res.drawable.ic_ice_app,
                 titleRes = Res.string.text_unabled_apps,
                 listState = viewModel.unabledApps,
+            ),
+            AppPage(
+                iconRes = Res.drawable.ic_disable,
+                titleRes = Res.string.text_disabled_apps,
+                listState = viewModel.disabledApps,
             ),
         )
     }
@@ -372,6 +383,8 @@ private fun AppManagerLoadStateEffects(viewModel: AppManagerViewModel) {
         WatchSnackBarState("forceKillApp", hostState)
         WatchSnackBarState("unableSelectedApps", hostState)
         WatchSnackBarState("unableApp", hostState)
+        WatchSnackBarState("disableSelectedApps", hostState)
+        WatchSnackBarState("disableApp", hostState)
         WatchSnackBarState("enableSelectedApps", hostState)
         WatchSnackBarState("enableApp", hostState)
         WatchSnackBarState("uninstallSelectedApps", hostState)
@@ -810,8 +823,10 @@ private fun BoxScope.BottomToolbar(
     val selectedApps by viewModel.selectedApps.collectAsStateWithLifecycle()
     val isEmpty = remember(selectedApps) { selectedApps.isEmpty() }
     val isUnfreezeAction = currentPosition == 2
+    val isEnableDisabledAction = currentPosition == 3
     var forceDialogState by remember { mutableStateOf(false) }
     var iceDialogState by remember { mutableStateOf(false) }
+    var disableDialogState by remember { mutableStateOf(false) }
     var uninstallDialogState by remember { mutableStateOf(false) }
     val density = LocalDensity.current
 
@@ -839,6 +854,22 @@ private fun BoxScope.BottomToolbar(
                 viewModel.unableSelectedApps()
             }
             iceDialogState = false
+        }
+    )
+
+    DisableActionDialog(
+        show = disableDialogState,
+        isEnableAction = isEnableDisabledAction,
+        onDismissRequest = {
+            disableDialogState = false
+        },
+        onConfirm = {
+            if (isEnableDisabledAction) {
+                viewModel.enableSelectedApps()
+            } else {
+                viewModel.disableSelectedApps()
+            }
+            disableDialogState = false
         }
     )
 
@@ -923,7 +954,7 @@ private fun BoxScope.BottomToolbar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(
-                        painter = if (currentPosition == 2) {
+                        painter = if (isUnfreezeAction) {
                             painterResource(Res.drawable.ic_sun)
                         } else {
                             painterResource(Res.drawable.ic_unable_app)
@@ -933,10 +964,46 @@ private fun BoxScope.BottomToolbar(
                         tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
                     )
                     Text(
-                        text = if (currentPosition == 2) {
+                        text = if (isUnfreezeAction) {
                             stringResource(Res.string.text_enable_app)
                         } else {
                             stringResource(Res.string.text_unable_app)
+                        },
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurface.copy(.75f)
+                    )
+                }
+            }
+
+            // 禁用
+            Block {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                        .weight(1f)
+                        .alpha(if (isEmpty) .31f else 1f)
+                        .clickable(
+                            enabled = !isEmpty,
+                        ) {
+                            disableDialogState = true
+                        },
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        painter = if (isEnableDisabledAction) {
+                            painterResource(Res.drawable.ic_sun)
+                        } else {
+                            painterResource(Res.drawable.ic_disable)
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
+                    )
+                    Text(
+                        text = if (isEnableDisabledAction) {
+                            stringResource(Res.string.text_enable_disabled_app)
+                        } else {
+                            stringResource(Res.string.text_disable_app)
                         },
                         style = MiuixTheme.textStyles.footnote1,
                         color = MiuixTheme.colorScheme.onSurface.copy(.75f)
@@ -1047,6 +1114,35 @@ private fun FreezeActionDialog(
                 stringResource(Res.string.text_enable_app)
             } else {
                 stringResource(Res.string.text_unable_app)
+            },
+            onConfirm = onConfirm,
+            onCancel = onDismissRequest,
+        )
+    }
+}
+
+@Composable
+private fun DisableActionDialog(
+    show: Boolean,
+    isEnableAction: Boolean,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    OverlayDialog(
+        title = stringResource(Res.string.text_dialog_warm_tip),
+        summary = if (isEnableAction) {
+            stringResource(Res.string.text_dialog_enable_disabled_app_summary)
+        } else {
+            stringResource(Res.string.text_dialog_disable_app_summary)
+        },
+        show = show,
+        onDismissRequest = onDismissRequest,
+    ) {
+        DialogActionButtons(
+            confirmText = if (isEnableAction) {
+                stringResource(Res.string.text_enable_disabled_app)
+            } else {
+                stringResource(Res.string.text_disable_app)
             },
             onConfirm = onConfirm,
             onCancel = onDismissRequest,
@@ -1291,14 +1387,17 @@ private fun AppItem(
 private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
     var forceDialogState by remember { mutableStateOf(false) }
     var freezeDialogState by remember { mutableStateOf(false) }
+    var disableDialogState by remember { mutableStateOf(false) }
     var uninstallDialogState by remember { mutableStateOf(false) }
-    val isUnfreezeAction = appInfo?.state != AppState.ENABLED
+    val isUnfreezeAction = appInfo?.state == AppState.FROZEN
+    val isEnableDisabledAction = appInfo?.state == AppState.DISABLED
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(appInfo) {
         if (appInfo == null) {
             forceDialogState = false
             freezeDialogState = false
+            disableDialogState = false
             uninstallDialogState = false
         }
     }
@@ -1325,6 +1424,22 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
                 viewModel.enableApp(info.packageName, info.state)
             } else {
                 viewModel.freezeApp(info.packageName)
+            }
+        },
+    )
+
+    DisableActionDialog(
+        show = disableDialogState,
+        isEnableAction = isEnableDisabledAction,
+        onDismissRequest = { disableDialogState = false },
+        onConfirm = {
+            val info = appInfo ?: return@DisableActionDialog
+            disableDialogState = false
+            viewModel.setTargetAppInfo(null)
+            if (isEnableDisabledAction) {
+                viewModel.enableApp(info.packageName, info.state)
+            } else {
+                viewModel.disableApp(info.packageName)
             }
         },
     )
@@ -1484,22 +1599,6 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
                     }
 
                     Button(
-                        onClick = { freezeDialogState = true },
-                        colors = ButtonDefaults.buttonColorsPrimary(
-                            color = MiuixTheme.colorScheme.primaryContainer,
-                        ),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = when (info.state) {
-                                AppState.ENABLED -> stringResource(Res.string.text_unable_app)
-                                AppState.DISABLED -> stringResource(Res.string.text_enable_app)
-                                AppState.FROZEN -> stringResource(Res.string.text_enable_app)
-                            }
-                        )
-                    }
-
-                    Button(
                         onClick = { uninstallDialogState = true },
                         colors = ButtonDefaults.buttonColorsPrimary(
                             color = MiuixTheme.colorScheme.error.copy(.5f),
@@ -1508,6 +1607,45 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
                     ) {
                         Text(
                             text = stringResource(Res.string.text_app_uninstall)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { freezeDialogState = true },
+                        colors = ButtonDefaults.buttonColorsPrimary(
+                            color = MiuixTheme.colorScheme.primaryContainer,
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = if (info.state == AppState.FROZEN) {
+                                stringResource(Res.string.text_enable_app)
+                            } else {
+                                stringResource(Res.string.text_unable_app)
+                            }
+                        )
+                    }
+
+                    Button(
+                        onClick = { disableDialogState = true },
+                        colors = ButtonDefaults.buttonColorsPrimary(
+                            color = MiuixTheme.colorScheme.primaryContainer,
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = if (info.state == AppState.DISABLED) {
+                                stringResource(Res.string.text_enable_disabled_app)
+                            } else {
+                                stringResource(Res.string.text_disable_app)
+                            }
                         )
                     }
                 }

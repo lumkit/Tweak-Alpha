@@ -97,11 +97,11 @@ internal fun SplashScreen(
     // 升级后已有模式但未同意协议：自动弹出协议，同意后继续原模式校验
     LaunchedEffect(runtimeMode, agreementAccepted) {
         logD("agreementAccepted=$agreementAccepted")
-        if (agreementAccepted == true || showAgreementDialog) return@LaunchedEffect
+        if (agreementAccepted == true || showAgreementDialog && agreementAccepted == null) return@LaunchedEffect
         val mode = runtimeMode
         if (mode == null || mode == RuntimeMode.Unknow) return@LaunchedEffect
         pendingRuntimeMode = mode
-        if (agreementAccepted != true) {
+        if (agreementAccepted == false) {
             showAgreementDialog = true
         }
     }

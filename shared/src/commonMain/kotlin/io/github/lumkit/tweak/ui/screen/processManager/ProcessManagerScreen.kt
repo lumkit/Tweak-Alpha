@@ -206,9 +206,9 @@ fun ProcessManagerContent(
         if (!pendingScroll || processes.isEmpty()) {
             return@LaunchedEffect
         }
-        // 定位前切到「全部」，避免目标进程被当前过滤隐藏
+        // 定位前切到「全部」，避免目标进程被当前过滤隐藏（不持久化，以免覆盖用户偏好）
         if (viewModel.filterMode.value != ProcessFilterMode.All) {
-            viewModel.setFilterMode(ProcessFilterMode.All)
+            viewModel.setFilterMode(ProcessFilterMode.All, persist = false)
             return@LaunchedEffect
         }
         val index = viewModel.indexOfTarget(processes, scrollToPackage, scrollToPid)
