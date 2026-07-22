@@ -101,6 +101,14 @@ expect fun startKeepAliveService(isForegroundService: Boolean)
 
 expect fun toastText(msg: String)
 
+/**
+ * 复制文本到系统剪贴板。
+ *
+ * @param text 要复制的内容
+ * @param label 剪贴板条目标签（部分平台可见）
+ */
+expect fun copyTextToClipboard(text: String, label: String = "text")
+
 expect val BUILD_VERSION_CODE: Long
 expect val BUILD_VERSION_NAME: String
 

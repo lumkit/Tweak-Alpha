@@ -18,6 +18,11 @@ object ConstCommon {
         const val EXTRA_SCROLL_TO_PACKAGE = "scrollToPackage"
         const val EXTRA_SCROLL_TO_PID = "scrollToPid"
         const val EXTRA_ID = "id"
+        /**
+         * 内部崩溃通道：CrashReport JSON。
+         * 仅 UncaughtExceptionHandler 写入，不走 adb route / 通用 nav_intent，且不落盘。
+         */
+        const val EXTRA_CRASH_REPORT = "crash_report"
     }
 
     object Path {

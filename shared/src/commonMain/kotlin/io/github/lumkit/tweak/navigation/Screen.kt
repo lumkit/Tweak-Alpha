@@ -13,6 +13,10 @@ sealed class Screen: NavKey {
     @Serializable
     data object Main: Screen()
 
+    /** 未捕获异常崩溃后展示；禁止 adb / 通用深链唤起。 */
+    @Serializable
+    data object Crash : Screen()
+
     @Serializable
     data object UpdateSystem: Screen()
 

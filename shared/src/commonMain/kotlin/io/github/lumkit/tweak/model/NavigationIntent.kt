@@ -50,6 +50,7 @@ data class NavigationIntent(
 fun Screen.isDeeplinkNavigable(): Boolean = when (this) {
     is Screen.Splash,
     is Screen.Main,
+    is Screen.Crash,
     is Screen.FilePicker,
     -> false
     else -> true

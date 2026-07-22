@@ -23,10 +23,12 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import io.github.lumkit.tweak.common.utils.ripple
+import io.github.lumkit.tweak.model.CrashSession
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Navigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.navigation.rememberNavigationState
+import io.github.lumkit.tweak.ui.screen.crash.CrashScreen
 import io.github.lumkit.tweak.ui.screen.feature.FeatureRegistry
 import io.github.lumkit.tweak.ui.screen.filePicker.FilePickerScreen
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordDetailScreen
@@ -87,8 +89,10 @@ val LocalSnackBarHostState = staticCompositionLocalOf<SnackbarHostState> { error
 private fun GlobalCompositionProvider(
     content: @Composable () -> Unit
 ) {
-
-    val navigationState = rememberNavigationState(startRoute = Screen.Splash)
+    val startRoute = remember {
+        if (CrashSession.hasPending()) Screen.Crash else Screen.Splash
+    }
+    val navigationState = rememberNavigationState(startRoute = startRoute)
     val navigator = remember { Navigator(navigationState) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -113,6 +117,9 @@ private fun AppRoute(
         entryProvider<NavKey> {
             entry<Screen.Splash> {
                 SplashScreen()
+            }
+            entry<Screen.Crash> {
+                CrashScreen()
             }
             entry<Screen.Main> {
                 MainScreen()

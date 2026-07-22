@@ -4,6 +4,7 @@ import android.app.Application
 import com.topjohnwu.superuser.Shell
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.isDebugBuild
+import io.github.lumkit.tweak.model.CrashReporter
 import io.github.lumkit.tweak.sharednative.BatteryBridge
 
 lateinit var application: TweakApplication
@@ -14,6 +15,7 @@ class TweakApplication: Application() {
         super.onCreate()
         application = this
 
+        CrashReporter.install()
         BatteryBridge.init(this)
         initLibSu()
     }

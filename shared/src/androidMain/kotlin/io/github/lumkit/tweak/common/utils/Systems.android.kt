@@ -6,6 +6,8 @@ import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.UiModeManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -235,6 +237,11 @@ actual fun toastText(msg: String) {
             notifyFromBackground(msg)
         }
     }
+}
+
+actual fun copyTextToClipboard(text: String, label: String) {
+    val clipboard = application.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
 }
 
 private fun isProcessInForeground(): Boolean {

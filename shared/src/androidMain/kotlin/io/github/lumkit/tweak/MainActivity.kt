@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import io.github.lumkit.tweak.common.ConstCommon
+import io.github.lumkit.tweak.model.CrashReporter
 import io.github.lumkit.tweak.model.NavigationIntent
 import io.github.lumkit.tweak.model.NavigationViewModel
 import io.github.lumkit.tweak.model.parseDeeplinkRoute
@@ -39,11 +40,16 @@ class MainActivity : ComponentActivity() {
 
     /**
      * 处理导航意图：
-     * 1. `nav_intent`：完整 [NavigationIntent] JSON（通知 / 服务 PendingIntent）
-     * 2. `route`：adb 简易路由名 + 可选参数 extras
+     * 1. `crash_report`：内部崩溃通道（Intent 直传，跳过通用深链）
+     * 2. `nav_intent`：完整 [NavigationIntent] JSON（通知 / 服务 PendingIntent）
+     * 3. `route`：adb 简易路由名 + 可选参数 extras
      */
     private fun handleIntentForNavIntent(intent: Intent?) {
         if (intent?.action != ConstCommon.Navigation.ACTION_DEEPLINK_SELF) {
+            return
+        }
+
+        if (CrashReporter.absorbCrashReportFromIntent(intent)) {
             return
         }
 
