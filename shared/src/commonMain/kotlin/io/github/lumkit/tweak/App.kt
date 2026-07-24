@@ -32,6 +32,7 @@ import io.github.lumkit.tweak.ui.screen.crash.CrashScreen
 import io.github.lumkit.tweak.ui.screen.feature.FeatureRegistry
 import io.github.lumkit.tweak.ui.screen.filePicker.FilePickerScreen
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordDetailScreen
+import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordThreadsScreen
 import io.github.lumkit.tweak.ui.screen.main.MainScreen
 import io.github.lumkit.tweak.ui.screen.processManager.ProcessManagerContent
 import io.github.lumkit.tweak.ui.screen.settings.OpenSourceScreen
@@ -150,6 +151,9 @@ private fun AppRoute(
 
             entry<Screen.FilePicker> {
                 FilePickerScreen(it)
+            }
+            entry<Screen.FpsRecordThreads> {
+                FpsRecordThreadsScreen(it.id)
             }
         }
     }

@@ -41,8 +41,9 @@ object AppThread {
             if (threadDelta <= 0L) {
                 return@forEach
             }
-            loads[currentThread.name] = (loads[currentThread.name] ?: 0.0) +
-                threadDelta * 100.0 / totalDelta
+            // key: "tid|name"，便于详情页分别展示线程名与 TID
+            val key = "$tid|${currentThread.name}"
+            loads[key] = (loads[key] ?: 0.0) + threadDelta * 100.0 / totalDelta
         }
 
         lastSamples[packageName] = currentSample

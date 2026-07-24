@@ -65,6 +65,7 @@ import io.github.lumkit.tweak.common.utils.formatElapsedTime
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
+import io.github.lumkit.tweak.navigation.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.DrawableResource
@@ -87,12 +88,14 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.ConvertFile
 import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_platform_device_style
 import tweak_alpha.shared.generated.resources.ic_soc
 import tweak_alpha.shared.generated.resources.ic_system_version
+import tweak_alpha.shared.generated.resources.ic_threads
 import tweak_alpha.shared.generated.resources.text_avg
 import tweak_alpha.shared.generated.resources.text_battery_level
 import tweak_alpha.shared.generated.resources.text_cpu_cycles
@@ -102,6 +105,8 @@ import tweak_alpha.shared.generated.resources.text_cpu_loads
 import tweak_alpha.shared.generated.resources.text_cpu_loads_source
 import tweak_alpha.shared.generated.resources.text_cpu_temperature
 import tweak_alpha.shared.generated.resources.text_diff
+import tweak_alpha.shared.generated.resources.text_fps_record_thread_loads
+import tweak_alpha.shared.generated.resources.text_fps_record_thread_loads_description
 import tweak_alpha.shared.generated.resources.text_fps_recording
 import tweak_alpha.shared.generated.resources.text_frame_time
 import tweak_alpha.shared.generated.resources.text_go_back
@@ -232,6 +237,12 @@ fun FpsRecordDetailScreen(
 
                 item {
                     CpuTemperatureChart(detail = detail)
+                }
+
+                item {
+                    ThreadsInfoItem(detail = detail) { aggregate ->
+                        navigator.navigate(Screen.FpsRecordThreads(aggregate.sessionId))
+                    }
                 }
             }
         }
@@ -1654,3 +1665,25 @@ private fun Map<Int, Boolean>.toggleCpuLoadOption(index: Int): LinkedHashMap<Int
     }
 }
 
+@Composable
+private fun ThreadsInfoItem(detail: FpsRecordDetailAggregate?, onTap: (FpsRecordDetailAggregate) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        ArrowPreference(
+            modifier = Modifier.fillMaxWidth(),
+            startAction = {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_threads),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                )
+            },
+            title = stringResource(Res.string.text_fps_record_thread_loads),
+            summary = stringResource(Res.string.text_fps_record_thread_loads_description),
+            onClick = {
+                detail?.let { onTap(it) }
+            }
+        )
+    }
+}

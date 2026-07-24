@@ -27,6 +27,9 @@ sealed class Screen: NavKey {
     data class FpsRecordDetail(val id: Long): Screen()
 
     @Serializable
+    data class FpsRecordThreads(val id: Long): Screen()
+
+    @Serializable
     data object OpenSources: Screen()
 
     @Serializable

@@ -363,4 +363,8 @@
     <string name="text_float_navigation_bar_enable_liquidity_description">启用悬浮底部导航栏液态玻璃效果</string>
     <string name="text_process_info_overview">进程信息概览</string>
     <string name="text_process_info_overview_description">启用面板页TOP15进程信息概览</string>
+    <string name="text_fps_record_thread_loads">线程负载统计</string>
+    <string name="text_fps_record_thread_loads_description">查看此次记录线程负载曲线</string>
+    <string name="text_thread_loads_empty">暂无线程负载数据</string>
+    <string name="text_thread_load_avg_max">AVG: %.1f%%  MAX: %.1f%%</string>
 </resources>
