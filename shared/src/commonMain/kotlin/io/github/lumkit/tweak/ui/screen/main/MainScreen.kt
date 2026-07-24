@@ -38,8 +38,6 @@ import io.github.lumkit.tweak.common.component.LiquidBottomTab
 import io.github.lumkit.tweak.common.component.LiquidBottomTabs
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.glassBlur
-import io.github.lumkit.tweak.common.feature.setupUpdateForegroundService
-import io.github.lumkit.tweak.common.utils.AppsHelper
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.NavigationViewModel
@@ -52,19 +50,6 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-
-@Composable
-private fun Setup() {
-
-    LaunchedEffect(Unit) {
-        // 启动系统更新前台服务
-        setupUpdateForegroundService()
-
-        // 初始化App列表
-        AppsHelper.init()
-    }
-
-}
 
 @Composable
 internal fun MainScreen(
@@ -83,8 +68,6 @@ internal fun MainScreen(
             }
         }
     }
-
-    Setup()
 
     LaunchedEffect(NavigationViewModel) {
         NavigationViewModel.setupNavigator(navigator)

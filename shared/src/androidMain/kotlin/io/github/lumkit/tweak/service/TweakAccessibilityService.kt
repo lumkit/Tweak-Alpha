@@ -20,7 +20,10 @@ import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 
 /**
- * 无障碍服务，用于监听前台应用切换
+ * 无障碍服务：前台应用监听 + Daemon 保活锚点。
+ *
+ * Daemon 在连接后持续巡检，用无障碍 Context 拉起 [KeepAliveService] / UpdateEngine，
+ * 并维持 1x1 overlay 防止厂商冻结事件回调。
  */
 @SuppressLint("AccessibilityPolicy")
 class TweakAccessibilityService : AccessibilityService() {
@@ -41,12 +44,18 @@ class TweakAccessibilityService : AccessibilityService() {
 
         val overlayContextOrNull: TweakAccessibilityService?
             get() = serviceReference?.get()
+
+        /** 无障碍 Daemon 是否正在运行 */
+        val isDaemonRunning: Boolean
+            get() = serviceReference?.get()?.daemon?.isRunning == true
     }
 
     private var keepAliveView: View? = null
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(serviceJob + Dispatchers.IO)
     private var resolveForegroundJob: Job? = null
     private val windowPackageCache = LruCache<Int, String>(16)
+    private var daemon: AccessibilityDaemon? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -59,21 +68,42 @@ class TweakAccessibilityService : AccessibilityService() {
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
                     AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-            packageNames = null // 监听所有应用，不做包名过滤
+            packageNames = null
             notificationTimeout = 0
         }
 
         addKeepAliveOverlay()
+        startDaemon()
         logD("TweakAccessibilityService is connected.", TAG)
     }
 
+    private fun startDaemon() {
+        if (daemon?.isRunning == true) return
+        daemon = AccessibilityDaemon(
+            context = this,
+            ensureOverlay = { ensureKeepAliveOverlay() },
+        ).also { it.start() }
+        logD("AccessibilityDaemon started", TAG)
+    }
+
+    private fun stopDaemon() {
+        daemon?.stop()
+        daemon = null
+    }
+
     /**
-     * 添加 1x1 透明悬浮窗，防止 MIUI/HyperOS 冻结进程导致事件回调暂停
+     * Daemon 巡检时若发现 overlay 丢失会重新补上。
      */
+    private fun ensureKeepAliveOverlay() {
+        if (keepAliveView?.isAttachedToWindow == true) return
+        addKeepAliveOverlay()
+    }
+
     private fun addKeepAliveOverlay() {
+        if (keepAliveView?.isAttachedToWindow == true) return
+        removeKeepAliveOverlay()
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val view = View(this).apply {
-            // 完全透明且不可交互
             alpha = 0f
         }
         val params = WindowManager.LayoutParams(
@@ -90,6 +120,7 @@ class TweakAccessibilityService : AccessibilityService() {
             logD("Keep-alive overlay added.", TAG)
         } catch (e: Exception) {
             logD("Failed to add keep-alive overlay: ${e.message}", TAG)
+            keepAliveView = null
         }
     }
 
@@ -98,7 +129,8 @@ class TweakAccessibilityService : AccessibilityService() {
             try {
                 val wm = getSystemService(WINDOW_SERVICE) as WindowManager
                 wm.removeView(it)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
             keepAliveView = null
         }
     }
@@ -221,10 +253,12 @@ class TweakAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopDaemon()
         if (serviceReference?.get() === this) {
             serviceReference = null
         }
         resolveForegroundJob?.cancel()
+        serviceJob.cancel()
         windowPackageCache.evictAll()
         removeKeepAliveOverlay()
         ForegroundAppMonitor._isRunning.value = false

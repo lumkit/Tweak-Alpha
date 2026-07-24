@@ -55,6 +55,8 @@ object TweakDataStore {
     private val processInfoUpdateTime = longPreferencesKey("process_info_update_time")
     // 自动启动应用开关
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
+    // 是否自动监听系统更新并推送通知（关闭后需进入系统更新页才发通知）
+    private val autoListenSystemUpdate = booleanPreferencesKey("auto_listen_system_update")
     // 是否申请过通知权限
     private val hasRequestNotificationPermission = booleanPreferencesKey("has_request_notification_permission")
     // 是否已同意使用协议
@@ -229,6 +231,18 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[autoStartAppSwitch] = enable
+            }
+        }
+    }
+
+    fun autoListenSystemUpdateFlow(): Flow<Boolean> = preferences.data.map {
+        it[autoListenSystemUpdate] ?: false
+    }
+
+    suspend fun setAutoListenSystemUpdate(enable: Boolean) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[autoListenSystemUpdate] = enable
             }
         }
     }

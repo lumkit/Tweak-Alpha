@@ -17,6 +17,7 @@ import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.common.base.BaseService
 import io.github.lumkit.tweak.common.feature.UpdateEngineClient
 import io.github.lumkit.tweak.common.feature.UpdateEngineEvent
+import io.github.lumkit.tweak.common.feature.UpdateEngineNotificationGate
 import io.github.lumkit.tweak.common.feature.UpdateStatus
 import io.github.lumkit.tweak.common.feature.asMsg
 import io.github.lumkit.tweak.common.feature.asMsgText
@@ -450,6 +451,7 @@ class UpdateEngineService: BaseService() {
      * @param indeterminate 是否为不确定进度（如清理阶段）
      */
     fun notifyProgress(title: String, text: String, progress: Int, indeterminate: Boolean = false, autoCancel: Boolean = true, id: Int = 0) {
+        if (!UpdateEngineNotificationGate.shouldNotify()) return
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_logo_round)
             .setContentTitle(title)
@@ -472,6 +474,7 @@ class UpdateEngineService: BaseService() {
      * @param autoCancel 点击后是否自动取消
      */
     fun notifyMessage(title: String, text: String, autoCancel: Boolean = true, id: Int = 0) {
+        if (!UpdateEngineNotificationGate.shouldNotify()) return
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_logo_round)
             .setContentTitle(title)

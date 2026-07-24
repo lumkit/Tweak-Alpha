@@ -53,6 +53,14 @@ class SettingsViewModel : BaseViewModel() {
             initialValue = false,
         )
 
+    val autoListenSystemUpdate = TweakDataStore.autoListenSystemUpdateFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val hasRequestNotificationPermission = TweakDataStore.hasRequestNotificationPermission()
         .distinctUntilChanged()
         .stateIn(
@@ -131,6 +139,12 @@ class SettingsViewModel : BaseViewModel() {
     fun setAutoStartApp(enable: Boolean) {
         viewModelScope.launch {
             TweakDataStore.setAutoStartAppSwitch(enable)
+        }
+    }
+
+    fun setAutoListenSystemUpdate(enable: Boolean) {
+        viewModelScope.launch {
+            TweakDataStore.setAutoListenSystemUpdate(enable)
         }
     }
 

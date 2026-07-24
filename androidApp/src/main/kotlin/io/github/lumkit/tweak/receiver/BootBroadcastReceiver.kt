@@ -3,23 +3,20 @@ package io.github.lumkit.tweak.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import io.github.lumkit.tweak.common.feature.UpdateEngineClient
+import io.github.lumkit.tweak.common.utils.AccessibilityBootstrap
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
-import io.github.lumkit.tweak.common.utils.startSmartService
-import io.github.lumkit.tweak.model.GlobalViewModel
-import io.github.lumkit.tweak.model.RuntimeMode
-import io.github.lumkit.tweak.service.KeepAliveService
-import io.github.lumkit.tweak.service.UpdateEngineService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class BootBroadcastReceiver: BroadcastReceiver() {
+/**
+ * 开机广播：仅在开启自启动且特权通过时启用无障碍服务。
+ * KeepAlive / UpdateEngine 由无障碍服务连接后拉起。
+ */
+class BootBroadcastReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "BootBroadcastReceiver"
@@ -31,35 +28,19 @@ class BootBroadcastReceiver: BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED -> {
                 logD("BootBroadcastReceiver.onReceive: $intent", TAG)
+                val pendingResult = goAsync()
                 scope.launch {
-                    TweakDataStore.autoStartAppSwitchFlow()
-                        .distinctUntilChanged()
-                        .collect { switch ->
-                        logD("autoStartAppSwitchFlow: $switch", TAG)
-                        if (switch) {
-                            // 启动Daemon
-                            context.startSmartService(KeepAliveService::class.java)
-
-                            // 配置更新服务
-                            setupUpdateService(context)
+                    try {
+                        val autoStart = TweakDataStore.autoStartAppSwitchFlow().first()
+                        logD("autoStart=$autoStart", TAG)
+                        if (autoStart) {
+                            val enabled = AccessibilityBootstrap.enableIfPrivileged()
+                            logD("ensure accessibility: $enabled", TAG)
                         }
+                    } finally {
+                        pendingResult.finish()
                     }
                 }
-            }
-        }
-    }
-
-
-    private fun CoroutineScope.setupUpdateService(context: Context) {
-        launch {
-            // 如果是Root模式并且支持OTA则启动更新服务
-            val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
-            val support = UpdateEngineClient.support()
-            logD("runtimeMode: $runtimeMode, support: $support", TAG)
-
-            if (runtimeMode == RuntimeMode.Root && support) {
-                val intent = Intent(context, UpdateEngineService::class.java)
-                context.startService(intent)
             }
         }
     }

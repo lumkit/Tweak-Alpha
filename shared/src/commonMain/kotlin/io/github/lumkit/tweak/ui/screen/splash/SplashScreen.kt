@@ -113,6 +113,7 @@ internal fun SplashScreen(
                 RuntimeMode.Root -> {
                     if (viewModel.checkRootMode()) {
                         viewModel.setRuntimeMode(RuntimeMode.Root)
+                        viewModel.onPrivilegeReady()
                         navigator.navigate(Screen.Main, true)
                     } else {
                         val result = snackbarHostState.showSnackbar(
@@ -129,6 +130,7 @@ internal fun SplashScreen(
                 RuntimeMode.Shizuku -> {
                     if (viewModel.checkShizukuMode()) {
                         viewModel.setRuntimeMode(RuntimeMode.Shizuku)
+                        viewModel.onPrivilegeReady()
                         navigator.navigate(Screen.Main, true)
                     } else {
                         snackbarHostState.showSnackbar(

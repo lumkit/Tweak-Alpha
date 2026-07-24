@@ -107,10 +107,6 @@
                 android:value="fileWatcher" />
         </service>
 
-        <service android:name=".service.PersistentTaskService"
-            android:enabled="true"
-            android:exported="false"/>
-
         <service android:name=".service.UpdateEngineService"
             android:enabled="true"
             android:exported="false"

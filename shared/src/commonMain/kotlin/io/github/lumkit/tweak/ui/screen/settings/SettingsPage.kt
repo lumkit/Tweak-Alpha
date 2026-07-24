@@ -78,6 +78,8 @@ import tweak_alpha.shared.generated.resources.text_about
 import tweak_alpha.shared.generated.resources.text_apk_export_dir
 import tweak_alpha.shared.generated.resources.text_apk_export_dir_description
 import tweak_alpha.shared.generated.resources.text_app_version
+import tweak_alpha.shared.generated.resources.text_auto_listen_system_update
+import tweak_alpha.shared.generated.resources.text_auto_listen_system_update_description
 import tweak_alpha.shared.generated.resources.text_auto_start
 import tweak_alpha.shared.generated.resources.text_auto_start_description
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list
@@ -416,6 +418,7 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
         Block {
             val hasNotificationPermission by viewModel.notificationPermission.collectAsStateWithLifecycle()
             val hasRequest by viewModel.hasRequestNotificationPermission.collectAsStateWithLifecycle()
+            val autoListen by viewModel.autoListenSystemUpdate.collectAsStateWithLifecycle()
 
             SwitchPreference(
                 title = stringResource(Res.string.text_notification_permission),
@@ -441,6 +444,15 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                     }
                 }
             )
+
+            AnimatedVisibility(visible = hasNotificationPermission) {
+                SwitchPreference(
+                    title = stringResource(Res.string.text_auto_listen_system_update),
+                    summary = stringResource(Res.string.text_auto_listen_system_update_description),
+                    checked = autoListen,
+                    onCheckedChange = viewModel::setAutoListenSystemUpdate,
+                )
+            }
         }
 
         // 安装包提取目录

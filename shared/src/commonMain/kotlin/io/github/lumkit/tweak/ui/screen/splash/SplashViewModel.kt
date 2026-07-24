@@ -2,16 +2,17 @@ package io.github.lumkit.tweak.ui.screen.splash
 
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.LibSuX
+import io.github.lumkit.tweak.common.utils.PrivilegedAppInitializer
 import io.github.lumkit.tweak.common.utils.ShizukuX
 import io.github.lumkit.tweak.common.utils.TweakDataStore
-import io.github.lumkit.tweak.common.utils.startKeepAliveService
+import io.github.lumkit.tweak.common.utils.ensureAccessibilityServiceEnabled
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class SplashViewModel: BaseViewModel() {
+class SplashViewModel : BaseViewModel() {
 
     private val _checkLoadingState = MutableStateFlow(false)
     val checkLoadingState: StateFlow<Boolean> = _checkLoadingState.asStateFlow()
@@ -38,7 +39,7 @@ class SplashViewModel: BaseViewModel() {
                     setRuntimeMode(RuntimeMode.Unknow)
                     return
                 }
-                initAppService()
+                onPrivilegeReady()
                 block()
             }
             RuntimeMode.Shizuku -> {
@@ -46,7 +47,7 @@ class SplashViewModel: BaseViewModel() {
                     setRuntimeMode(RuntimeMode.Unknow)
                     return
                 }
-                initAppService()
+                onPrivilegeReady()
                 block()
             }
         }
@@ -76,8 +77,11 @@ class SplashViewModel: BaseViewModel() {
         }
     }
 
-    private fun initAppService() {
-        // START KeepAlive
-        startKeepAliveService(true)
+    /**
+     * 特权校验通过后调用（Splash 自动检测与手动选模式共用）。
+     */
+    suspend fun onPrivilegeReady() {
+        PrivilegedAppInitializer.onPrivilegeReady()
+        ensureAccessibilityServiceEnabled()
     }
 }

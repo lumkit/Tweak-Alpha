@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,9 +44,11 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.feature.UpdateEngineClient
+import io.github.lumkit.tweak.common.feature.UpdateEngineNotificationGate
 import io.github.lumkit.tweak.common.feature.UpdateErrorCode
 import io.github.lumkit.tweak.common.feature.UpdateStatus
 import io.github.lumkit.tweak.common.feature.asMsg
+import io.github.lumkit.tweak.common.feature.ensureUpdateEngineService
 import io.github.lumkit.tweak.common.utils.documentFile
 import io.github.lumkit.tweak.common.utils.formatMemorySize
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
@@ -152,6 +155,12 @@ fun UpdateSystemScreen() {
     val status by UpdateEngineViewModel.updateStatus.collectAsStateWithLifecycle()
     val selectedRom by UpdateEngineViewModel.selectedRom.collectAsStateWithLifecycle()
     val unzipping by UpdateEngineViewModel.unzipping.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        // 进入本页视为用户主动触发：允许发送系统更新通知，并确保服务已启动
+        UpdateEngineNotificationGate.markUserOpenedUpdatePage()
+        ensureUpdateEngineService()
+    }
 
     var showMorePopup by remember { mutableStateOf(false) }
 
