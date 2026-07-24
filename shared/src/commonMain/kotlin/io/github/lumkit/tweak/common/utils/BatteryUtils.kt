@@ -3,6 +3,8 @@ package io.github.lumkit.tweak.common.utils
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
+import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.time.Clock
 
 /**
@@ -25,6 +27,12 @@ object BatteryUtils {
     @Volatile
     private var cacheTimestamp: Long = 0L
 
+    private val ueventPaths = listOf(
+        "/sys/class/power_supply/bms/uevent",
+        "/sys/class/power_supply/battery/uevent",
+        "/sys/class/power_supply/Battery/uevent",
+    )
+
     private val voltagePaths = listOf(
         "/sys/class/power_supply/battery/voltage_now",
         "/sys/class/power_supply/Battery/voltage_now",
@@ -35,6 +43,12 @@ object BatteryUtils {
         "/sys/class/power_supply/battery/current_now",
         "/sys/class/power_supply/Battery/current_now",
         "/sys/class/power_supply/bms/current_now",
+        "/sys/class/power_supply/battery/current_avg",
+        "/sys/class/power_supply/Battery/current_avg",
+        "/sys/class/power_supply/bms/current_avg",
+        "/sys/class/power_supply/battery/constant_charge_current",
+        "/sys/class/power_supply/Battery/constant_charge_current",
+        "/sys/class/power_supply/bms/constant_charge_current",
     )
 
     private val temperaturePaths = listOf(
@@ -108,7 +122,7 @@ object BatteryUtils {
      * 计算方式：|电压(mV) * 电流(mA)| / 1000
      */
     suspend fun getPower(): Int? {
-        val snapshot = getSnapshot() ?: return null
+        val snapshot = getSnapshot()
         val voltage = snapshot.voltageMv ?: return null
         val current = snapshot.currentMa ?: return null
         return (voltage.toLong() * current.toLong() / 1000L).toInt()
@@ -148,56 +162,36 @@ object BatteryUtils {
     }
 
     private suspend fun readBatterySnapshot(): BatterySnapshot {
-        val cycleCount = readFirstAvailable(cycleCountPaths)?.toIntOrNull()
-        val designCapacityRaw = readFirstAvailable(designCapacityPaths)?.toLongOrNull()
-        val currentFullCapacityRaw = readFirstAvailable(currentCapacityPaths)?.toLongOrNull()
+        // 优先一次读 uevent（兼容更多 OEM），再回退到单节点 / 平台 API
+        val uevent = readUeventProps()
 
-        // 优先通过 Android API 获取电压（mV），无需 ROOT/Shizuku 权限
-        val voltageMv = PlatformBatterySource.getVoltage() ?: run {
-            // 回退到 sysfs
-            val voltageRaw = readFirstAvailable(voltagePaths)?.toLongOrNull()
-            voltageRaw?.let { raw ->
-                if (raw > 100_000) (raw / 1000).toInt() else raw.toInt()
-            }
-        }
+        val designCapacityRaw = uevent?.getLong("POWER_SUPPLY_CHARGE_FULL_DESIGN")
+            ?: readFirstAvailable(designCapacityPaths)?.toLongOrNull()
+        val currentFullCapacityRaw = uevent?.getLong("POWER_SUPPLY_CHARGE_FULL")
+            ?: readFirstAvailable(currentCapacityPaths)?.toLongOrNull()
+        val capacityScaleRaw = currentFullCapacityRaw ?: designCapacityRaw
+        val capacityDigitLength = capacityScaleRaw?.toString()?.length ?: 0
 
-        // 优先通过 Android API 获取温度（0.1°C）
+        val cycleCount = uevent?.getInt("POWER_SUPPLY_CYCLE_COUNT")
+            ?: readFirstAvailable(cycleCountPaths)?.toIntOrNull()
+
+        val voltageMv = PlatformBatterySource.getVoltage()
+            ?: uevent?.getLong("POWER_SUPPLY_VOLTAGE_NOW")?.let(::normalizeVoltageToMv)
+            ?: readFirstAvailable(voltagePaths)?.toLongOrNull()?.let(::normalizeVoltageToMv)
+
         val temperatureCelsius = PlatformBatterySource.getTemperature()?.let { raw ->
             raw / 10f
-        } ?: run {
-            // 回退到 sysfs
-            val tempRaw = readFirstAvailable(temperaturePaths)?.toIntOrNull()
-            tempRaw?.let { raw ->
-                if (raw > 1000 || raw < -1000) raw / 1000f
-                else if (raw > 200 || raw < -200) raw / 10f
-                else raw.toFloat()
-            }
-        }
+        } ?: uevent?.getInt("POWER_SUPPLY_TEMP")?.let(::normalizeTemperatureToCelsius)
+            ?: readFirstAvailable(temperaturePaths)?.toIntOrNull()?.let(::normalizeTemperatureToCelsius)
 
-        // 优先通过 BatteryManager API 获取电流（µA）
-        val batteryCurrentUa = PlatformBatterySource.getCurrentNow()
-        val currentMa = if (batteryCurrentUa != null) {
-            (batteryCurrentUa / 1000).toInt()
-        } else {
-            val currentRaw = readFirstAvailable(currentPaths)?.toLongOrNull()
-            currentRaw?.let { raw ->
-                if (raw > 100_000 || raw < -100_000) (raw / 1000).toInt() else raw.toInt()
-            }
-        }
+        val currentMa = resolveCurrentMa(uevent, capacityDigitLength)
 
-        // 优先通过 Android API 获取电量百分比
         val capacity = PlatformBatterySource.getCapacity()
+            ?: uevent?.getInt("POWER_SUPPLY_CAPACITY")
             ?: readFirstAvailable(capacityPaths)?.toIntOrNull()
 
-        // charge_full_design 单位通常是 µAh，转换为 mAh
-        val designCapacityMah = designCapacityRaw?.let { raw ->
-            if (raw > 100_000) (raw / 1000).toInt() else raw.toInt()
-        }
-
-        // charge_full 单位通常是 µAh，转换为 mAh
-        val currentFullCapacityMah = currentFullCapacityRaw?.let { raw ->
-            if (raw > 100_000) (raw / 1000).toInt() else raw.toInt()
-        }
+        val designCapacityMah = designCapacityRaw?.let(::normalizeCapacityToMah)
+        val currentFullCapacityMah = currentFullCapacityRaw?.let(::normalizeCapacityToMah)
 
         return BatterySnapshot(
             voltageMv = voltageMv,
@@ -209,6 +203,115 @@ object BatteryUtils {
             currentFullCapacityMah = currentFullCapacityMah,
         )
     }
+
+    /**
+     * 解析电流（mA）。
+     *
+     * 部分设备上 BatteryManager.CURRENT_NOW 会返回 0 表示“不可用”，不能当作真实电流。
+     * 参考 Scene 逻辑：优先从 bms/battery 的 uevent 读取 CURRENT_NOW /
+     * CONSTANT_CHARGE_CURRENT，并按 charge_full 位数做单位换算。
+     */
+    private suspend fun resolveCurrentMa(
+        uevent: Map<String, String>?,
+        capacityDigitLength: Int,
+    ): Int? {
+        // 平台 API：0 / MIN 视为不可用，继续走 sysfs
+        PlatformBatterySource.getCurrentNow()
+            ?.takeIf { it != 0L }
+            ?.let { return normalizePlatformCurrentToMa(it) }
+
+        val ueventCurrent = uevent?.getLong("POWER_SUPPLY_CURRENT_NOW")
+            ?: uevent?.getLong("POWER_SUPPLY_CURRENT_AVG")
+            ?: uevent?.getLong("POWER_SUPPLY_CONSTANT_CHARGE_CURRENT")
+        ueventCurrent?.let { raw ->
+            return normalizeSysfsCurrentToMa(raw, capacityDigitLength)
+        }
+
+        readFirstAvailable(currentPaths)?.toLongOrNull()?.let { raw ->
+            return normalizeSysfsCurrentToMa(raw, capacityDigitLength)
+        }
+
+        return null
+    }
+
+    /**
+     * Android BatteryManager 约定单位为 µA；少数厂商直接回 mA。
+     */
+    private fun normalizePlatformCurrentToMa(rawUaOrMa: Long): Int {
+        return if (abs(rawUaOrMa) < 10_000L) {
+            rawUaOrMa.toInt()
+        } else {
+            (rawUaOrMa / 1000L).toInt()
+        }
+    }
+
+    /**
+     * Scene 同源换算：以 charge_full(_design) 位数推断电流单位。
+     * - 位数 < 5：认为容量是 mAh，电流也是 mA
+     * - 位数 >= 5：按 10^(len-4) 缩放（常见 7 位 µAh → 电流 µA / 1000 = mA）
+     */
+    private fun normalizeSysfsCurrentToMa(raw: Long, capacityDigitLength: Int): Int {
+        if (capacityDigitLength in 1..4) {
+            return raw.toInt()
+        }
+        if (capacityDigitLength >= 5) {
+            val divisor = 10.0.pow((capacityDigitLength - 4).toDouble())
+            return (raw / divisor).toInt()
+        }
+        return if (abs(raw) > 100_000L) (raw / 1000L).toInt() else raw.toInt()
+    }
+
+    private fun normalizeVoltageToMv(raw: Long): Int {
+        return when {
+            raw > 100_000L -> (raw / 1000L).toInt()
+            raw > 10_000L -> (raw / 10L).toInt()
+            else -> raw.toInt()
+        }
+    }
+
+    private fun normalizeTemperatureToCelsius(raw: Int): Float {
+        return when {
+            raw > 1000 || raw < -1000 -> raw / 1000f
+            raw > 200 || raw < -200 -> raw / 10f
+            else -> raw.toFloat()
+        }
+    }
+
+    private fun normalizeCapacityToMah(raw: Long): Int {
+        return if (raw > 100_000L) (raw / 1000L).toInt() else raw.toInt()
+    }
+
+    private suspend fun readUeventProps(): Map<String, String>? {
+        for (path in ueventPaths) {
+            val text = when (val result = Files.readText(path)) {
+                is NativeFileResult.Success -> result.value
+                is NativeFileResult.Failure -> continue
+            }
+            if (text.isBlank()) continue
+
+            val props = LinkedHashMap<String, String>()
+            for (line in text.lineSequence()) {
+                val info = line.trim()
+                if (info.isEmpty()) continue
+                val index = info.indexOf('=')
+                if (index <= 0 || index >= info.length - 1) continue
+                val key = info.substring(0, index).trim()
+                val value = info.substring(index + 1).trim()
+                // 同名参数只取第一次，避免部分机型重复键值互相覆盖
+                if (key.isNotEmpty() && value.isNotEmpty()) {
+                    props.putIfAbsent(key, value)
+                }
+            }
+            if (props.isNotEmpty()) return props
+        }
+        return null
+    }
+
+    private fun Map<String, String>.getLong(key: String): Long? =
+        this[key]?.toLongOrNull()
+
+    private fun Map<String, String>.getInt(key: String): Int? =
+        this[key]?.toIntOrNull()
 
     private suspend fun readFirstAvailable(paths: List<String>): String? {
         for (path in paths) {

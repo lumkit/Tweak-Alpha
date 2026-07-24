@@ -52,8 +52,13 @@ object BatteryBridge {
     fun getCurrentNow(): Int {
         batteryManager?.let { bm ->
             val current = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-            if (current != Int.MIN_VALUE) {
+            // 部分 OEM 在不支持时返回 0 而非 MIN_VALUE，0 交给上层回退 sysfs
+            if (current != Int.MIN_VALUE && current != 0) {
                 return current
+            }
+            val average = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE)
+            if (average != Int.MIN_VALUE && average != 0) {
+                return average
             }
         }
 
@@ -61,7 +66,10 @@ object BatteryBridge {
         lastBatteryStatus?.let { intent ->
             if (intent.hasExtra("current_now")) {
                 // 三星和部分厂商在广播中提供 current_now，单位通常是 µA
-                return intent.getIntExtra("current_now", Int.MIN_VALUE)
+                val current = intent.getIntExtra("current_now", Int.MIN_VALUE)
+                if (current != Int.MIN_VALUE && current != 0) {
+                    return current
+                }
             }
         }
 
