@@ -284,6 +284,11 @@ class ExtractApkService : BaseService() {
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
+    override fun onForegroundTimeoutCleanup() {
+        extractJob?.cancel()
+        runCatching { stopForegroundCompat() }
+    }
+
     override fun onDestroy() {
         extractJob?.cancel()
         serviceScope.cancel()

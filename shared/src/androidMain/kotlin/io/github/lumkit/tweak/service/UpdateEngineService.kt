@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.service
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -103,6 +104,9 @@ class UpdateEngineService: BaseService() {
         getSystemService(NOTIFICATION_SERVICE) as NotificationManager
     }
 
+    @Volatile
+    private var isDataSyncForeground = false
+
     private val updateListener: UpdateEngineClient.OnReadLineListener = { line ->
         logD("line=$line", TAG)
         val event = UpdateEngineEvent.parse(line)
@@ -120,11 +124,12 @@ class UpdateEngineService: BaseService() {
                     text = msg,
                     id = 1
                 )
-                notificationManager.cancel(NOTIFICATION_ID + 2)
+                demoteFromForeground(cancelProgressNotification = true)
             }
             is UpdateEngineEvent.StatusUpdate -> {
                 logD("statusUpdate=$event", TAG)
                 val status = event.status
+                syncForegroundWithStatus(status)
                 val percent = (status.progress.coerceIn(0f, 1f) * 100).roundToInt()
                 val indeterminate = status.progress <= 0f || status.progress >= 1f
 
@@ -156,8 +161,8 @@ class UpdateEngineService: BaseService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        tryStartForeground()
-        logD("start update service", TAG)
+        // 空闲监听不要长期占用 dataSync FGS（Android 15+ 24h 内累计 6h 超时）
+        logD("start update service (background watch)", TAG)
 
         updateScope.launch {
             GlobalViewModel.runtimeModeState.collect { mode ->
@@ -174,6 +179,24 @@ class UpdateEngineService: BaseService() {
                 }
             }
         }
+    }
+
+    override fun handleForegroundServiceTimeout(startId: Int, fgsType: Int?) {
+        logE(
+            "dataSync FGS timed out startId=$startId fgsType=$fgsType, stop and restart as background",
+            null,
+            TAG,
+        )
+        isDataSyncForeground = false
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+        val appCtx = applicationContext
+        // 下一帧再拉起普通后台服务，继续 follow，避免占用 dataSync 配额
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            runCatching {
+                appCtx.startService(Intent(appCtx, UpdateEngineService::class.java))
+            }
+        }
+        stopSelf()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -197,9 +220,11 @@ class UpdateEngineService: BaseService() {
                             text = getString(R.string.text_update_rom_msg_file_is_not_exists),
                             id = 1,
                         )
-                        notificationManager.cancel(NOTIFICATION_ID + 2)
+                        demoteFromForeground(cancelProgressNotification = true)
                         return@launch
                     }
+
+                    ensureDataSyncForeground()
 
                     // 先清理工作区
                     val otaPackage = Const.Path.otaPackage
@@ -232,7 +257,7 @@ class UpdateEngineService: BaseService() {
                              text = getString(R.string.text_update_rom_msg_unzip_failed),
                              id = 1,
                         )
-                        notificationManager.cancel(NOTIFICATION_ID + 2)
+                        demoteFromForeground(cancelProgressNotification = true)
                         return@launch
                     }
 
@@ -344,15 +369,55 @@ class UpdateEngineService: BaseService() {
     }
 
     /**
-     * 尝试提升为前台服务。
-     * 在系统重建 Service（START_STICKY）等场景下可能没有前台启动豁免，
-     * 此时 catch 异常后以普通后台 Service 继续运行。
+     * 仅在真正执行 OTA 同步任务时提升为 dataSync 前台服务。
+     * 空闲 follow 保持普通后台 Service，避免 Android 15+ 6 小时配额耗尽崩溃。
      */
-    private fun tryStartForeground() {
+    private fun ensureDataSyncForeground() {
+        if (isDataSyncForeground) return
         try {
             startForegroundWithNotification()
+            isDataSyncForeground = true
+            logD("elevated to dataSync foreground", TAG)
         } catch (e: Exception) {
-            logE("Cannot start foreground: ${e.message}, running as background service", e, TAG)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                e is ForegroundServiceStartNotAllowedException
+            ) {
+                logE("dataSync FGS not allowed (quota/background), continue as background", e, TAG)
+            } else {
+                logE("Cannot start foreground: ${e.message}, running as background service", e, TAG)
+            }
+            isDataSyncForeground = false
+        }
+    }
+
+    private fun demoteFromForeground(cancelProgressNotification: Boolean) {
+        if (isDataSyncForeground) {
+            runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+            isDataSyncForeground = false
+            logD("demoted from dataSync foreground", TAG)
+        }
+        if (cancelProgressNotification) {
+            notificationManager.cancel(NOTIFICATION_ID + 2)
+        }
+    }
+
+    private fun syncForegroundWithStatus(status: UpdateStatus) {
+        when (status) {
+            is UpdateStatus.Idle,
+            is UpdateStatus.UpdatedNeedReboot,
+            is UpdateStatus.Disabled,
+            -> demoteFromForeground(cancelProgressNotification = false)
+
+            is UpdateStatus.CheckingForUpdate,
+            is UpdateStatus.UpdateAvailable,
+            is UpdateStatus.Downloading,
+            is UpdateStatus.Verifying,
+            is UpdateStatus.Finalizing,
+            is UpdateStatus.ReportingErrorEvent,
+            is UpdateStatus.AttemptingRollback,
+            is UpdateStatus.CleanupPreviousUpdate,
+            is UpdateStatus.Unknown,
+            -> ensureDataSyncForeground()
         }
     }
 

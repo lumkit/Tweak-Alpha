@@ -374,6 +374,11 @@ class LineFlashService : BaseService() {
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
+    override fun onForegroundTimeoutCleanup() {
+        pipelineJob?.cancel()
+        runCatching { stopForegroundCompat() }
+    }
+
     override fun onDestroy() {
         FlashRomViewModel.onRequestCancel = null
         pipelineJob?.cancel()
