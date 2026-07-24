@@ -52,12 +52,15 @@ object ProcessUtils {
             return null
         }
         val row = readRow(rows[1]) ?: return null
+        val status = KernelProps.getProp("/proc/$pid/status")
         return row.copy(
+            state = parseProcStatusField(status, "State"),
             cpuSet = KernelProps.getProp("/proc/$pid/cpuset"),
             cGroup = KernelProps.getProp("/proc/$pid/cgroup"),
             oomAdj = KernelProps.getProp("/proc/$pid/oom_adj"),
             oomScore = KernelProps.getProp("/proc/$pid/oom_score"),
             oomScoreAdj = KernelProps.getProp("/proc/$pid/oom_score_adj"),
+            cpus = parseProcStatusField(status, "Cpus_allowed_list"),
         ).withAppMeta()
     }
 
@@ -80,6 +83,16 @@ object ProcessUtils {
         listCommand = null
         detailCommand = null
         probed = false
+    }
+
+    private fun parseProcStatusField(status: String, key: String): String {
+        val prefix = "$key:"
+        return status.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith(prefix) }
+            ?.substringAfter(prefix)
+            ?.trim()
+            .orEmpty()
     }
 
     private suspend fun ensureProbed() {

@@ -8,25 +8,27 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,6 +42,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -58,6 +62,7 @@ import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.SmallTopAppBar
 import io.github.lumkit.tweak.common.component.glassBlur
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
+import io.github.lumkit.tweak.common.utils.jumpToAppInfo
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.model.ProcessInfo
 import io.github.lumkit.tweak.navigation.LocalNavigator
@@ -85,6 +90,7 @@ import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -98,26 +104,30 @@ import tweak_alpha.shared.generated.resources.text_process_cgroup
 import tweak_alpha.shared.generated.resources.text_process_cmdline
 import tweak_alpha.shared.generated.resources.text_process_command
 import tweak_alpha.shared.generated.resources.text_process_count_format
-import tweak_alpha.shared.generated.resources.text_process_cpu
+import tweak_alpha.shared.generated.resources.text_process_cpu_avg
+import tweak_alpha.shared.generated.resources.text_process_cpus
 import tweak_alpha.shared.generated.resources.text_process_cpuset
-import tweak_alpha.shared.generated.resources.text_process_detail
 import tweak_alpha.shared.generated.resources.text_process_filter_all
 import tweak_alpha.shared.generated.resources.text_process_filter_android
 import tweak_alpha.shared.generated.resources.text_process_filter_other
 import tweak_alpha.shared.generated.resources.text_process_filter_system
 import tweak_alpha.shared.generated.resources.text_process_filter_user
 import tweak_alpha.shared.generated.resources.text_process_kill
+import tweak_alpha.shared.generated.resources.text_process_kill_android_app
 import tweak_alpha.shared.generated.resources.text_process_kill_confirm
+import tweak_alpha.shared.generated.resources.text_process_manage
 import tweak_alpha.shared.generated.resources.text_process_manager
 import tweak_alpha.shared.generated.resources.text_process_manager_description
-import tweak_alpha.shared.generated.resources.text_process_mem
 import tweak_alpha.shared.generated.resources.text_process_oom_adj
 import tweak_alpha.shared.generated.resources.text_process_oom_score_adj
 import tweak_alpha.shared.generated.resources.text_process_pid
+import tweak_alpha.shared.generated.resources.text_process_res
 import tweak_alpha.shared.generated.resources.text_process_sort_cpu
 import tweak_alpha.shared.generated.resources.text_process_sort_none
 import tweak_alpha.shared.generated.resources.text_process_sort_pid
 import tweak_alpha.shared.generated.resources.text_process_sort_res
+import tweak_alpha.shared.generated.resources.text_process_state
+import tweak_alpha.shared.generated.resources.text_process_stop
 import tweak_alpha.shared.generated.resources.text_process_stop_app
 import tweak_alpha.shared.generated.resources.text_process_stop_app_confirm
 import tweak_alpha.shared.generated.resources.text_process_swap
@@ -229,6 +239,9 @@ fun ProcessManagerContent(
         process = detail,
         loading = detailLoading,
         onDismiss = viewModel::dismissDetail,
+        onManage = { process ->
+            jumpToAppInfo(process.appPackageName)
+        },
         onKill = { process -> confirmKillPid = process.pid },
         onStopApp = { process -> confirmStopApp = process },
     )
@@ -530,8 +543,6 @@ private fun ProcessListItem(
             append("PID ")
             append(process.pid)
             append(" · ")
-            append("%.1f%%".format(process.cpu))
-            append(" · ")
             append(formatProcessMem(process.res))
         }
     }
@@ -550,34 +561,36 @@ private fun ProcessListItem(
                     contentDescription = null,
                     error = painterResource(Res.drawable.ic_process_linux),
                     modifier = Modifier
-                        .clip(Rectangle.copy(12.dp))
+                        .clip(Rectangle.copy(8.dp))
                         .border(
                             width = 1.dp,
-                            shape = Rectangle.copy(12.dp),
+                            shape = Rectangle.copy(8.dp),
                             color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                         )
-                        .size(48.dp),
+                        .size(36.dp),
                 )
             },
             endActions = {
                 Text(
                     text = "%.1f%%".format(process.cpu),
                     color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    style = MiuixTheme.textStyles.body2,
+                    style = MiuixTheme.textStyles.footnote1
                 )
             },
         ) {
             Text(
                 text = process.displayName,
                 color = MiuixTheme.colorScheme.onSurface,
-                style = MiuixTheme.textStyles.body1,
+                style = MiuixTheme.textStyles.footnote1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = summary,
                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.31f),
                 style = MiuixTheme.textStyles.footnote2.copy(
-                    fontSize = 10.sp,
-                    lineHeight = 12.sp,
+                    fontSize = 9.sp,
+                    lineHeight = 9.sp,
                 ),
             )
         }
@@ -589,80 +602,293 @@ private fun ProcessDetailDialog(
     process: ProcessInfo?,
     loading: Boolean,
     onDismiss: () -> Unit,
+    onManage: (ProcessInfo) -> Unit,
     onKill: (ProcessInfo) -> Unit,
     onStopApp: (ProcessInfo) -> Unit,
 ) {
-    OverlayDialog(
-        title = stringResource(Res.string.text_process_detail),
-        summary = process?.displayName.orEmpty(),
+    OverlayBottomSheet(
         show = process != null,
         onDismissRequest = onDismiss,
     ) {
-        val info = process ?: return@OverlayDialog
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(320.dp),
-        ) {
-            if (loading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    InfiniteProgressIndicator(modifier = Modifier.size(24.dp))
-                }
-            } else {
+        val info = process ?: return@OverlayBottomSheet
+        if (loading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                InfiniteProgressIndicator(modifier = Modifier.size(24.dp))
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ProcessDetailHeader(info = info)
+
                 Column(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ProcessDetailGridRow(
+                        leftLabel = stringResource(Res.string.text_process_pid),
+                        leftValue = info.pid.toString(),
+                        rightLabel = stringResource(Res.string.text_process_user),
+                        rightValue = info.user,
+                    )
+                    ProcessDetailGridRow(
+                        leftLabel = stringResource(Res.string.text_process_cpu_avg),
+                        leftValue = "%.1f%%".format(info.cpu),
+                        rightContent = {
+//                            Text(
+//                                text = stringResource(Res.string.text_process_show_threads),
+//                                color = MiuixTheme.colorScheme.primary,
+//                                style = MiuixTheme.textStyles.body2,
+//                            )
+                        },
+                    )
+                    ProcessDetailGridRow(
+                        leftLabel = stringResource(Res.string.text_process_res),
+                        leftValue = formatProcessMem(info.res),
+                        rightLabel = stringResource(Res.string.text_process_swap),
+                        rightValue = formatProcessMem(info.swap),
+                    )
+
+                    ProcessDetailKvColumn(
+                        items = listOf(
+                            ProcessDetailKv(
+                                title = stringResource(Res.string.text_process_command),
+                                value = info.command,
+                            ),
+                            ProcessDetailKv(
+                                title = stringResource(Res.string.text_process_cmdline),
+                                value = info.cmdline.ifBlank { info.name },
+                            ),
+                            ProcessDetailKv(
+                                title = stringResource(Res.string.text_process_state),
+                                value = info.state,
+                            ),
+                            ProcessDetailKv(
+                                title = stringResource(Res.string.text_process_cpuset),
+                                value = info.cpuSet,
+                            ),
+                            ProcessDetailKv(
+                                title = stringResource(Res.string.text_process_cgroup),
+                                value = info.cGroup,
+                            ),
+                            ProcessDetailKv(
+                                title = stringResource(Res.string.text_process_cpus),
+                                value = info.cpus,
+                            ),
+                        ),
+                    )
+
+                    ProcessDetailGridRow(
+                        leftLabel = stringResource(Res.string.text_process_oom_adj),
+                        leftValue = info.oomAdj,
+                        rightLabel = stringResource(Res.string.text_process_oom_score_adj),
+                        rightValue = info.oomScoreAdj,
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth()
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        DetailRow(stringResource(Res.string.text_process_pid), info.pid.toString())
-                        DetailRow(stringResource(Res.string.text_process_cpu), "%.1f%%".format(info.cpu))
-                        DetailRow(stringResource(Res.string.text_process_mem), formatProcessMem(info.res))
-                        DetailRow(stringResource(Res.string.text_process_swap), formatProcessMem(info.swap))
-                        DetailRow(stringResource(Res.string.text_process_user), info.user)
-                        DetailRow(stringResource(Res.string.text_process_command), info.command)
-                        DetailRow(stringResource(Res.string.text_process_cmdline), info.cmdline)
-                        DetailRow(stringResource(Res.string.text_process_cpuset), info.cpuSet)
-                        DetailRow(stringResource(Res.string.text_process_oom_adj), info.oomAdj)
-                        DetailRow(stringResource(Res.string.text_process_oom_score_adj), info.oomScoreAdj)
-                        DetailRow(stringResource(Res.string.text_process_cgroup), info.cGroup)
-                        Spacer(modifier = Modifier.height(4.dp))
+                    if (info.isAndroidProcess) {
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { onManage(info) },
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                        ) {
+                            Text(text = stringResource(Res.string.text_process_manage))
+                        }
                     }
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        if (info.isAndroidProcess) {
+                            Button(
+                                modifier = Modifier.fillMaxWidth()
+                                    .weight(1f),
+                                onClick = { onStopApp(info) },
+                                colors = ButtonDefaults.buttonColorsPrimary(),
+                            ) {
+                                Text(text = stringResource(Res.string.text_process_kill_android_app))
+                            }
+                        }
                         Button(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth()
+                                .weight(1f),
                             onClick = { onKill(info) },
                             colors = ButtonDefaults.buttonColorsPrimary(),
                         ) {
-                            Text(text = stringResource(Res.string.text_process_kill))
-                        }
-                        if (info.isAndroidProcess) {
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                onClick = { onStopApp(info) },
-                            ) {
-                                Text(text = stringResource(Res.string.text_process_stop_app))
-                            }
+                            Text(text = stringResource(Res.string.text_process_stop))
                         }
                     }
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = onDismiss,
-                    ) {
-                        Text(text = stringResource(Res.string.text_dialog_cancel))
-                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProcessDetailHeader(info: ProcessInfo) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        AsyncImage(
+            model = info.iconPath.takeIf { it.isNotBlank() },
+            contentDescription = null,
+            error = painterResource(Res.drawable.ic_process_linux),
+            modifier = Modifier
+                .clip(Rectangle.copy(10.dp))
+                .border(
+                    width = 1.dp,
+                    shape = Rectangle.copy(10.dp),
+                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                )
+                .size(36.dp),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = info.displayName,
+                color = MiuixTheme.colorScheme.onSurface,
+                style = MiuixTheme.textStyles.body1,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            Text(
+                text = info.appPackageName.ifBlank { info.displayName },
+                color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                style = MiuixTheme.textStyles.footnote2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProcessDetailGridRow(
+    leftLabel: String,
+    leftValue: String,
+    rightLabel: String = "",
+    rightValue: String = "",
+    rightContent: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        ProcessDetailGridCell(
+            label = leftLabel,
+            value = leftValue,
+            modifier = Modifier.weight(1f),
+        )
+        if (rightContent != null) {
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                rightContent()
+            }
+        } else {
+            ProcessDetailGridCell(
+                label = rightLabel,
+                value = rightValue,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProcessDetailGridCell(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = label,
+            color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+            style = MiuixTheme.textStyles.body2,
+            maxLines = 1,
+        )
+        SelectionContainer(modifier = Modifier.weight(1f)) {
+            Text(
+                text = value.ifBlank { "-" },
+                color = MiuixTheme.colorScheme.onSurface,
+                style = MiuixTheme.textStyles.body2,
+            )
+        }
+    }
+}
+
+@Immutable
+private data class ProcessDetailKv(
+    val title: String,
+    val value: String,
+)
+
+@Composable
+private fun ProcessDetailKvColumn(items: List<ProcessDetailKv>) {
+    val titleStyle = MiuixTheme.textStyles.body2
+    val textMeasurer = rememberTextMeasurer()
+    val labelWidth = with(LocalDensity.current) {
+        remember(items, titleStyle) {
+            items.maxOf { item ->
+                textMeasurer.measure(
+                    text = item.title,
+                    style = titleStyle,
+                ).size.width.toDp()
+            }
+        }
+    }
+
+    SelectionContainer {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            items.forEach { item ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Text(
+                        text = item.title,
+                        modifier = Modifier.width(labelWidth),
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = item.value.ifBlank { "-" },
+                        modifier = Modifier.weight(1f),
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurface,
+                    )
                 }
             }
         }
@@ -701,22 +927,6 @@ private fun ConfirmActionDialog(
                 Text(text = stringResource(Res.string.text_dialog_cancel))
             }
         }
-    }
-}
-
-@Composable
-private fun DetailRow(label: String, value: String) {
-    Column {
-        Text(
-            text = label,
-            color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-            style = MiuixTheme.textStyles.footnote2,
-        )
-        Text(
-            text = value.ifBlank { "-" },
-            color = MiuixTheme.colorScheme.onSurface,
-            style = MiuixTheme.textStyles.body2,
-        )
     }
 }
 

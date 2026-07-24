@@ -62,6 +62,8 @@ data class ProcessInfo(
     val oomAdj: String = "",
     val oomScore: String = "",
     val oomScoreAdj: String = "",
+    /** `/proc/pid/status` 的 Cpus_allowed_list，如 `0-3` */
+    val cpus: String = "",
     /** 展示名：Android 应用为应用标签，否则多为 [name] */
     val friendlyName: String = "",
     /** AppsHelper 图标缓存路径；非 Android 应用进程为空 */
