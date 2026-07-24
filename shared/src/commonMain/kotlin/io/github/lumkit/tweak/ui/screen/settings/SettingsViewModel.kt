@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.ui.screen.settings
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -109,6 +110,14 @@ class SettingsViewModel : BaseViewModel() {
             initialValue = true,
         )
 
+    val batteryRecordSampleIntervalLevel = TweakDataStore.batteryRecordSampleIntervalLevelFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = BatteryRecordDefaults.DEFAULT_INTERVAL_LEVEL,
+        )
+
     fun updateIsIgnoringBatteryOptimizations(isIgnoring: Boolean) {
         _isIgnoringBatteryOptimizations.value = isIgnoring
     }
@@ -133,6 +142,12 @@ class SettingsViewModel : BaseViewModel() {
     fun setInfoUpdateTimeSpan(level: Float) {
         viewModelScope.launch {
             TweakDataStore.setInfoUpdateTimeSpan(level.roundToInt())
+        }
+    }
+
+    fun setBatteryRecordSampleIntervalLevel(level: Float) {
+        viewModelScope.launch {
+            TweakDataStore.setBatteryRecordSampleIntervalLevel(level.roundToInt())
         }
     }
 

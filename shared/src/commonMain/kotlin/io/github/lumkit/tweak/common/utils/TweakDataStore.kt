@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.model.BatteryDisplayType
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.flow.Flow
@@ -53,6 +54,8 @@ object TweakDataStore {
     private val infoUpdateTimeSpan = intPreferencesKey("info_update_time_span")
     // 进程信息更新时间间隔
     private val processInfoUpdateTime = longPreferencesKey("process_info_update_time")
+    // 电池记录采样间隔档位（×500ms，与面板刷新一致）
+    private val batteryRecordSampleIntervalLevel = intPreferencesKey("battery_record_sample_interval_level")
     // 自动启动应用开关
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
     // 是否自动监听系统更新并推送通知（关闭后需进入系统更新页才发通知）
@@ -203,6 +206,25 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[processInfoUpdateTime] = span
+            }
+        }
+    }
+
+    /**
+     * 电池记录采样间隔档位，默认 2 → 1000ms（档位 × [io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults.INTERVAL_LEVEL_RANGE_MS]）。
+     */
+    fun batteryRecordSampleIntervalLevelFlow(): Flow<Int> = preferences.data.map {
+        it[batteryRecordSampleIntervalLevel] ?: BatteryRecordDefaults.DEFAULT_INTERVAL_LEVEL
+    }
+
+    fun batteryRecordSampleIntervalMsFlow(): Flow<Int> = batteryRecordSampleIntervalLevelFlow().map { level ->
+        level * BatteryRecordDefaults.INTERVAL_LEVEL_RANGE_MS
+    }
+
+    suspend fun setBatteryRecordSampleIntervalLevel(level: Int) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[batteryRecordSampleIntervalLevel] = level
             }
         }
     }

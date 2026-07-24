@@ -75,6 +75,8 @@
     <string name="text_auto_listen_system_update_description">开启后自动推送系统更新状态通知</string>
     <string name="text_panel_refresh_tick">面板刷新间隔</string>
     <string name="text_panel_refresh_tick_description">当前：%d ms</string>
+    <string name="text_battery_record_sample_interval">电池记录采样间隔</string>
+    <string name="text_battery_record_sample_interval_description">当前：%d ms</string>
     <string name="text_battery_ignore_optimization_white_list">电池优化忽略白名单</string>
     <string name="text_battery_ignore_optimization_white_list_description">设置后应用数据将更精准</string>
     <string name="text_system_not_supported">系统未支持</string>

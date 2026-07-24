@@ -34,6 +34,7 @@ import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.component.Block
 import io.github.lumkit.tweak.common.component.Logo
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_CODE
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_NAME
 import io.github.lumkit.tweak.common.utils.hasNotificationPermission
@@ -84,6 +85,8 @@ import tweak_alpha.shared.generated.resources.text_auto_start
 import tweak_alpha.shared.generated.resources.text_auto_start_description
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list_description
+import tweak_alpha.shared.generated.resources.text_battery_record_sample_interval
+import tweak_alpha.shared.generated.resources.text_battery_record_sample_interval_description
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar_description
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar_enable_liquidity
@@ -368,6 +371,25 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                 title = stringResource(Res.string.text_panel_refresh_tick),
                 summary = stringResource(Res.string.text_panel_refresh_tick_description)
                     .format(tick),
+                valueRange = 1f..10f,
+                steps = 10,
+                hapticEffect = SliderDefaults.SliderHapticEffect.Step
+            )
+        }
+
+        // 电池记录采样间隔
+        Block {
+            val level by viewModel.batteryRecordSampleIntervalLevel.collectAsStateWithLifecycle()
+            val intervalMs = remember(level) {
+                level * BatteryRecordDefaults.INTERVAL_LEVEL_RANGE_MS
+            }
+
+            SliderPreference(
+                value = level.toFloat(),
+                onValueChange = viewModel::setBatteryRecordSampleIntervalLevel,
+                title = stringResource(Res.string.text_battery_record_sample_interval),
+                summary = stringResource(Res.string.text_battery_record_sample_interval_description)
+                    .format(intervalMs),
                 valueRange = 1f..10f,
                 steps = 10,
                 hapticEffect = SliderDefaults.SliderHapticEffect.Step
