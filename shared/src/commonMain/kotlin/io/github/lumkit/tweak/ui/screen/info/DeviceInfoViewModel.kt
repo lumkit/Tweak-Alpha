@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.ui.screen.info
 
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
@@ -7,6 +8,7 @@ import io.github.lumkit.tweak.common.utils.BatteryUtils
 import io.github.lumkit.tweak.common.utils.CpuCodenameUtils
 import io.github.lumkit.tweak.common.utils.CpuFrequencyUtil
 import io.github.lumkit.tweak.common.utils.CpuLoadUtils
+import io.github.lumkit.tweak.common.utils.DEFAULT_INFO_PAGE_ITEM_ORDER
 import io.github.lumkit.tweak.common.utils.DeviceMemoryInfoUtils
 import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.common.utils.GpuUtils
@@ -213,7 +215,40 @@ object DeviceInfoViewModel : BaseViewModel() {
             initialValue = true
         )
 
+    /** 信息页卡片顺序，常驻 ViewModel，避免切页后从默认顺序再播一次重排动画。 */
+    private val _sectionOrder = MutableStateFlow(DEFAULT_INFO_PAGE_ITEM_ORDER)
+    val sectionOrder = _sectionOrder.asStateFlow()
+
+    /** 信息页列表滚动位置，随 ViewModel 常驻。 */
+    val listState = LazyListState()
+
+    fun moveSection(fromIndex: Int, toIndex: Int) {
+        if (fromIndex == toIndex) {
+            return
+        }
+        val current = _sectionOrder.value
+        if (fromIndex !in current.indices || toIndex !in current.indices) {
+            return
+        }
+        val newOrder = current.toMutableList().apply {
+            add(toIndex, removeAt(fromIndex))
+        }
+        _sectionOrder.value = newOrder
+        viewModelScope.launch {
+            TweakDataStore.setInfoPageItemOrder(newOrder)
+        }
+    }
+
     init {
+        viewModelScope.launch {
+            TweakDataStore.infoPageItemOrderFlow()
+                .distinctUntilChanged()
+                .collect { order ->
+                    if (order != _sectionOrder.value) {
+                        _sectionOrder.value = order
+                    }
+                }
+        }
         viewModelScope.launch(Dispatchers.Default) {
             _loadingState.value = false
             // 初始化GPU是否支持

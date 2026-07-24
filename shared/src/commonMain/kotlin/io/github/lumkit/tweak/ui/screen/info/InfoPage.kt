@@ -26,10 +26,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -67,8 +65,6 @@ import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
 import io.github.lumkit.tweak.common.shell.ReusableShells
-import io.github.lumkit.tweak.common.utils.DEFAULT_INFO_PAGE_ITEM_ORDER
-import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
@@ -80,7 +76,6 @@ import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.service.OverlayMonitor
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
@@ -151,33 +146,22 @@ private enum class InfoPageSection(val key: String) {
 @Composable
 fun InfoPage() {
     val loadState by DeviceInfoViewModel.loadingState.collectAsStateWithLifecycle()
+    val sectionOrder by DeviceInfoViewModel.sectionOrder.collectAsStateWithLifecycle()
     val direction = LocalLayoutDirection.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
     val backdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
     val navigator = LocalNavigator.current
-    val scope = rememberCoroutineScope()
     val hapticFeedback = LocalHapticFeedback.current
     val overlayAlpha by animateFloatAsState(
         targetValue = if (loadState) 0f else .5f,
         animationSpec = tween(durationMillis = 400)
     )
 
-    var sectionOrder by remember { mutableStateOf(DEFAULT_INFO_PAGE_ITEM_ORDER) }
-    LaunchedEffect(Unit) {
-        sectionOrder = TweakDataStore.infoPageItemOrderFlow().first()
-    }
-
-    val lazyListState = rememberLazyListState()
+    val lazyListState = DeviceInfoViewModel.listState
     val reorderableLazyListState = rememberReorderableLazyListState(lazyListState) { from, to ->
-        val newOrder = sectionOrder.toMutableList().apply {
-            add(to.index, removeAt(from.index))
-        }
-        sectionOrder = newOrder
+        DeviceInfoViewModel.moveSection(from.index, to.index)
         hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
-        scope.launch {
-            TweakDataStore.setInfoPageItemOrder(newOrder)
-        }
     }
 
     Box(
