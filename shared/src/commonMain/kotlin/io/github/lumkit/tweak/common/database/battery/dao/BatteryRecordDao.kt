@@ -68,6 +68,17 @@ interface BatteryRecordDao {
     )
     fun observeLatestConfirmedSessionByState(state: Int): Flow<List<BatteryRecordSessionEntity>>
 
+    /** 最近一条充电会话（含未结束、未确认），按 [startedAt] 倒序 */
+    @Query(
+        """
+        SELECT * FROM battery_record_session
+        WHERE deleted = 0 AND state = :state
+        ORDER BY startedAt DESC
+        LIMIT 1
+        """,
+    )
+    fun observeLatestChargingSessions(state: Int): Flow<List<BatteryRecordSessionEntity>>
+
     @Query(
         """
         SELECT * FROM battery_record_session

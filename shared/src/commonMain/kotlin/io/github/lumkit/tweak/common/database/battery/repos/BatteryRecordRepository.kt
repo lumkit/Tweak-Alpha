@@ -8,6 +8,8 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleE
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import io.github.lumkit.tweak.common.utils.getDatabaseBuilder
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
 
@@ -68,9 +70,24 @@ class BatteryRecordRepository {
     fun queryConfirmedSessions(): Flow<List<BatteryRecordSessionEntity>> =
         dao.queryConfirmedSessions()
 
-    fun observeLatestConfirmedChargingSession(): Flow<BatteryRecordSessionEntity?> =
-        dao.observeLatestConfirmedSessionByState(BatteryChargeState.CHARGING.code)
+    fun observeLatestChargingSession(): Flow<BatteryRecordSessionEntity?> =
+        dao.observeLatestChargingSessions(BatteryChargeState.CHARGING.code)
             .map { it.firstOrNull() }
+
+    /**
+     * 图表与充电摘要所用会话：正在充电时用当前活跃充电 session，否则用最近一条充电 session。
+     */
+    fun observeChargingSessionForCharts(): Flow<BatteryRecordSessionEntity?> =
+        combine(
+            observeActiveSession(),
+            observeLatestChargingSession(),
+        ) { active, latestCharging ->
+            if (active?.chargeState == BatteryChargeState.CHARGING) {
+                active
+            } else {
+                latestCharging
+            }
+        }.distinctUntilChangedBy { session -> session?.id to session?.endedAt }
 
     fun querySessions(): Flow<List<BatteryRecordSessionEntity>> =
         dao.querySessions()

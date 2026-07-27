@@ -27,11 +27,15 @@ import kotlin.math.abs
 import kotlin.time.Clock
 
 /**
- * 充电统计：只订阅「最新一条采样 + SQL 功率聚合」，避免大 session 全量进内存。
+ * 充电统计页数据：
+ * - **图表 + 底部充电摘要**：始终绑定「最新充电会话」（充电中为当前活跃充电 session，否则为历史上最近一条充电 session）
+ * - **顶部实时标签 + 迷你曲线**：绑定「当前活跃会话」的最新采样（无活跃会话时清空实时项，不影响图表）
  */
 class ChargeStatisticsViewModel : BaseViewModel() {
 
     private val repository = BatteryRecordRepository()
+
+    // region 实时（当前活跃会话）
 
     private val _averagePower = MutableStateFlow(0L)
     val averagePower = _averagePower.asStateFlow()
@@ -55,8 +59,19 @@ class ChargeStatisticsViewModel : BaseViewModel() {
     private val _chargeState = MutableStateFlow<BatteryChargeState?>(null)
     val chargeState = _chargeState.asStateFlow()
 
-    private val _currentSessionSummary = MutableStateFlow<CurrentSessionSummary?>(null)
-    val currentSessionSummary = _currentSessionSummary.asStateFlow()
+    val chartState = LintCurveChartState(
+        List(60) { ChartState(0f) }.map { (it.progress * 100f).bounds(0f, 100f) },
+    )
+
+    private var liveSessionId: Long? = null
+    private var lastSparklineSampleId: Long = -1L
+
+    // endregion
+
+    // region 最新充电会话（图表 + 摘要）
+
+    private val _chargingSessionSummary = MutableStateFlow<ChargingSessionSummary?>(null)
+    val currentSessionSummary = _chargingSessionSummary.asStateFlow()
 
     private val _chartSamples = MutableStateFlow<List<ChargeChartSample>>(emptyList())
     val chartSamples = _chartSamples.asStateFlow()
@@ -64,154 +79,210 @@ class ChargeStatisticsViewModel : BaseViewModel() {
     private val _currentTime = MutableStateFlow(Clock.System.now().toEpochMilliseconds())
     val currentTime = _currentTime.asStateFlow()
 
-    val chartState = LintCurveChartState(
-        List(60) { ChartState(0f) }.map { (it.progress * 100f).bounds(0f, 100f) },
-    )
-    private var chartJob: Job? = null
-    private var lastPushedSampleId: Long = -1L
-    private var boundSessionId: Long? = null
+    // endregion
+
+    private var chargingChartsJob: Job? = null
+    private var liveSessionJob: Job? = null
 
     init {
         chartState.bindScope(viewModelScope)
-        observeLatestChargingSessionSummary()
-        observeActiveSessionSamples()
+        observeChargingSessionCharts()
+        observeLiveActiveSession()
+        refreshBatterySnapshotOnce()
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeLatestChargingSessionSummary() {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.observeLatestConfirmedChargingSession()
-                .distinctUntilChangedBy { it?.id to it?.endedAt }
+    private fun observeChargingSessionCharts() {
+        chargingChartsJob?.cancel()
+        chargingChartsJob = viewModelScope.launch(Dispatchers.IO) {
+            repository.observeChargingSessionForCharts()
+                .distinctUntilChangedBy { session -> session?.id to session?.endedAt }
                 .flatMapLatest { session ->
                     if (session == null) {
-                        flowOf(null to emptyList<BatteryRecordSampleEntity>())
+                        flowOf(ChargingSessionChartsUpdate(null, emptyList()))
                     } else {
                         combine(
                             flowOf(session),
-                            repository.querySessions(),
                             repository.observeSamplesBySessionId(session.id),
-                            repository.observeLatestSampleBySessionId(session.id),
-                        ) { currentSession, sessions, samples, latest ->
-                            buildCurrentSessionSummary(
-                                currentSession,
-                                sessions.firstOrNull(),
-                                samples,
-                                latest,
-                            ) to samples
+                        ) { chargingSession, samples ->
+                            ChargingSessionChartsUpdate(chargingSession, samples)
                         }
                     }
                 }
-                .collect { (summary, samples) ->
-                    val chartSamples = buildChartSamples(samples)
+                .collect { update ->
+                    val summary = update.session?.let { session ->
+                        ChargeSessionChartsMapper.buildSummary(session, update.samples)
+                    }
+                    val chartSamples = ChargeSessionChartsMapper.buildChartSamples(update.samples)
                     withContext(Dispatchers.Main.immediate) {
-                        _currentSessionSummary.value = summary
+                        _chargingSessionSummary.value = summary
                         _chartSamples.value = chartSamples
+                        _currentTime.value = Clock.System.now().toEpochMilliseconds()
                     }
                 }
         }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeActiveSessionSamples() {
-        chartJob?.cancel()
-        chartJob = viewModelScope.launch(Dispatchers.IO) {
+    private fun observeLiveActiveSession() {
+        liveSessionJob?.cancel()
+        liveSessionJob = viewModelScope.launch(Dispatchers.IO) {
             repository.observeActiveSession()
-                .distinctUntilChangedBy { it?.id to it?.state }
+                .distinctUntilChangedBy { session -> session?.id to session?.state }
                 .flatMapLatest { session ->
                     if (session == null) {
-                        withContext(Dispatchers.Main.immediate) {
-                            onSessionCleared()
-                        }
-                        flowOf<SessionSampleUpdate?>(null)
+                        flowOf<LiveSessionUpdate?>(null)
                     } else {
-                        if (boundSessionId != session.id) {
-                            boundSessionId = session.id
-                            lastPushedSampleId = -1L
-                        }
-                        withContext(Dispatchers.Main.immediate) {
-                            _chargeState.value = session.chargeState
-                        }
                         combine(
                             flowOf(session),
-                            repository.observeSamplesBySessionId(session.id),
                             repository.observeLatestSampleBySessionId(session.id),
                             repository.observePowerAggregateBySessionId(session.id),
-                        ) { currentSession, samples, latest, aggregate ->
-                            SessionSampleUpdate(currentSession, samples, latest, aggregate)
+                        ) { activeSession, latestSample, powerAggregate ->
+                            LiveSessionUpdate(activeSession, latestSample, powerAggregate)
                         }
                     }
                 }
                 .collect { update ->
                     withContext(Dispatchers.Main.immediate) {
                         _currentTime.value = Clock.System.now().toEpochMilliseconds()
-                        if (update == null) return@withContext
-                        onSampleUpdate(update)
+                        if (update == null) {
+                            clearLiveSessionState()
+                            return@withContext
+                        }
+                        applyLiveSessionUpdate(update)
                     }
                 }
         }
     }
 
-    private fun onSessionCleared() {
-        boundSessionId = null
-        lastPushedSampleId = -1L
+    private fun clearLiveSessionState() {
+        liveSessionId = null
+        lastSparklineSampleId = -1L
         _averagePower.value = 0L
         _currentPowerMw.value = null
         _currentMa.value = null
         _batteryTemperatureC.value = null
         _batteryVoltageMv.value = null
-        _batterySnapshot.value = null
         _chargeState.value = null
-        _currentSessionSummary.value = null
     }
 
-    private fun onSampleUpdate(update: SessionSampleUpdate) {
-        val averageUw = update.aggregate.averagePowerUw
-        _averagePower.value = averageUw
+    private fun applyLiveSessionUpdate(update: LiveSessionUpdate) {
+        if (liveSessionId != update.session.id) {
+            liveSessionId = update.session.id
+            lastSparklineSampleId = -1L
+        }
+        _chargeState.value = update.session.chargeState
+        _averagePower.value = update.powerAggregate.averagePowerUw
 
-        val latest = update.latest ?: return
-        if (latest.id <= lastPushedSampleId) return
-
-        val currentUw = samplePowerUw(latest)
-        _currentPowerMw.value = currentUw?.let { (it / 1000L).toInt() }
+        val latest = update.latestSample ?: return
+        _currentPowerMw.value = samplePowerUw(latest)?.let { (it / 1000L).toInt() }
         _currentMa.value = latest.currentMa
         _batteryTemperatureC.value = latest.temperatureC
         _batteryVoltageMv.value = latest.voltageMv
-        lastPushedSampleId = latest.id
 
+        if (latest.id <= lastSparklineSampleId) return
+        lastSparklineSampleId = latest.id
+        refreshBatterySnapshotOnce()
+
+        pushSparklinePoint(update.powerAggregate.averagePowerUw, latest)
+    }
+
+    private fun pushSparklinePoint(averageUw: Long, latest: BatteryRecordSampleEntity) {
+        val currentUw = samplePowerUw(latest) ?: 0L
+        if (averageUw <= 0L) {
+            chartState.push(0f)
+            return
+        }
+        chartState.push((currentUw.toFloat() / averageUw.toFloat()).coerceIn(0f, 1f))
+    }
+
+    private fun refreshBatterySnapshotOnce() {
         viewModelScope.launch(Dispatchers.IO) {
             val snapshot = BatteryUtils.getSnapshot()
             withContext(Dispatchers.Main.immediate) {
                 _batterySnapshot.value = snapshot
             }
         }
-
-        val current = currentUw ?: 0L
-        if (averageUw <= 0L) {
-            chartState.push(0f)
-            return
-        }
-        chartState.push((current.toFloat() / averageUw.toFloat()).coerceIn(0f, 1f))
     }
 
-    private fun buildCurrentSessionSummary(
-        chargingSession: BatteryRecordSessionEntity,
-        latestSession: BatteryRecordSessionEntity?,
+    override fun onCleared() {
+        chargingChartsJob?.cancel()
+        liveSessionJob?.cancel()
+    }
+
+    private data class ChargingSessionChartsUpdate(
+        val session: BatteryRecordSessionEntity?,
+        val samples: List<BatteryRecordSampleEntity>,
+    )
+
+    private data class LiveSessionUpdate(
+        val session: BatteryRecordSessionEntity,
+        val latestSample: BatteryRecordSampleEntity?,
+        val powerAggregate: BatteryPowerAggregate,
+    )
+
+    /** 瞬时功率（µW）= |mA| × mV；缺电流或电压时返回 null */
+    private fun samplePowerUw(sample: BatteryRecordSampleEntity): Long? {
+        val currentMa = sample.currentMa ?: return null
+        val voltageMv = sample.voltageMv ?: return null
+        return abs(currentMa.toLong() * voltageMv.toLong())
+    }
+
+    data class ChargingSessionSummary(
+        val startedAt: Long,
+        val endedAt: Long,
+        val isCurrentChargingSession: Boolean,
+        val startLevel: Int,
+        val endLevel: Int?,
+        val energyGainUw: Long,
+    )
+
+    /** 与 [ChargingSessionSummary] 同构，供 UI 沿用 [currentSessionSummary] 命名 */
+    typealias CurrentSessionSummary = ChargingSessionSummary
+
+    data class ChargeChartSample(
+        val elapsedMs: Long,
+        val powerW: Float,
+        val currentMa: Float,
+        val level: Float,
+        val temperatureC: Float,
+    )
+}
+
+/** 最新充电会话的摘要与曲线点（纯函数，便于单测） */
+private object ChargeSessionChartsMapper {
+
+    fun buildSummary(
+        session: BatteryRecordSessionEntity,
         samples: List<BatteryRecordSampleEntity>,
-        latest: BatteryRecordSampleEntity?,
-    ): CurrentSessionSummary? {
-        val firstSample = samples.firstOrNull() ?: return null
-        val latestSample = latest ?: firstSample
-        val isLatestSession = latestSession?.id == chargingSession.id
-        val isCurrentChargingSession = isLatestSession && chargingSession.endedAt == null
-        val endedAt = chargingSession.endedAt ?: latestSample.timestamp
-        return CurrentSessionSummary(
-            startedAt = chargingSession.startedAt,
-            endedAt = endedAt,
-            isCurrentChargingSession = isCurrentChargingSession,
-            startLevel = firstSample.level,
-            endLevel = samples.lastOrNull()?.level,
+    ): ChargeStatisticsViewModel.ChargingSessionSummary? {
+        val first = samples.firstOrNull() ?: return null
+        val last = samples.last()
+        val isOngoingCharging =
+            session.chargeState == BatteryChargeState.CHARGING && session.endedAt == null
+        return ChargeStatisticsViewModel.ChargingSessionSummary(
+            startedAt = session.startedAt,
+            endedAt = session.endedAt ?: last.timestamp,
+            isCurrentChargingSession = isOngoingCharging,
+            startLevel = first.level,
+            endLevel = last.level,
             energyGainUw = calculateEnergyGainUw(samples),
         )
+    }
+
+    fun buildChartSamples(samples: List<BatteryRecordSampleEntity>): List<ChargeStatisticsViewModel.ChargeChartSample> {
+        if (samples.isEmpty()) return emptyList()
+        val startAt = samples.first().timestamp
+        return samples.map { sample ->
+            val powerUw = samplePowerUw(sample)
+            ChargeStatisticsViewModel.ChargeChartSample(
+                elapsedMs = (sample.timestamp - startAt).coerceAtLeast(0L),
+                powerW = powerUw?.let { it / 1_000_000f } ?: 0f,
+                currentMa = sample.currentMa?.let { abs(it).toFloat() } ?: 0f,
+                level = sample.level.toFloat(),
+                temperatureC = sample.temperatureC ?: 0f,
+            )
+        }
     }
 
     private fun calculateEnergyGainUw(samples: List<BatteryRecordSampleEntity>): Long {
@@ -223,60 +294,17 @@ class ChargeStatisticsViewModel : BaseViewModel() {
             val previousCurrent = previous.currentMa
             val previousVoltage = previous.voltageMv
             if (previousCurrent == null || previousVoltage == null) continue
-            val durationHours = (current.timestamp - previous.timestamp).coerceAtLeast(0L) / 3_600_000.0
+            val durationHours =
+                (current.timestamp - previous.timestamp).coerceAtLeast(0L) / 3_600_000.0
             val powerW = abs(previousCurrent.toDouble() * previousVoltage.toDouble()) / 1_000_000.0
             total += powerW * durationHours
         }
         return (total * 1_000_000.0).toLong()
     }
 
-    private fun buildChartSamples(samples: List<BatteryRecordSampleEntity>): List<ChargeChartSample> {
-        if (samples.isEmpty()) return emptyList()
-        val startAt = samples.first().timestamp
-        return samples.map { sample ->
-            val powerUw = samplePowerUw(sample)
-            ChargeChartSample(
-                elapsedMs = (sample.timestamp - startAt).coerceAtLeast(0L),
-                powerW = powerUw?.let { it / 1_000_000f } ?: 0f,
-                currentMa = sample.currentMa?.let { abs(it).toFloat() } ?: 0f,
-                level = sample.level.toFloat(),
-                temperatureC = sample.temperatureC ?: 0f,
-            )
-        }
-    }
-
-    /** 瞬时功率（µW）= |mA| × mV；缺电流或电压时返回 null */
     private fun samplePowerUw(sample: BatteryRecordSampleEntity): Long? {
         val currentMa = sample.currentMa ?: return null
         val voltageMv = sample.voltageMv ?: return null
         return abs(currentMa.toLong() * voltageMv.toLong())
     }
-
-    override fun onCleared() {
-        chartJob?.cancel()
-    }
-
-    private data class SessionSampleUpdate(
-        val session: BatteryRecordSessionEntity,
-        val samples: List<BatteryRecordSampleEntity>,
-        val latest: BatteryRecordSampleEntity?,
-        val aggregate: BatteryPowerAggregate,
-    )
-
-    data class CurrentSessionSummary(
-        val startedAt: Long,
-        val endedAt: Long,
-        val isCurrentChargingSession: Boolean,
-        val startLevel: Int,
-        val endLevel: Int?,
-        val energyGainUw: Long,
-    )
-
-    data class ChargeChartSample(
-        val elapsedMs: Long,
-        val powerW: Float,
-        val currentMa: Float,
-        val level: Float,
-        val temperatureC: Float,
-    )
 }

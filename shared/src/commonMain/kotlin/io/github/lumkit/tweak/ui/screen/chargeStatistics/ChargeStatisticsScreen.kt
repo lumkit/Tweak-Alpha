@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -170,16 +172,16 @@ fun ChargeStatisticsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item("ChargeStateContent") {
+                item {
                     ChargeStateContent(viewModel)
                 }
-                item("ChargePowerTimeChart") {
+                item {
                     ChargePowerTimeChart(viewModel)
                 }
-                item("ChargeLevelTimeChart") {
+                item {
                     ChargeLevelTimeChart(viewModel)
                 }
-                item("ChargeTemperatureTimeChart") {
+                item {
                     ChargeTemperatureTimeChart(viewModel)
                 }
             }
@@ -292,7 +294,7 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
         HorizontalDivider()
         Spacer(modifier = Modifier.width(12.dp))
 
-        // 当前充电session状态
+        // session摘要
         Row(
             modifier = Modifier.fillMaxWidth()
                 .padding(16.dp),
@@ -461,56 +463,20 @@ private fun ChargePowerTimeChart(viewModel: ChargeStatisticsViewModel) {
         ChargePowerChartMode.Current -> modeCurrentLabel
     }
 
-    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), samples) {
+    val snapshot by produceState(initialValue = ChargeLineChartSnapshot.Empty, samples, mode) {
         value = withContext(Dispatchers.Default) {
-            LineChartXAxisData(
-                dataSet = samples.map { it.elapsedMs.formatElapsedTime() },
+            buildChargePowerChartSnapshot(
+                samples = samples,
+                mode = mode,
+                powerTitle = powerTitle,
+                currentTitle = currentTitle,
+                batteryLevelLabel = batteryLevelLabel,
+                primaryColor = primaryColor,
+                batteryLevelColor = batteryLevelColor,
             )
         }
     }
-    val chartData by produceState(
-        initialValue = emptyList(),
-        samples,
-        mode,
-        powerTitle,
-        currentTitle,
-        batteryLevelLabel,
-        primaryColor,
-        batteryLevelColor,
-    ) {
-        value = withContext(Dispatchers.Default) {
-            if (samples.isEmpty()) {
-                emptyList()
-            } else {
-                val primary = when (mode) {
-                    ChargePowerChartMode.Power -> LineChartData(
-                        name = powerTitle,
-                        suffix = "W",
-                        dataSet = samples.map { it.powerW },
-                        color = primaryColor,
-                        axisType = LineChartAxisType.Primary,
-                    )
-                    ChargePowerChartMode.Current -> LineChartData(
-                        name = currentTitle,
-                        suffix = "mA",
-                        dataSet = samples.map { it.currentMa },
-                        color = primaryColor,
-                        axisType = LineChartAxisType.Primary,
-                    )
-                }
-                listOf(
-                    primary,
-                    LineChartData(
-                        name = batteryLevelLabel,
-                        suffix = "",
-                        dataSet = samples.map { it.level },
-                        color = batteryLevelColor,
-                        axisType = LineChartAxisType.Secondary,
-                    ),
-                )
-            }
-        }
-    }
+    val chartSnapshot = rememberStableChargeChartSnapshot(samples, snapshot)
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -567,11 +533,10 @@ private fun ChargePowerTimeChart(viewModel: ChargeStatisticsViewModel) {
         Spacer(modifier = Modifier.height(4.dp))
         ChargeSmoothLineChartBody(
             endPadding = 0.dp,
-            xAxis = xAxis,
-            chartData = chartData,
+            snapshot = chartSnapshot,
             showAffix = true,
         )
-        ChargeChartColorIndicator(chartData, modifier = Modifier.padding(bottom = 16.dp))
+        ChargeChartColorIndicator(chartSnapshot.chartData, modifier = Modifier.padding(bottom = 16.dp))
     }
 }
 
@@ -581,41 +546,24 @@ private fun ChargeLevelTimeChart(viewModel: ChargeStatisticsViewModel) {
     val primaryColor = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
     val title = stringResource(Res.string.text_charge_chart_level_time)
 
-    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), samples) {
+    val snapshot by produceState(initialValue = ChargeLineChartSnapshot.Empty, samples) {
         value = withContext(Dispatchers.Default) {
-            LineChartXAxisData(
-                dataSet = samples.map { it.elapsedMs.formatElapsedTime() },
+            buildChargeSingleSeriesSnapshot(
+                samples = samples,
+                title = title,
+                suffix = "%",
+                primaryColor = primaryColor,
+                valueSelector = { it.level },
             )
         }
     }
-    val chartData by produceState(
-        initialValue = emptyList(),
-        samples,
-        title,
-        primaryColor,
-    ) {
-        value = withContext(Dispatchers.Default) {
-            if (samples.isEmpty()) {
-                emptyList()
-            } else {
-                listOf(
-                    LineChartData(
-                        name = title,
-                        suffix = "%",
-                        dataSet = samples.map { it.level },
-                        color = primaryColor,
-                        axisType = LineChartAxisType.Primary,
-                    ),
-                )
-            }
-        }
-    }
+    val chartSnapshot = rememberStableChargeChartSnapshot(samples, snapshot)
 
     Card(modifier = Modifier.fillMaxWidth()) {
         SmallTitle(text = title)
         Spacer(modifier = Modifier.height(4.dp))
-        ChargeSmoothLineChartBody(endPadding = 16.dp, xAxis = xAxis, chartData = chartData)
-        ChargeChartColorIndicator(chartData, modifier = Modifier.padding(bottom = 16.dp))
+        ChargeSmoothLineChartBody(endPadding = 16.dp, snapshot = chartSnapshot)
+        ChargeChartColorIndicator(chartSnapshot.chartData, modifier = Modifier.padding(bottom = 16.dp))
     }
 }
 
@@ -625,62 +573,148 @@ private fun ChargeTemperatureTimeChart(viewModel: ChargeStatisticsViewModel) {
     val primaryColor = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
     val title = stringResource(Res.string.text_charge_chart_temperature_time)
 
-    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), samples) {
+    val snapshot by produceState(initialValue = ChargeLineChartSnapshot.Empty, samples) {
         value = withContext(Dispatchers.Default) {
-            LineChartXAxisData(
-                dataSet = samples.map { it.elapsedMs.formatElapsedTime() },
+            buildChargeSingleSeriesSnapshot(
+                samples = samples,
+                title = title,
+                suffix = "℃",
+                primaryColor = primaryColor,
+                valueSelector = { it.temperatureC },
             )
         }
     }
-    val chartData by produceState(
-        initialValue = emptyList(),
-        samples,
-        title,
-        primaryColor,
-    ) {
-        value = withContext(Dispatchers.Default) {
-            if (samples.isEmpty()) {
-                emptyList()
-            } else {
-                listOf(
-                    LineChartData(
-                        name = title,
-                        suffix = "℃",
-                        dataSet = samples.map { it.temperatureC },
-                        color = primaryColor,
-                        axisType = LineChartAxisType.Primary,
-                    ),
-                )
-            }
-        }
-    }
+    val chartSnapshot = rememberStableChargeChartSnapshot(samples, snapshot)
 
     Card(modifier = Modifier.fillMaxWidth()) {
         SmallTitle(text = title)
         Spacer(modifier = Modifier.height(4.dp))
-        ChargeSmoothLineChartBody(endPadding = 16.dp, xAxis = xAxis, chartData = chartData)
-        ChargeChartColorIndicator(chartData, modifier = Modifier.padding(bottom = 16.dp))
+        ChargeSmoothLineChartBody(endPadding = 16.dp, snapshot = chartSnapshot)
+        ChargeChartColorIndicator(chartSnapshot.chartData, modifier = Modifier.padding(bottom = 16.dp))
     }
+}
+
+@Immutable
+private data class ChargeLineChartSnapshot(
+    val xAxis: LineChartXAxisData,
+    val chartData: List<LineChartData>,
+) {
+    val isDrawable: Boolean
+        get() = chartData.isNotEmpty() &&
+            xAxis.dataSet.isNotEmpty() &&
+            chartData.all { it.dataSet.size == xAxis.dataSet.size }
+
+    companion object {
+        val Empty = ChargeLineChartSnapshot(LineChartXAxisData(emptyList()), emptyList())
+    }
+}
+
+/**
+ * x 轴与序列在同一帧内构建，避免两个 [produceState] 先后完成导致尺寸不一致而闪空白。
+ * 无采样时不用上一帧缓存，避免会话清空后仍显示旧曲线。
+ */
+@Composable
+private fun rememberStableChargeChartSnapshot(
+    samples: List<ChargeStatisticsViewModel.ChargeChartSample>,
+    snapshot: ChargeLineChartSnapshot,
+): ChargeLineChartSnapshot {
+    var lastDrawable by remember { mutableStateOf(ChargeLineChartSnapshot.Empty) }
+    SideEffect {
+        if (snapshot.isDrawable) {
+            lastDrawable = snapshot
+        }
+    }
+    return when {
+        snapshot.isDrawable -> snapshot
+        samples.isEmpty() -> ChargeLineChartSnapshot.Empty
+        lastDrawable.isDrawable -> lastDrawable
+        else -> snapshot
+    }
+}
+
+private fun buildChargeXAxis(samples: List<ChargeStatisticsViewModel.ChargeChartSample>): LineChartXAxisData {
+    return LineChartXAxisData(
+        dataSet = samples.map { it.elapsedMs.formatElapsedTime() },
+    )
+}
+
+private fun buildChargePowerChartSnapshot(
+    samples: List<ChargeStatisticsViewModel.ChargeChartSample>,
+    mode: ChargePowerChartMode,
+    powerTitle: String,
+    currentTitle: String,
+    batteryLevelLabel: String,
+    primaryColor: Color,
+    batteryLevelColor: Color,
+): ChargeLineChartSnapshot {
+    if (samples.isEmpty()) return ChargeLineChartSnapshot.Empty
+    val primary = when (mode) {
+        ChargePowerChartMode.Power -> LineChartData(
+            name = powerTitle,
+            suffix = "W",
+            dataSet = samples.map { it.powerW },
+            color = primaryColor,
+            axisType = LineChartAxisType.Primary,
+        )
+        ChargePowerChartMode.Current -> LineChartData(
+            name = currentTitle,
+            suffix = "mA",
+            dataSet = samples.map { it.currentMa },
+            color = primaryColor,
+            axisType = LineChartAxisType.Primary,
+        )
+    }
+    return ChargeLineChartSnapshot(
+        xAxis = buildChargeXAxis(samples),
+        chartData = listOf(
+            primary,
+            LineChartData(
+                name = batteryLevelLabel,
+                suffix = "",
+                dataSet = samples.map { it.level },
+                color = batteryLevelColor,
+                axisType = LineChartAxisType.Secondary,
+            ),
+        ),
+    )
+}
+
+private fun buildChargeSingleSeriesSnapshot(
+    samples: List<ChargeStatisticsViewModel.ChargeChartSample>,
+    title: String,
+    suffix: String,
+    primaryColor: Color,
+    valueSelector: (ChargeStatisticsViewModel.ChargeChartSample) -> Float,
+): ChargeLineChartSnapshot {
+    if (samples.isEmpty()) return ChargeLineChartSnapshot.Empty
+    return ChargeLineChartSnapshot(
+        xAxis = buildChargeXAxis(samples),
+        chartData = listOf(
+            LineChartData(
+                name = title,
+                suffix = suffix,
+                dataSet = samples.map(valueSelector),
+                color = primaryColor,
+                axisType = LineChartAxisType.Primary,
+            ),
+        ),
+    )
 }
 
 @Composable
 private fun ChargeSmoothLineChartBody(
     endPadding: Dp,
-    xAxis: LineChartXAxisData,
-    chartData: List<LineChartData>,
+    snapshot: ChargeLineChartSnapshot,
     showAffix: Boolean = false,
 ) {
-    if (chartData.isNotEmpty() &&
-        xAxis.dataSet.isNotEmpty() &&
-        chartData.all { it.dataSet.size == xAxis.dataSet.size }
-    ) {
+    if (snapshot.isDrawable) {
         SmoothLineChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(end = endPadding)
                 .height(250.dp),
-            xAxis = xAxis,
-            data = chartData,
+            xAxis = snapshot.xAxis,
+            data = snapshot.chartData,
             axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
             tickTextColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
             lineWidth = 1.dp,
