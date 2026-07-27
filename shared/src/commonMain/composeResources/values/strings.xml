@@ -390,4 +390,6 @@
     <string name="text_charge_chart_temperature_time">温度 / 时间</string>
     <string name="text_charge_chart_mode_power">功率</string>
     <string name="text_charge_chart_mode_current">电流</string>
+    <string name="text_charge_history_title">充电记录</string>
+    <string name="text_dialog_delete_charge_history_notes">确定要删除选中的充电记录吗？将同时删除相关采样数据，删除后无法恢复。</string>
 </resources>

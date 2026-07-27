@@ -82,6 +82,24 @@ interface BatteryRecordDao {
     @Query(
         """
         SELECT * FROM battery_record_session
+        WHERE deleted = 0 AND state = :state
+        ORDER BY startedAt DESC
+        """,
+    )
+    suspend fun queryChargingSessions(state: Int): List<BatteryRecordSessionEntity>
+
+    @Query(
+        """
+        SELECT * FROM battery_record_session
+        WHERE deleted = 0 AND state = :state
+        ORDER BY startedAt DESC
+        """,
+    )
+    fun observeChargingSessions(state: Int): Flow<List<BatteryRecordSessionEntity>>
+
+    @Query(
+        """
+        SELECT * FROM battery_record_session
         WHERE deleted = 0
         ORDER BY startedAt DESC
         """,

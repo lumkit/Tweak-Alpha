@@ -18,9 +18,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -28,7 +31,7 @@ import kotlin.time.Clock
 
 /**
  * 充电统计页数据：
- * - **图表 + 底部充电摘要**：始终绑定「最新充电会话」（充电中为当前活跃充电 session，否则为历史上最近一条充电 session）
+ * - **图表 + 底部充电摘要**：默认绑定「最新充电会话」；可从充电记录点选覆盖
  * - **顶部实时标签 + 迷你曲线**：绑定「当前活跃会话」的最新采样（无活跃会话时清空实时项，不影响图表）
  */
 class ChargeStatisticsViewModel : BaseViewModel() {
@@ -84,6 +87,12 @@ class ChargeStatisticsViewModel : BaseViewModel() {
     private var chargingChartsJob: Job? = null
     private var liveSessionJob: Job? = null
 
+    private val _chartsSessionOverrideId = MutableStateFlow<Long?>(null)
+
+    /** 主页面图表/摘要当前展示的充电 session（含历史点选覆盖） */
+    private val _displayedChartsSessionId = MutableStateFlow<Long?>(null)
+    val displayedChartsSessionId = _displayedChartsSessionId.asStateFlow()
+
     init {
         chartState.bindScope(viewModelScope)
         observeChargingSessionCharts()
@@ -95,18 +104,34 @@ class ChargeStatisticsViewModel : BaseViewModel() {
     private fun observeChargingSessionCharts() {
         chargingChartsJob?.cancel()
         chargingChartsJob = viewModelScope.launch(Dispatchers.IO) {
-            repository.observeChargingSessionForCharts()
-                .distinctUntilChangedBy { session -> session?.id to session?.endedAt }
-                .flatMapLatest { session ->
-                    if (session == null) {
-                        flowOf(ChargingSessionChartsUpdate(null, emptyList()))
-                    } else {
-                        combine(
-                            flowOf(session),
-                            repository.observeSamplesBySessionId(session.id),
-                        ) { chargingSession, samples ->
-                            ChargingSessionChartsUpdate(chargingSession, samples)
+            combine(
+                _chartsSessionOverrideId,
+                repository.observeChargingSessionForCharts(),
+            ) { overrideId, defaultSession ->
+                overrideId to defaultSession
+            }
+                .distinctUntilChanged()
+                .flatMapLatest { (overrideId, defaultSession) ->
+                    when {
+                        overrideId != null -> {
+                            combine(
+                                repository.observeChargingSessions()
+                                    .map { sessions -> sessions.firstOrNull { it.id == overrideId } }
+                                    .distinctUntilChangedBy { session -> session?.id to session?.endedAt },
+                                repository.observeSamplesBySessionId(overrideId),
+                            ) { session, samples ->
+                                ChargingSessionChartsUpdate(session, samples)
+                            }
                         }
+                        defaultSession != null -> {
+                            combine(
+                                flowOf(defaultSession),
+                                repository.observeSamplesBySessionId(defaultSession.id),
+                            ) { chargingSession, samples ->
+                                ChargingSessionChartsUpdate(chargingSession, samples)
+                            }
+                        }
+                        else -> flowOf(ChargingSessionChartsUpdate(null, emptyList()))
                     }
                 }
                 .collect { update ->
@@ -115,6 +140,10 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                     }
                     val chartSamples = ChargeSessionChartsMapper.buildChartSamples(update.samples)
                     withContext(Dispatchers.Main.immediate) {
+                        if (_chartsSessionOverrideId.value != null && update.session == null) {
+                            _chartsSessionOverrideId.value = null
+                        }
+                        _displayedChartsSessionId.value = update.session?.id
                         _chargingSessionSummary.value = summary
                         _chartSamples.value = chartSamples
                         _currentTime.value = Clock.System.now().toEpochMilliseconds()
@@ -208,6 +237,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
     override fun onCleared() {
         chargingChartsJob?.cancel()
         liveSessionJob?.cancel()
+        historyObserveJob?.cancel()
     }
 
     private data class ChargingSessionChartsUpdate(
@@ -247,64 +277,159 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         val level: Float,
         val temperatureC: Float,
     )
-}
 
-/** 最新充电会话的摘要与曲线点（纯函数，便于单测） */
-private object ChargeSessionChartsMapper {
+    // region 充电历史
 
-    fun buildSummary(
-        session: BatteryRecordSessionEntity,
-        samples: List<BatteryRecordSampleEntity>,
-    ): ChargeStatisticsViewModel.ChargingSessionSummary? {
-        val first = samples.firstOrNull() ?: return null
-        val last = samples.last()
-        val isOngoingCharging =
-            session.chargeState == BatteryChargeState.CHARGING && session.endedAt == null
-        return ChargeStatisticsViewModel.ChargingSessionSummary(
-            startedAt = session.startedAt,
-            endedAt = session.endedAt ?: last.timestamp,
-            isCurrentChargingSession = isOngoingCharging,
-            startLevel = first.level,
-            endLevel = last.level,
-            energyGainUw = calculateEnergyGainUw(samples),
-        )
+    data class ChargeHistoryItem(
+        val sessionId: Long,
+        val startedAt: Long,
+        val summary: ChargingSessionSummary,
+    )
+
+    data class ChargeHistoryUiState(
+        val items: List<ChargeHistoryItem> = emptyList(),
+        val selectedSessionIds: Set<Long> = emptySet(),
+        val isSelectionMode: Boolean = false,
+        val isLoading: Boolean = false,
+        val isDeleting: Boolean = false,
+    )
+
+    private val _chargeHistoryUiState = MutableStateFlow(ChargeHistoryUiState())
+    val chargeHistoryUiState = _chargeHistoryUiState.asStateFlow()
+
+    private var historyObserveJob: Job? = null
+
+    fun onChargeHistorySheetOpened() {
+        if (historyObserveJob?.isActive == true) return
+        _chargeHistoryUiState.update { it.copy(isLoading = it.items.isEmpty()) }
+        observeChargeHistory()
     }
 
-    fun buildChartSamples(samples: List<BatteryRecordSampleEntity>): List<ChargeStatisticsViewModel.ChargeChartSample> {
-        if (samples.isEmpty()) return emptyList()
-        val startAt = samples.first().timestamp
-        return samples.map { sample ->
-            val powerUw = samplePowerUw(sample)
-            ChargeStatisticsViewModel.ChargeChartSample(
-                elapsedMs = (sample.timestamp - startAt).coerceAtLeast(0L),
-                powerW = powerUw?.let { it / 1_000_000f } ?: 0f,
-                currentMa = sample.currentMa?.let { abs(it).toFloat() } ?: 0f,
-                level = sample.level.toFloat(),
-                temperatureC = sample.temperatureC ?: 0f,
+    fun onChargeHistorySheetClosed() {
+        historyObserveJob?.cancel()
+        historyObserveJob = null
+        _chargeHistoryUiState.value = ChargeHistoryUiState()
+    }
+
+    fun selectChargeHistorySessionForCharts(sessionId: Long) {
+        _chartsSessionOverrideId.value = sessionId
+    }
+
+    fun onChargeHistoryLongPress(sessionId: Long) {
+        _chargeHistoryUiState.update { state ->
+            state.copy(
+                isSelectionMode = true,
+                selectedSessionIds = state.selectedSessionIds + sessionId,
             )
         }
     }
 
-    private fun calculateEnergyGainUw(samples: List<BatteryRecordSampleEntity>): Long {
-        if (samples.size < 2) return 0L
-        var total = 0.0
-        for (index in 1 until samples.size) {
-            val previous = samples[index - 1]
-            val current = samples[index]
-            val previousCurrent = previous.currentMa
-            val previousVoltage = previous.voltageMv
-            if (previousCurrent == null || previousVoltage == null) continue
-            val durationHours =
-                (current.timestamp - previous.timestamp).coerceAtLeast(0L) / 3_600_000.0
-            val powerW = abs(previousCurrent.toDouble() * previousVoltage.toDouble()) / 1_000_000.0
-            total += powerW * durationHours
+    fun toggleChargeHistorySelection(sessionId: Long) {
+        _chargeHistoryUiState.update { state ->
+            val next = state.selectedSessionIds.toMutableSet()
+            if (sessionId in next) next.remove(sessionId) else next.add(sessionId)
+            state.copy(selectedSessionIds = next)
         }
-        return (total * 1_000_000.0).toLong()
     }
 
-    private fun samplePowerUw(sample: BatteryRecordSampleEntity): Long? {
-        val currentMa = sample.currentMa ?: return null
-        val voltageMv = sample.voltageMv ?: return null
-        return abs(currentMa.toLong() * voltageMv.toLong())
+    fun exitChargeHistorySelectionMode() {
+        _chargeHistoryUiState.update {
+            it.copy(isSelectionMode = false, selectedSessionIds = emptySet())
+        }
     }
+
+    fun toggleChargeHistorySelectAll() {
+        _chargeHistoryUiState.update { state ->
+            val allIds = state.items.map { it.sessionId }.toSet()
+            val selectAll = state.selectedSessionIds.size < allIds.size
+            state.copy(
+                selectedSessionIds = if (selectAll) allIds else emptySet(),
+            )
+        }
+    }
+
+    fun deleteSelectedChargeHistory() {
+        val ids = _chargeHistoryUiState.value.selectedSessionIds
+        if (ids.isEmpty() || _chargeHistoryUiState.value.isDeleting) return
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main.immediate) {
+                _chargeHistoryUiState.update { it.copy(isDeleting = true) }
+            }
+            try {
+                ids.forEach { sessionId ->
+                    repository.deleteSession(sessionId)
+                }
+            } finally {
+                withContext(Dispatchers.Main.immediate) {
+                    if (_chartsSessionOverrideId.value in ids) {
+                        _chartsSessionOverrideId.value = null
+                    }
+                    _chargeHistoryUiState.update {
+                        it.copy(
+                            isDeleting = false,
+                            isSelectionMode = false,
+                            selectedSessionIds = emptySet(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeChargeHistory() {
+        historyObserveJob?.cancel()
+        historyObserveJob = viewModelScope.launch(Dispatchers.IO) {
+            combine(
+                repository.observeChargingSessions(),
+                repository.observeChargingSessionForCharts().map { it?.id }.distinctUntilChanged(),
+                _chartsSessionOverrideId,
+            ) { sessions, defaultChartSessionId, overrideId ->
+                sessions.filter { _ ->
+                    when {
+                        overrideId != null -> true
+                        defaultChartSessionId == null -> true
+                        else -> true
+                    }
+                }
+            }
+                .distinctUntilChangedBy { sessions -> sessions.map { it.id } }
+                .flatMapLatest { sessions ->
+                    if (sessions.isEmpty()) {
+                        flowOf(emptyList())
+                    } else {
+                        combine(
+                            sessions.map { session ->
+                                repository.observeSamplesBySessionId(session.id)
+                                    .map { samples -> session to samples }
+                            },
+                        ) { sessionSamples ->
+                            sessionSamples.mapNotNull { (session, samples) ->
+                                val summary = ChargeSessionChartsMapper.buildSummary(session, samples)
+                                    ?: return@mapNotNull null
+                                ChargeHistoryItem(
+                                    sessionId = session.id,
+                                    startedAt = session.startedAt,
+                                    summary = summary,
+                                )
+                            }
+                        }
+                    }
+                }
+                .collect { items ->
+                    val itemIds = items.map { it.sessionId }.toSet()
+                    withContext(Dispatchers.Main.immediate) {
+                        _chargeHistoryUiState.update { state ->
+                            state.copy(
+                                items = items,
+                                isLoading = false,
+                                selectedSessionIds = state.selectedSessionIds intersect itemIds,
+                            )
+                        }
+                    }
+                }
+        }
+    }
+
+    // endregion
 }

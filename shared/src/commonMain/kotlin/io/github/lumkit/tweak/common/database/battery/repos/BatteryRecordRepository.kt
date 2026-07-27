@@ -104,6 +104,12 @@ class BatteryRecordRepository {
     fun observePowerAggregateBySessionId(sessionId: Long): Flow<BatteryPowerAggregate> =
         dao.observePowerAggregateBySessionId(sessionId)
 
+    suspend fun queryChargingSessions(): List<BatteryRecordSessionEntity> =
+        dao.queryChargingSessions(BatteryChargeState.CHARGING.code)
+
+    fun observeChargingSessions(): Flow<List<BatteryRecordSessionEntity>> =
+        dao.observeChargingSessions(BatteryChargeState.CHARGING.code)
+
     suspend fun confirmSession(sessionId: Long) =
         dao.confirmSession(sessionId)
 

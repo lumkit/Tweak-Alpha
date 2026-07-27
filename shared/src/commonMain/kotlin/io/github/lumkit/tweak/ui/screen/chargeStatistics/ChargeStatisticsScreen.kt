@@ -1,7 +1,10 @@
 package io.github.lumkit.tweak.ui.screen.chargeStatistics
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,12 +17,16 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,10 +36,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,29 +72,38 @@ import io.github.lumkit.tweak.ui.screen.feature.model.Feature
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.number
-import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.ConvertFile
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_charge
+import tweak_alpha.shared.generated.resources.ic_charge_fill
+import tweak_alpha.shared.generated.resources.ic_history
 import tweak_alpha.shared.generated.resources.text_battery_level
 import tweak_alpha.shared.generated.resources.text_charge_chart_current_time
 import tweak_alpha.shared.generated.resources.text_charge_chart_level_time
@@ -92,6 +111,7 @@ import tweak_alpha.shared.generated.resources.text_charge_chart_mode_current
 import tweak_alpha.shared.generated.resources.text_charge_chart_mode_power
 import tweak_alpha.shared.generated.resources.text_charge_chart_power_time
 import tweak_alpha.shared.generated.resources.text_charge_chart_temperature_time
+import tweak_alpha.shared.generated.resources.text_charge_history_title
 import tweak_alpha.shared.generated.resources.text_charge_label_average_power
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_capacity
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_power
@@ -103,9 +123,11 @@ import tweak_alpha.shared.generated.resources.text_charge_label_battery_voltage
 import tweak_alpha.shared.generated.resources.text_charge_label_current
 import tweak_alpha.shared.generated.resources.text_charge_statistics
 import tweak_alpha.shared.generated.resources.text_charge_statistics_description
+import tweak_alpha.shared.generated.resources.text_dialog_confirm
+import tweak_alpha.shared.generated.resources.text_dialog_delete_charge_history_notes
+import tweak_alpha.shared.generated.resources.text_dialog_tip
 import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_go_back
-import kotlin.time.Instant
 
 internal val ChargeStatisticsProvider = object : FeatureProvider {
     override val feature: Feature
@@ -154,6 +176,9 @@ fun ChargeStatisticsScreen(
                             )
                         }
                     },
+                    actions = {
+                        ActionHistory(viewModel)
+                    }
                 )
             },
             containerColor = MiuixTheme.colorScheme.surface,
@@ -303,7 +328,7 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
             currentSessionSummary?.let { summary ->
                 val endedAt = if (summary.isCurrentChargingSession) currentTime else summary.endedAt
                 Text(
-                    text = buildSessionTimeText(
+                    text = buildChargeSessionTimeText(
                         summary.startedAt,
                         endedAt,
                         summary.isCurrentChargingSession,
@@ -313,19 +338,19 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = formatSessionDuration(summary.startedAt, endedAt),
+                    text = formatChargeSessionDuration(summary.startedAt, endedAt),
                     style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurface.copy(.31f),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = formatLevelGain(summary.startLevel, summary.endLevel ?: summary.startLevel),
+                    text = formatChargeLevelGain(summary.startLevel, summary.endLevel ?: summary.startLevel),
                     style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurface.copy(.31f),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = formatEnergyGainWh(summary.energyGainUw),
+                    text = formatChargeEnergyGainWh(summary.energyGainUw),
                     style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurface.copy(.31f),
                 )
@@ -357,83 +382,6 @@ private fun ChargeStateLabel(
             style = MiuixTheme.textStyles.footnote1,
             color = MiuixTheme.colorScheme.onSurface.copy(.75f),
         )
-    }
-}
-
-private fun buildSessionTimeText(startedAt: Long, endedAt: Long, showNow: Boolean): String {
-    val zone = TimeZone.currentSystemDefault()
-    val start = Instant.fromEpochMilliseconds(startedAt).toLocalDateTime(zone)
-    val end = Instant.fromEpochMilliseconds(endedAt).toLocalDateTime(zone)
-    val startText = "%04d-%02d-%02d %02d:%02d:%02d".format(
-        start.year,
-        start.month.number,
-        start.day,
-        start.hour,
-        start.minute,
-        start.second,
-    )
-    val endText = if (showNow) {
-        "现在"
-    } else if (
-        start.year == end.year &&
-        start.month.number == end.month.number &&
-        start.day == end.day
-    ) {
-        "%02d:%02d:%02d".format(end.hour, end.minute, end.second)
-    } else {
-        "%04d-%02d-%02d %02d:%02d:%02d".format(
-            end.year,
-            end.month.number,
-            end.day,
-            end.hour,
-            end.minute,
-            end.second,
-        )
-    }
-    return "$startText ~ $endText"
-}
-
-private fun formatSessionDuration(startedAt: Long, endedAt: Long): String {
-    val elapsed = (endedAt - startedAt).coerceAtLeast(0L)
-    val second = 1_000L
-    val minute = 60 * second
-    val hour = 60 * minute
-    val day = 24 * hour
-    return when {
-        elapsed >= day -> buildString {
-            val days = elapsed / day
-            val hours = (elapsed % day) / hour
-            append("${days}天")
-            if (hours > 0) append("${hours}小时")
-        }
-        elapsed >= hour -> buildString {
-            val hours = elapsed / hour
-            val minutes = (elapsed % hour) / minute
-            append("${hours}小时")
-            if (minutes > 0) append("${minutes}分钟")
-        }
-        elapsed >= minute -> buildString {
-            val minutes = elapsed / minute
-            val seconds = (elapsed % minute) / second
-            append("${minutes}分钟")
-            if (seconds > 0) append("${seconds}秒")
-        }
-        else -> "${elapsed / second}秒"
-    }
-}
-
-private fun formatLevelGain(startLevel: Int, endLevel: Int): String {
-    val delta = endLevel - startLevel
-    return if (delta >= 0) "+${delta}%" else "${delta}%"
-}
-
-private fun formatEnergyGainWh(energyGainUw: Long): String {
-    val wh = energyGainUw / 1_000_000L
-    val fraction = kotlin.math.abs((energyGainUw % 1_000_000L) / 10_000L)
-    return if (fraction == 0L) {
-        "${wh}Wh"
-    } else {
-        "${wh}.${fraction.toString().padStart(2, '0')}Wh"
     }
 }
 
@@ -765,5 +713,238 @@ private fun ChargeChartColorIndicator(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ActionHistory(viewModel: ChargeStatisticsViewModel) {
+    var showSheet by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val historyState by viewModel.chargeHistoryUiState.collectAsStateWithLifecycle()
+    val currentTime by viewModel.currentTime.collectAsStateWithLifecycle()
+    val displayedChartsSessionId by viewModel.displayedChartsSessionId.collectAsStateWithLifecycle()
+
+    val selectAllState = when {
+        historyState.items.isEmpty() -> ToggleableState.Off
+        historyState.selectedSessionIds.size == historyState.items.size -> ToggleableState.On
+        historyState.selectedSessionIds.isEmpty() -> ToggleableState.Off
+        else -> ToggleableState.Indeterminate
+    }
+    val deleteEnabled = historyState.selectedSessionIds.isNotEmpty() && !historyState.isDeleting
+    val deleteAlpha by animateFloatAsState(
+        targetValue = if (deleteEnabled) 1f else 0.31f,
+    )
+
+    BackHandler(enabled = showSheet && historyState.isSelectionMode) {
+        viewModel.exitChargeHistorySelectionMode()
+    }
+
+    IconButton(
+        onClick = { showSheet = true },
+    ) {
+        Icon(
+            painter = painterResource(Res.drawable.ic_history),
+            contentDescription = stringResource(Res.string.text_charge_history_title),
+            modifier = Modifier.size(24.dp),
+        )
+    }
+
+    OverlayBottomSheet(
+        show = showSheet,
+        title = stringResource(Res.string.text_charge_history_title),
+        startAction = {
+            IconButton(
+                onClick = {
+                    if (historyState.isSelectionMode) {
+                        viewModel.exitChargeHistorySelectionMode()
+                    } else {
+                        showSheet = false
+                    }
+                },
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Close,
+                    contentDescription = stringResource(Res.string.text_go_back),
+                )
+            }
+        },
+        endAction = if (historyState.isSelectionMode) {
+            {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = { showDeleteDialog = true },
+                        enabled = deleteEnabled,
+                        modifier = Modifier.alpha(deleteAlpha),
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Delete,
+                            contentDescription = null,
+                        )
+                    }
+                    IconButton(onClick = viewModel::toggleChargeHistorySelectAll) {
+                        Checkbox(
+                            state = selectAllState,
+                            onClick = null,
+                        )
+                    }
+                }
+            }
+        } else {
+            null
+        },
+        onDismissRequest = {
+            showSheet = false
+            showDeleteDialog = false
+            viewModel.onChargeHistorySheetClosed()
+        },
+    ) {
+        LaunchedEffect(Unit) {
+            viewModel.onChargeHistorySheetOpened()
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 560.dp),
+        ) {
+
+            when {
+                historyState.isLoading && historyState.items.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        InfiniteProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                }
+                historyState.items.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "—",
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                        )
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth()
+                            .sizeIn(minHeight = 200.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        items(
+                            items = historyState.items,
+                            key = { it.sessionId },
+                        ) { item ->
+                            val selected = item.sessionId in historyState.selectedSessionIds
+                            val highlighted = !historyState.isSelectionMode &&
+                                item.sessionId == displayedChartsSessionId
+                            ChargeHistoryListItem(
+                                title = formatChargeSessionStartTitle(item.startedAt),
+                                subtitle = formatChargeSessionSummaryLine(item.summary, currentTime),
+                                selectionMode = historyState.isSelectionMode,
+                                selected = selected,
+                                highlighted = highlighted,
+                                onClick = {
+                                    if (historyState.isSelectionMode) {
+                                        viewModel.toggleChargeHistorySelection(item.sessionId)
+                                    } else {
+                                        viewModel.selectChargeHistorySessionForCharts(item.sessionId)
+                                    }
+                                },
+                                onLongClick = {
+                                    viewModel.onChargeHistoryLongPress(item.sessionId)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+
+    OverlayDialog(
+        title = stringResource(Res.string.text_dialog_tip),
+        summary = stringResource(Res.string.text_dialog_delete_charge_history_notes),
+        show = showDeleteDialog,
+        onDismissRequest = { showDeleteDialog = false },
+    ) {
+        TextButton(
+            text = stringResource(Res.string.text_dialog_confirm),
+            onClick = {
+                showDeleteDialog = false
+                viewModel.deleteSelectedChargeHistory()
+            },
+            colors = ButtonDefaults.textButtonColorsPrimary(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun ChargeHistoryListItem(
+    title: String,
+    subtitle: String,
+    selectionMode: Boolean,
+    selected: Boolean,
+    highlighted: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val containerColor = if (highlighted) {
+        MiuixTheme.colorScheme.primary.copy(alpha = 0.12f)
+    } else {
+        Color.Transparent
+    }
+    BasicComponent(
+        modifier = Modifier
+            .clip(Rectangle.copy(12.dp))
+            .fillMaxWidth()
+            .background(containerColor)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
+        startAction = {
+            Icon(
+                painter = painterResource(Res.drawable.ic_charge_fill),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        endActions = {
+            if (selectionMode) {
+                Checkbox(
+                    state = if (selected) ToggleableState.On else ToggleableState.Off,
+                    onClick = null,
+                )
+            }
+        },
+    ) {
+        Text(
+            text = title,
+            color = MiuixTheme.colorScheme.onSurface,
+            style = MiuixTheme.textStyles.footnote1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = subtitle,
+            color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.31f),
+            style = MiuixTheme.textStyles.footnote2.copy(
+                fontSize = 9.sp,
+                lineHeight = 9.sp,
+            ),
+        )
     }
 }
