@@ -4,7 +4,7 @@ package io.github.lumkit.tweak.common.daemon
  * 特权环境下的独立 native daemon 控制面。
  *
  * 二进制以 `assets/tweakd/<abi>/tweakd` 打进 APK，安装到 [DaemonPaths] 解析的目录
- * （Root→`/data/adb/...`，Shizuku→tmp）。启动时若已安装且 SHA-256 与 assets 一致则跳过拷贝。
+ * （Root→应用 filesDir，Shizuku→tmp）。启动时若已安装且 SHA-256 与 assets 一致则跳过拷贝。
  * 通过 127.0.0.1 TCP（端口写入 port 文件）与 App 通信；业务为无障碍保活巡检。
  */
 expect object TweakDaemon {

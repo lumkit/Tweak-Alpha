@@ -1,7 +1,6 @@
 package io.github.lumkit.tweak.common.utils
 
-import io.github.lumkit.tweak.common.daemon.A11yWatchDaemonConfig
-import io.github.lumkit.tweak.common.daemon.TweakDaemon
+import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -38,26 +37,14 @@ object PrivilegedAppInitializer {
         }
     }
 
-    /** @return true 表示 tweakd 已成功启动（或已在跑） */
+    /**
+     * @return true 表示已处理（含用户未启用时的跳过，或启动成功/已在跑）
+     */
     private suspend fun bootstrapDaemon(): Boolean {
         return try {
-            A11yWatchDaemonConfig.syncFromDataStore()
-            // 旧版 tweakd：无 a11y_watch / idle_poll / tcp 字段时，重启一次以升级
-            val status = TweakDaemon.status()
-            val needsUpgrade =
-                status == null ||
-                    !status.raw.contains("a11y_watch=1") ||
-                    !status.raw.contains("idle_poll=1") ||
-                    !status.raw.contains("tcp=")
-            if (needsUpgrade && TweakDaemon.isRunning()) {
-                TweakDaemon.stop()
-            }
-            val started = TweakDaemon.start()
-            logD(
-                "TweakDaemon.start => $started needsUpgrade=$needsUpgrade",
-                TAG,
-            )
-            started
+            val started = NativeDaemonController.ensureRunningIfEnabled()
+            logD("NativeDaemonController.ensureRunningIfEnabled => $started", TAG)
+            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

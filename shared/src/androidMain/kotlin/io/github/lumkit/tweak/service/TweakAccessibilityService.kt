@@ -10,6 +10,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
+import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
 import io.github.lumkit.tweak.common.utils.logD
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +75,11 @@ class TweakAccessibilityService : AccessibilityService() {
 
         addKeepAliveOverlay()
         startDaemon()
+        // 广播/系统拉活无障碍后：若用户启用了 Native Daemon，检测一次并按需启动 tweakd
+        serviceScope.launch {
+            val started = NativeDaemonController.ensureRunningIfEnabled()
+            logD("native daemon ensure on a11y connected => $started", TAG)
+        }
         logD("TweakAccessibilityService is connected.", TAG)
     }
 

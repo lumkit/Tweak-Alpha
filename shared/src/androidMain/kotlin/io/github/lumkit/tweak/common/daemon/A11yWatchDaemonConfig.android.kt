@@ -11,6 +11,7 @@ import io.github.lumkit.tweak.common.utils.logE
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.io.File
 
 actual object A11yWatchDaemonConfig {
 
@@ -29,13 +30,19 @@ actual object A11yWatchDaemonConfig {
             append("component=").append(component).append('\n')
         }
         try {
-            PrivilegedWorkDir.ensureWritable(
-                path = paths.dir,
-                workRoot = paths.workRoot,
-                mode = paths.dirMode,
-            )
-            Files.writeText(paths.a11yConf, text).throwIfFailed("writeText ${paths.a11yConf}")
-            Files.chmod(paths.a11yConf, "0644").throwIfFailed("chmod ${paths.a11yConf}")
+            if (paths.isRootPrivate) {
+                File(paths.workRoot).mkdirs()
+                File(paths.dir).mkdirs()
+                File(paths.a11yConf).writeText(text)
+            } else {
+                PrivilegedWorkDir.ensureWritable(
+                    path = paths.dir,
+                    workRoot = paths.workRoot,
+                    mode = paths.dirMode,
+                )
+                Files.writeText(paths.a11yConf, text).throwIfFailed("writeText ${paths.a11yConf}")
+                Files.chmod(paths.a11yConf, "0644").throwIfFailed("chmod ${paths.a11yConf}")
+            }
             logD(
                 "wrote a11y conf intervalMs=$safeInterval enabled=$enabled path=${paths.a11yConf}",
                 TAG,

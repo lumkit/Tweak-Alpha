@@ -13,7 +13,7 @@ object PrivilegedWorkDir {
     private const val TAG = "PrivilegedWorkDir"
 
     /**
-     * @param workRoot 工作区根（如 `/data/adb/tweak-alpha` 或 tmp 根）
+     * @param workRoot 工作区根（如应用 filesDir/tweak-alpha 或 tmp 根）
      * @param path 要确保可写的目录（通常为 daemon 子目录）
      * @param mode 目标权限，如 `0700` / `0777`
      */
@@ -162,7 +162,7 @@ object PrivilegedWorkDir {
 
     private fun buildPermissionHint(path: String, workRoot: String, detail: String?): String {
         return "无法写入工作目录 $path（$detail）。" +
-            "请确认当前特权模式与目录匹配（Root→/data/adb，Shizuku→tmp），或执行：" +
+            "请确认当前特权模式与目录匹配（Root→应用数据目录，Shizuku→tmp），或执行：" +
             "rm -rf $workRoot  后重试。"
     }
 

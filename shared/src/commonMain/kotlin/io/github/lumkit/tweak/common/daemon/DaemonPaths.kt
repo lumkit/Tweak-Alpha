@@ -7,12 +7,11 @@ import kotlinx.coroutines.flow.first
 
 /**
  * Native daemon 工作路径：按 [RuntimeMode] 分流。
- * - Root → `/data/adb/tweak-alpha`（私有，0700）
+ * - Root → 应用私有数据目录（filesDir/tweak-alpha，0700）
  * - Shizuku → `/data/local/tmp/tweak-alpha`（ADB/shell 工作区）
  */
 object DaemonPaths {
 
-    const val ROOT_WORK_ROOT = "/data/adb/tweak-alpha"
     const val SHIZUKU_WORK_ROOT = "/data/local/tmp/tweak-alpha"
 
     const val A11Y_WATCH_CONF_NAME = "a11y_watch.conf"
@@ -41,7 +40,7 @@ object DaemonPaths {
 
     fun resolve(mode: RuntimeMode): Resolved {
         val workRoot = when (mode) {
-            RuntimeMode.Root -> ROOT_WORK_ROOT
+            RuntimeMode.Root -> rootWorkRoot()
             RuntimeMode.Shizuku, RuntimeMode.Unknow -> SHIZUKU_WORK_ROOT
         }
         val dir = "$workRoot/daemon"
@@ -62,3 +61,6 @@ object DaemonPaths {
         )
     }
 }
+
+/** Root 模式：应用私有 files 目录下的 tweak-alpha 工作区 */
+internal expect fun rootWorkRoot(): String

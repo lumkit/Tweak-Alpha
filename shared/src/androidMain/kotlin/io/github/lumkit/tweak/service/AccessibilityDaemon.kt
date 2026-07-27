@@ -11,6 +11,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -59,7 +60,10 @@ internal class AccessibilityDaemon(
     }
 
     private suspend fun tick() {
-        ensureOverlay()
+        // WindowManager.addView 必须在有 Looper 的主线程
+        withContext(Dispatchers.Main.immediate) {
+            ensureOverlay()
+        }
         ensureKeepAliveService()
         ensureUpdateEngineService()
     }

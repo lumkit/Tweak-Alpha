@@ -404,7 +404,7 @@ A11yWatchConfig readA11yConfig(const char *path) {
     A11yWatchConfig cfg;
     std::ifstream in(path);
     if (!in) {
-        // 无 conf 时默认开启巡检（Magisk 开机等场景）
+        // 无 conf 时默认开启巡检
         return cfg;
     }
     std::string line;

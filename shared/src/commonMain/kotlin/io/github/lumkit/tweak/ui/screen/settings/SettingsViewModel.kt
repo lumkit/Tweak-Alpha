@@ -2,18 +2,27 @@ package io.github.lumkit.tweak.ui.screen.settings
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
-import io.github.lumkit.tweak.common.daemon.DaemonPaths
+import io.github.lumkit.tweak.common.daemon.NativeDaemonController
+import io.github.lumkit.tweak.common.daemon.TweakDaemon
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.RuntimeMode
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.seconds
 
 class SettingsViewModel : BaseViewModel() {
 
@@ -22,6 +31,34 @@ class SettingsViewModel : BaseViewModel() {
 
     private val _notificationPermission = MutableStateFlow(false)
     val notificationPermission = _notificationPermission.asStateFlow()
+
+    /** 触发立即探测 tweakd 存活（开关切换 / 页面可见时） */
+    private val nativeDaemonProbe =
+        MutableSharedFlow<Unit>(
+            replay = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        ).also { it.tryEmit(Unit) }
+
+    /**
+     * 开关 UI 绑定进程存活状态（非 DataStore 偏好）。
+     * 页面有订阅时每 2s 探测；启停后立即刷新。
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val nativeDaemonRunning = nativeDaemonProbe
+        .flatMapLatest {
+            flow {
+                while (true) {
+                    emit(probeNativeDaemonRunning())
+                    delay(2.seconds)
+                }
+            }
+        }
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false,
+        )
 
     val themeMode = TweakDataStore.themeModeFlow()
         .distinctUntilChanged()
@@ -119,20 +156,16 @@ class SettingsViewModel : BaseViewModel() {
             initialValue = BatteryRecordDefaults.DEFAULT_INTERVAL_LEVEL,
         )
 
-    val a11yWatchIntervalLevel = TweakDataStore.a11yWatchIntervalLevelFlow()
-        .distinctUntilChanged()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = DaemonPaths.DEFAULT_A11Y_INTERVAL_MS / DaemonPaths.MIN_A11Y_INTERVAL_MS,
-        )
-
     fun updateIsIgnoringBatteryOptimizations(isIgnoring: Boolean) {
         _isIgnoringBatteryOptimizations.value = isIgnoring
     }
 
     fun updateNotificationPermission(permission: Boolean) {
         _notificationPermission.value = permission
+    }
+
+    fun refreshNativeDaemonStatus() {
+        nativeDaemonProbe.tryEmit(Unit)
     }
 
     fun setThemeMode(mode: ColorSchemeMode) {
@@ -160,15 +193,22 @@ class SettingsViewModel : BaseViewModel() {
         }
     }
 
-    fun setA11yWatchIntervalLevel(level: Float) {
+    fun setNativeDaemonEnabled(enable: Boolean) {
         viewModelScope.launch {
-            TweakDataStore.setA11yWatchIntervalLevel(level.roundToInt())
+            NativeDaemonController.setEnabled(enable)
+            refreshNativeDaemonStatus()
         }
     }
 
     fun setAutoStartApp(enable: Boolean) {
         viewModelScope.launch {
             TweakDataStore.setAutoStartAppSwitch(enable)
+            if (!enable) {
+                NativeDaemonController.stop()
+            } else if (TweakDataStore.nativeDaemonEnabledFlow().first()) {
+                NativeDaemonController.ensureRunning()
+            }
+            refreshNativeDaemonStatus()
         }
     }
 
@@ -212,5 +252,11 @@ class SettingsViewModel : BaseViewModel() {
         viewModelScope.launch {
             TweakDataStore.setInfoPageEnabledProcessInfo(enable)
         }
+    }
+
+    private suspend fun probeNativeDaemonRunning(): Boolean {
+        return runCatching {
+            TweakDaemon.isRunning() || TweakDaemon.ping()
+        }.getOrDefault(false)
     }
 }

@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -41,21 +44,15 @@ actual object TweakDaemon {
     actual suspend fun install(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val paths = DaemonPaths.resolve()
-            val backend = resolvePrivilegedBackend()
-
-            PrivilegedWorkDir.ensureWritable(
-                path = paths.dir,
-                workRoot = paths.workRoot,
-                mode = paths.dirMode,
-            )
+            ensureDaemonDir(paths)
 
             val expectedSha = expectedAssetSha256()
                 ?: error("assets/$ASSET_ROOT/<abi>/$ASSET_BIN_NAME not found for ${Build.SUPPORTED_ABIS?.joinToString()}")
 
-            if (isInstalledBinaryPresent(paths.bin)) {
-                val actualSha = hashInstalledBinary(backend, paths.bin)
+            if (isInstalledBinaryPresent(paths)) {
+                val actualSha = hashInstalledBinary(paths)
                 if (actualSha != null && actualSha.equals(expectedSha, ignoreCase = true)) {
-                    Files.chmod(paths.bin, "0755")
+                    setBinaryExecutable(paths.bin)
                     logD(
                         "tweakd already installed and intact, skip copy sha256=$actualSha dir=${paths.dir}",
                         TAG,
@@ -66,7 +63,7 @@ actual object TweakDaemon {
                     "tweakd corrupt or outdated actual=${actualSha ?: "unreadable"}, reinstall",
                     TAG,
                 )
-                runCatching { Files.delete(paths.bin) }
+                deleteBinary(paths.bin)
             } else {
                 logD("tweakd not installed at ${paths.bin}, copy from assets", TAG)
             }
@@ -74,17 +71,17 @@ actual object TweakDaemon {
             val (assetPath, input) = openPackagedBinaryAsset()
                 ?: error("packaged asset missing during copy")
             input.use { stream ->
-                copyAssetToPrivilegedPath(backend, stream, paths.bin)
+                copyAssetToBin(paths, stream)
             }
-            Files.chmod(paths.bin, "0755").throwIfFailed("chmod ${paths.bin}")
+            setBinaryExecutable(paths.bin)
 
-            val len = Files.length(paths.bin).getOrNull() ?: 0L
+            val len = binaryLength(paths.bin)
             if (len <= 0L) {
                 error("installed binary empty: ${paths.bin}")
             }
-            val afterSha = hashInstalledBinary(backend, paths.bin)
+            val afterSha = hashInstalledBinary(paths)
             if (afterSha == null || !afterSha.equals(expectedSha, ignoreCase = true)) {
-                runCatching { Files.delete(paths.bin) }
+                deleteBinary(paths.bin)
                 error("installed binary integrity failed expected=$expectedSha actual=$afterSha")
             }
             logD("installed tweakd -> ${paths.bin} len=$len asset=$assetPath sha256=$afterSha", TAG)
@@ -92,6 +89,84 @@ actual object TweakDaemon {
         }.onFailure {
             logE("install failed: ${it.message}", it, TAG)
         }.getOrDefault(false)
+    }
+
+    private suspend fun ensureDaemonDir(paths: DaemonPaths.Resolved) {
+        if (paths.isRootPrivate) {
+            // Root：应用私有数据目录，直接本地创建，避免走 Root Binder 写 /data/adb 一类受限路径
+            File(paths.workRoot).mkdirs()
+            File(paths.dir).mkdirs()
+            File(paths.bin).parentFile?.mkdirs()
+        } else {
+            PrivilegedWorkDir.ensureWritable(
+                path = paths.dir,
+                workRoot = paths.workRoot,
+                mode = paths.dirMode,
+            )
+        }
+    }
+
+    private suspend fun isInstalledBinaryPresent(paths: DaemonPaths.Resolved): Boolean {
+        if (paths.isRootPrivate) {
+            val f = File(paths.bin)
+            return f.isFile && f.length() > 0L
+        }
+        if (Files.exists(paths.bin).getOrNull() != true) return false
+        return (Files.length(paths.bin).getOrNull() ?: 0L) > 0L
+    }
+
+    private suspend fun hashInstalledBinary(paths: DaemonPaths.Resolved): String? = runCatching {
+        if (paths.isRootPrivate) {
+            FileInputStream(File(paths.bin)).use { sha256Hex(it) }
+        } else {
+            val backend = resolvePrivilegedBackend()
+            openPrivilegedReadOnlyFd(backend, paths.bin).use { pfd ->
+                ParcelFileDescriptor.AutoCloseInputStream(pfd).use { sha256Hex(it) }
+            }
+        }
+    }.onFailure {
+        logE("hash installed binary failed: ${it.message}", it, TAG)
+    }.getOrNull()
+
+    private suspend fun copyAssetToBin(paths: DaemonPaths.Resolved, input: InputStream) {
+        if (paths.isRootPrivate) {
+            val dest = File(paths.bin)
+            dest.parentFile?.mkdirs()
+            FileOutputStream(dest).use { output ->
+                input.copyTo(output)
+                output.flush()
+            }
+        } else {
+            val backend = resolvePrivilegedBackend()
+            openPrivilegedWriteOnlyFd(
+                backend = backend,
+                path = paths.bin,
+                create = true,
+                truncate = true,
+            ).use { writePfd ->
+                ParcelFileDescriptor.AutoCloseOutputStream(writePfd).use { output ->
+                    input.copyTo(output)
+                    output.flush()
+                }
+            }
+        }
+    }
+
+    private suspend fun setBinaryExecutable(binPath: String) {
+        runCatching { File(binPath).setExecutable(true, false) }
+        Files.chmod(binPath, "0755")
+        ReusableShells.execSync("chmod 755 ${binPath.shellQuote()} 2>/dev/null || true")
+    }
+
+    private suspend fun deleteBinary(binPath: String) {
+        runCatching { File(binPath).delete() }
+        runCatching { Files.delete(binPath) }
+    }
+
+    private suspend fun binaryLength(binPath: String): Long {
+        val local = File(binPath)
+        if (local.isFile) return local.length()
+        return Files.length(binPath).getOrNull() ?: 0L
     }
 
     actual suspend fun start(): Boolean = withContext(Dispatchers.IO) {
@@ -188,11 +263,6 @@ actual object TweakDaemon {
         }.getOrNull()
     }
 
-    private suspend fun isInstalledBinaryPresent(binPath: String): Boolean {
-        if (Files.exists(binPath).getOrNull() != true) return false
-        return (Files.length(binPath).getOrNull() ?: 0L) > 0L
-    }
-
     private suspend fun expectedAssetSha256(): String? {
         cachedAssetSha256?.let { return it }
         val sha = runCatching {
@@ -204,17 +274,6 @@ actual object TweakDaemon {
         cachedAssetSha256 = sha
         return sha
     }
-
-    private suspend fun hashInstalledBinary(
-        backend: NativeFileBackend,
-        binPath: String,
-    ): String? = runCatching {
-        openPrivilegedReadOnlyFd(backend, binPath).use { pfd ->
-            ParcelFileDescriptor.AutoCloseInputStream(pfd).use { sha256Hex(it) }
-        }
-    }.onFailure {
-        logE("hash installed binary failed: ${it.message}", it, TAG)
-    }.getOrNull()
 
     private fun sha256Hex(input: InputStream): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -275,7 +334,7 @@ actual object TweakDaemon {
     private suspend fun isRunningInternal(paths: DaemonPaths.Resolved): Boolean {
         val pid = readPid(paths)
         if (pid <= 0) return false
-        return Files.exists("/proc/$pid").getOrNull() == true
+        return File("/proc/$pid").exists() || Files.exists("/proc/$pid").getOrNull() == true
     }
 
     private suspend fun pingInternal(paths: DaemonPaths.Resolved): Boolean =
@@ -310,42 +369,28 @@ actual object TweakDaemon {
         return null
     }
 
-    private suspend fun copyAssetToPrivilegedPath(
-        backend: NativeFileBackend,
-        input: InputStream,
-        destPath: String,
-    ) {
-        openPrivilegedWriteOnlyFd(
-            backend = backend,
-            path = destPath,
-            create = true,
-            truncate = true,
-        ).use { writePfd ->
-            ParcelFileDescriptor.AutoCloseOutputStream(writePfd).use { output ->
-                input.copyTo(output)
-                output.flush()
-            }
-        }
-    }
-
     private suspend fun readPid(paths: DaemonPaths.Resolved): Int {
-        val text = Files.readText(paths.pid).getOrNull()
-            ?.trim()
-            ?.lines()
-            ?.firstOrNull()
-            .orEmpty()
+        val text = if (paths.isRootPrivate) {
+            runCatching { File(paths.pid).takeIf { it.isFile }?.readText() }.getOrNull()
+        } else {
+            Files.readText(paths.pid).getOrNull()
+        }?.trim()?.lines()?.firstOrNull().orEmpty()
         return text.toIntOrNull() ?: -1
     }
 
-    private suspend fun portExists(paths: DaemonPaths.Resolved): Boolean =
-        Files.exists(paths.port).getOrNull() == true
+    private suspend fun portExists(paths: DaemonPaths.Resolved): Boolean {
+        if (paths.isRootPrivate) {
+            return File(paths.port).isFile
+        }
+        return Files.exists(paths.port).getOrNull() == true
+    }
 
     private suspend fun readDaemonPort(paths: DaemonPaths.Resolved): Int {
-        val text = Files.readText(paths.port).getOrNull()
-            ?.trim()
-            ?.lines()
-            ?.firstOrNull()
-            .orEmpty()
+        val text = if (paths.isRootPrivate) {
+            runCatching { File(paths.port).takeIf { it.isFile }?.readText() }.getOrNull()
+        } else {
+            Files.readText(paths.port).getOrNull()
+        }?.trim()?.lines()?.firstOrNull().orEmpty()
         return text.toIntOrNull() ?: -1
     }
 
