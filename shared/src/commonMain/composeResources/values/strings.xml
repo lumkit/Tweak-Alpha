@@ -77,6 +77,8 @@
     <string name="text_panel_refresh_tick_description">当前：%d ms</string>
     <string name="text_battery_record_sample_interval">电池记录采样间隔</string>
     <string name="text_battery_record_sample_interval_description">当前：%d ms</string>
+    <string name="text_a11y_watch_interval">无障碍保活巡检间隔</string>
+    <string name="text_a11y_watch_interval_description">当前：%d ms（daemon 按此间隔检测并启用无障碍）</string>
     <string name="text_battery_ignore_optimization_white_list">电池优化忽略白名单</string>
     <string name="text_battery_ignore_optimization_white_list_description">设置后应用数据将更精准</string>
     <string name="text_system_not_supported">系统未支持</string>

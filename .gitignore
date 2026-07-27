@@ -37,3 +37,5 @@ google-services.json
 /tmp/**
 /docs/
 /androidSharedNative/src/main/jniLibs/
+# cmake POST_BUILD 产物；保留 assets/tweakd/magisk-service.sh
+/androidSharedNative/src/main/assets/tweakd/*/tweakd

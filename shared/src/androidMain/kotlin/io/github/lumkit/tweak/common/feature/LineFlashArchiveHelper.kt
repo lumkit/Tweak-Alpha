@@ -4,7 +4,9 @@ import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.NativeFileBackend
+import io.github.lumkit.tweak.common.utils.NativeFileError
 import io.github.lumkit.tweak.common.utils.NativeFileResult
+import io.github.lumkit.tweak.common.utils.PrivilegedWorkDir
 import io.github.lumkit.tweak.common.utils.StorageUtils
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.joinPath
@@ -35,10 +37,27 @@ object LineFlashArchiveHelper {
     }
 
     suspend fun ensureWorkRoot(): NativeFileResult<Unit> {
-        return Files.mkdirs(ConstCommon.Path.TWEAK_ALPHA_ROOT).also {
-            if (it is NativeFileResult.Success) {
-                Files.mkdirs(ConstCommon.Path.LINE_FLASH_DIR)
-            }
+        return try {
+            PrivilegedWorkDir.ensureWritable(
+                path = ConstCommon.Path.TWEAK_ALPHA_ROOT,
+                workRoot = ConstCommon.Path.TWEAK_ALPHA_ROOT,
+                mode = "0777",
+            )
+            PrivilegedWorkDir.ensureWritable(
+                path = ConstCommon.Path.LINE_FLASH_DIR,
+                workRoot = ConstCommon.Path.TWEAK_ALPHA_ROOT,
+                mode = "0777",
+            )
+            NativeFileResult.Success(Unit)
+        } catch (e: Exception) {
+            NativeFileResult.Failure(
+                NativeFileError(
+                    backend = NativeFileBackend.User,
+                    operation = "ensureWorkRoot",
+                    primaryPath = ConstCommon.Path.TWEAK_ALPHA_ROOT,
+                    message = e.message ?: "ensureWorkRoot failed",
+                ),
+            )
         }
     }
 

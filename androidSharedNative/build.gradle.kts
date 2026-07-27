@@ -59,10 +59,9 @@ android {
         aidl = true
     }
 
-    // cmake POST_BUILD 会把 tweakd 拷到此处，以 libtweakd.so 打进 AAR
+    // cmake POST_BUILD 会把 tweakd 拷到 assets/tweakd/<abi>/tweakd
     sourceSets {
         getByName("main") {
-            jniLibs.srcDir("src/main/jniLibs")
             assets.srcDir("src/main/assets")
         }
     }

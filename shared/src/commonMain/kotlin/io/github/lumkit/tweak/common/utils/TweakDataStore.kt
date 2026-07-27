@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import io.github.lumkit.tweak.common.daemon.A11yWatchDaemonConfig
+import io.github.lumkit.tweak.common.daemon.DaemonPaths
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.model.BatteryDisplayType
 import io.github.lumkit.tweak.model.RuntimeMode
@@ -56,6 +58,8 @@ object TweakDataStore {
     private val processInfoUpdateTime = longPreferencesKey("process_info_update_time")
     // 电池记录采样间隔档位（×500ms，与面板刷新一致）
     private val batteryRecordSampleIntervalLevel = intPreferencesKey("battery_record_sample_interval_level")
+    // 无障碍保活巡检间隔档位（×10s，默认 6 → 60s）
+    private val a11yWatchIntervalLevel = intPreferencesKey("a11y_watch_interval_level")
     // 自动启动应用开关
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
     // 是否自动监听系统更新并推送通知（关闭后需进入系统更新页才发通知）
@@ -227,6 +231,30 @@ object TweakDataStore {
                 preferences[batteryRecordSampleIntervalLevel] = level
             }
         }
+        // 电池记录与 native daemon 解耦，不再写 battery_record.conf
+    }
+
+    /**
+     * 无障碍保活巡检间隔档位，默认 6 → 60000ms（档位 × [DaemonPaths] 10s）。
+     */
+    fun a11yWatchIntervalLevelFlow(): Flow<Int> = preferences.data.map {
+        it[a11yWatchIntervalLevel] ?: (DaemonPaths.DEFAULT_A11Y_INTERVAL_MS / DaemonPaths.MIN_A11Y_INTERVAL_MS)
+    }
+
+    fun a11yWatchIntervalMsFlow(): Flow<Int> = a11yWatchIntervalLevelFlow().map { level ->
+        (level.coerceAtLeast(1) * DaemonPaths.MIN_A11Y_INTERVAL_MS)
+            .coerceAtLeast(DaemonPaths.MIN_A11Y_INTERVAL_MS)
+    }
+
+    suspend fun setA11yWatchIntervalLevel(level: Int) {
+        val safe = level.coerceIn(1, 30)
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[a11yWatchIntervalLevel] = safe
+            }
+        }
+        val intervalMs = safe * DaemonPaths.MIN_A11Y_INTERVAL_MS
+        A11yWatchDaemonConfig.write(intervalMs = intervalMs, enabled = true)
     }
 
     fun infoBatteryDisplayTypeFlow(): Flow<BatteryDisplayType> = preferences.data.map {

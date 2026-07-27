@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.ui.screen.settings
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.daemon.DaemonPaths
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.RuntimeMode
@@ -118,6 +119,14 @@ class SettingsViewModel : BaseViewModel() {
             initialValue = BatteryRecordDefaults.DEFAULT_INTERVAL_LEVEL,
         )
 
+    val a11yWatchIntervalLevel = TweakDataStore.a11yWatchIntervalLevelFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DaemonPaths.DEFAULT_A11Y_INTERVAL_MS / DaemonPaths.MIN_A11Y_INTERVAL_MS,
+        )
+
     fun updateIsIgnoringBatteryOptimizations(isIgnoring: Boolean) {
         _isIgnoringBatteryOptimizations.value = isIgnoring
     }
@@ -148,6 +157,12 @@ class SettingsViewModel : BaseViewModel() {
     fun setBatteryRecordSampleIntervalLevel(level: Float) {
         viewModelScope.launch {
             TweakDataStore.setBatteryRecordSampleIntervalLevel(level.roundToInt())
+        }
+    }
+
+    fun setA11yWatchIntervalLevel(level: Float) {
+        viewModelScope.launch {
+            TweakDataStore.setA11yWatchIntervalLevel(level.roundToInt())
         }
     }
 

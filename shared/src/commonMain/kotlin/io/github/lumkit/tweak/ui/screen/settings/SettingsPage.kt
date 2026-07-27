@@ -34,6 +34,7 @@ import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.component.Block
 import io.github.lumkit.tweak.common.component.Logo
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.daemon.DaemonPaths
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_CODE
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_NAME
@@ -83,6 +84,8 @@ import tweak_alpha.shared.generated.resources.text_auto_listen_system_update
 import tweak_alpha.shared.generated.resources.text_auto_listen_system_update_description
 import tweak_alpha.shared.generated.resources.text_auto_start
 import tweak_alpha.shared.generated.resources.text_auto_start_description
+import tweak_alpha.shared.generated.resources.text_a11y_watch_interval
+import tweak_alpha.shared.generated.resources.text_a11y_watch_interval_description
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list_description
 import tweak_alpha.shared.generated.resources.text_battery_record_sample_interval
@@ -392,6 +395,25 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                     .format(intervalMs),
                 valueRange = 1f..10f,
                 steps = 10,
+                hapticEffect = SliderDefaults.SliderHapticEffect.Step
+            )
+        }
+
+        // 无障碍保活巡检间隔（native daemon）
+        Block {
+            val level by viewModel.a11yWatchIntervalLevel.collectAsStateWithLifecycle()
+            val intervalMs = remember(level) {
+                level * DaemonPaths.MIN_A11Y_INTERVAL_MS
+            }
+
+            SliderPreference(
+                value = level.toFloat(),
+                onValueChange = viewModel::setA11yWatchIntervalLevel,
+                title = stringResource(Res.string.text_a11y_watch_interval),
+                summary = stringResource(Res.string.text_a11y_watch_interval_description)
+                    .format(intervalMs),
+                valueRange = 1f..30f,
+                steps = 30,
                 hapticEffect = SliderDefaults.SliderHapticEffect.Step
             )
         }

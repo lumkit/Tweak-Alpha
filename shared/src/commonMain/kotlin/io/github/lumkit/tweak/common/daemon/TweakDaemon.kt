@@ -3,14 +3,15 @@ package io.github.lumkit.tweak.common.daemon
 /**
  * 特权环境下的独立 native daemon 控制面。
  *
- * 二进制以 `libtweakd.so` 打进 APK，安装时拷到 [io.github.lumkit.tweak.common.ConstCommon.Path.DAEMON_BIN]，
- * 通过 Unix Domain Socket 与 App 通信（socket 权限 0666，App UID 可直连）。
+ * 二进制以 `assets/tweakd/<abi>/tweakd` 打进 APK，安装到 [DaemonPaths] 解析的目录
+ * （Root→`/data/adb/...`，Shizuku→tmp）。启动时若已安装且 SHA-256 与 assets 一致则跳过拷贝。
+ * 通过 127.0.0.1 TCP（端口写入 port 文件）与 App 通信；业务为无障碍保活巡检。
  */
 expect object TweakDaemon {
-    /** 从 APK nativeLibraryDir 安装/更新 ELF 到特权目录 */
+    /** 确保特权目录中有完好的 tweakd：已存在且哈希匹配则跳过拷贝 */
     suspend fun install(): Boolean
 
-    /** setsid 后台启动；已运行则视为成功 */
+    /** 后台启动；已运行则视为成功 */
     suspend fun start(): Boolean
 
     /** 发送 STOP；失败时尝试按 pidfile kill */

@@ -129,7 +129,8 @@
         <service
             android:name=".service.BatteryRecordService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="true"
+            tools:ignore="ExportedService" />
 
         <service
             android:name=".service.OverlayService"

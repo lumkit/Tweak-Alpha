@@ -26,18 +26,22 @@ object ConstCommon {
     }
 
     object Path {
-        /** 特权工作区主目录，存放各类功能临时文件 */
-        const val TWEAK_ALPHA_ROOT = "/data/local/tmp/TweakAlpha"
+        /** Shizuku/ADB 共享工作区（line_flash 等仍用此根）。Daemon 路径见 [io.github.lumkit.tweak.common.daemon.DaemonPaths]。 */
+        const val TWEAK_ALPHA_ROOT = "/data/local/tmp/tweak-alpha"
 
         const val LINE_FLASH_DIR = "$TWEAK_ALPHA_ROOT/line_flash"
 
         fun lineFlashSession(sessionId: String): String = "$LINE_FLASH_DIR/$sessionId"
+    }
 
-        /** 特权 native daemon 工作区 */
-        const val DAEMON_DIR = "$TWEAK_ALPHA_ROOT/daemon"
-        const val DAEMON_BIN = "$DAEMON_DIR/tweakd"
-        const val DAEMON_PID = "$DAEMON_DIR/tweakd.pid"
-        const val DAEMON_SOCK = "$DAEMON_DIR/tweakd.sock"
-        const val DAEMON_LOG = "$DAEMON_DIR/tweakd.log"
+    object Accessibility {
+        const val SERVICE_CLASS = "io.github.lumkit.tweak.service.TweakAccessibilityService"
+    }
+
+    object BatteryRecord {
+        const val ACTION_SAMPLE = "io.github.lumkit.tweak.action.BATTERY_RECORD_SAMPLE"
+        const val ACTION_STOP = "io.github.lumkit.tweak.action.BATTERY_RECORD_STOP"
+        /** 完整类名（am -n 用 `package/SERVICE_CLASS`） */
+        const val SERVICE_CLASS = "io.github.lumkit.tweak.service.BatteryRecordService"
     }
 }

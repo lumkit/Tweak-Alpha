@@ -32,17 +32,17 @@ target_link_libraries(
         log
 )
 
-# 打包进 jniLibs：以 libtweakd.so 名义打进 APK，运行时再拷到 /data/local/tmp 并 chmod +x
+# 打包进 assets：assets/tweakd/<abi>/tweakd，运行时由 App 拷到 DAEMON_DIR
 if (DEFINED ANDROID_ABI)
-    set(TWEAKD_JNI_LIBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}")
+    set(TWEAKD_ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../assets/tweakd/${ANDROID_ABI}")
     add_custom_command(
             TARGET tweakd
             POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${TWEAKD_JNI_LIBS_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${TWEAKD_ASSETS_DIR}"
             COMMAND ${CMAKE_COMMAND} -E copy
             "$<TARGET_FILE:tweakd>"
-            "${TWEAKD_JNI_LIBS_DIR}/libtweakd.so"
-            COMMENT "Copy tweakd -> jniLibs/${ANDROID_ABI}/libtweakd.so"
+            "${TWEAKD_ASSETS_DIR}/tweakd"
+            COMMENT "Copy tweakd -> assets/tweakd/${ANDROID_ABI}/tweakd"
     )
 endif ()
 

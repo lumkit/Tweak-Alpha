@@ -7,6 +7,7 @@ import android.os.BatteryManager
 import android.os.IBinder
 import android.os.PowerManager
 import io.github.lumkit.tweak.application
+import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.common.base.BaseService
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
@@ -15,8 +16,6 @@ import io.github.lumkit.tweak.common.utils.BatteryUtils
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
-import io.github.lumkit.tweak.service.BatteryRecordService.Companion.ACTION_SAMPLE
-import io.github.lumkit.tweak.service.BatteryRecordService.Companion.ACTION_STOP
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,8 +50,8 @@ class BatteryRecordService : BaseService() {
     companion object {
         const val TAG = "BatteryRecordService"
 
-        const val ACTION_SAMPLE = "io.github.lumkit.tweak.action.BATTERY_RECORD_SAMPLE"
-        const val ACTION_STOP = "io.github.lumkit.tweak.action.BATTERY_RECORD_STOP"
+        const val ACTION_SAMPLE = ConstCommon.BatteryRecord.ACTION_SAMPLE
+        const val ACTION_STOP = ConstCommon.BatteryRecord.ACTION_STOP
 
         fun sample(context: Context = application) {
             val intent = Intent(context, BatteryRecordService::class.java).apply {
@@ -131,7 +130,7 @@ class BatteryRecordService : BaseService() {
         )
         logD(
             "sampled session=$sessionId state=$chargeState level=$level " +
-                "current=${snapshot.currentMa} screenOn=${powerManager.isInteractive}",
+                "current=${snapshot.currentMa} screenOn=${powerManager.isInteractive} voltageMv=${snapshot.voltageMv}",
             TAG,
         )
     }

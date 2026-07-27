@@ -328,6 +328,8 @@ Java_io_github_lumkit_tweak_sharednative_NativeFileBridge_mkdirs(JNIEnv *env, jc
             if (mkdir(current.c_str(), 0777) != 0 && errno != EEXIST) {
                 throwIOException(env, lastError("Failed to create directory " + current));
             }
+            // 尽力放开权限，便于 Root / Shizuku(shell) 共享 /data/local/tmp 工作区
+            chmod(current.c_str(), 0777);
         }
     } catch (...) {
     }
