@@ -163,6 +163,7 @@
     <string name="text_overlay_watcher_description">可用于打开各种悬浮窗监视器</string>
     <string name="text_app_manager">应用管理</string>
     <string name="text_app_manager_description">可卸载、冻结用户应用或系统应用</string>
+    <string name="text_app_search_label">搜索应用名或包名</string>
     <string name="text_process_manager">进程管理</string>
     <string name="text_process_manager_description">查看与结束正在运行的进程</string>
     <string name="text_process_unsupported">当前环境不支持读取进程列表</string>
@@ -183,6 +184,7 @@
     <string name="text_process_kill_confirm">确认结束该进程？</string>
     <string name="text_process_stop_app_confirm">确认强行停止该应用的全部进程？</string>
     <string name="text_process_count_format">%d 个进程</string>
+    <string name="text_process_search_label">搜索进程名、包名或 PID</string>
     <string name="text_process_pid">PID</string>
     <string name="text_process_cpu">CPU</string>
     <string name="text_process_cpu_avg">CPU(AVG)</string>

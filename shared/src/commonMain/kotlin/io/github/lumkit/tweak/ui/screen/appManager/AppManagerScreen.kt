@@ -52,6 +52,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -163,6 +165,7 @@ import tweak_alpha.shared.generated.resources.text_app_info_target_sdk
 import tweak_alpha.shared.generated.resources.text_app_info_version_code
 import tweak_alpha.shared.generated.resources.text_app_manager
 import tweak_alpha.shared.generated.resources.text_app_manager_description
+import tweak_alpha.shared.generated.resources.text_app_search_label
 import tweak_alpha.shared.generated.resources.text_app_uninstall
 import tweak_alpha.shared.generated.resources.text_close
 import tweak_alpha.shared.generated.resources.text_dialog_cancel
@@ -613,22 +616,30 @@ private fun AppManagerTopBar(
 private fun SearchContent(viewModel: AppManagerViewModel) {
     val searchText by viewModel.searchQuery.collectAsStateWithLifecycle()
     var expanded by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
     SearchBar(
         inputField = {
             InputField(
                 query = searchText,
-                onQueryChange = {
-                    viewModel.setSearchQuery(it)
-                },
+                onQueryChange = viewModel::setSearchQuery,
                 onSearch = {},
                 expanded = expanded,
-                onExpandedChange = { expanded = it }
+                onExpandedChange = { expanded = it },
+                label = stringResource(Res.string.text_app_search_label),
+                modifier = Modifier.focusRequester(focusRequester),
             )
         },
         expanded = expanded,
         onExpandedChange = { expanded = it },
-        modifier = Modifier.padding(bottom = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 12.dp),
     ) {}
 }
 

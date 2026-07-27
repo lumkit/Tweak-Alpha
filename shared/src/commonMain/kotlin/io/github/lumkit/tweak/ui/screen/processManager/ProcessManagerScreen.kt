@@ -38,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -122,6 +124,7 @@ import tweak_alpha.shared.generated.resources.text_process_oom_adj
 import tweak_alpha.shared.generated.resources.text_process_oom_score_adj
 import tweak_alpha.shared.generated.resources.text_process_pid
 import tweak_alpha.shared.generated.resources.text_process_res
+import tweak_alpha.shared.generated.resources.text_process_search_label
 import tweak_alpha.shared.generated.resources.text_process_sort_cpu
 import tweak_alpha.shared.generated.resources.text_process_sort_none
 import tweak_alpha.shared.generated.resources.text_process_sort_pid
@@ -392,8 +395,6 @@ private fun ProcessManagerTopBar(
     sortMode: ProcessSortMode,
     onSortChange: (ProcessSortMode) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
     SmallTopAppBar(
         title = title,
         subTitle = subTitle,
@@ -418,56 +419,81 @@ private fun ProcessManagerTopBar(
             }
         },
         expander = {
-            val sortTabs = listOf(
-                stringResource(Res.string.text_process_sort_cpu),
-                stringResource(Res.string.text_process_sort_res),
-                stringResource(Res.string.text_process_sort_pid),
-                stringResource(Res.string.text_process_sort_none),
-            )
-            val selectedSortIndex = when (sortMode) {
-                ProcessSortMode.Cpu -> 0
-                ProcessSortMode.Res -> 1
-                ProcessSortMode.Pid -> 2
-                ProcessSortMode.None -> 3
-            }
-            TabRowWithContour(
-                tabs = sortTabs,
-                selectedTabIndex = selectedSortIndex,
-                onTabSelected = { index ->
-                    onSortChange(
-                        when (index) {
-                            0 -> ProcessSortMode.Cpu
-                            1 -> ProcessSortMode.Res
-                            2 -> ProcessSortMode.Pid
-                            else -> ProcessSortMode.None
-                        }
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 16.dp),
-            )
-
-            AnimatedVisibility(visible = searchMode) {
-                SearchBar(
-                    inputField = {
-                        InputField(
-                            query = searchQuery,
-                            onQueryChange = onSearchQueryChange,
-                            onSearch = {},
-                            expanded = expanded,
-                            onExpandedChange = { expanded = it },
+            if (!searchMode) {
+                val sortTabs = listOf(
+                    stringResource(Res.string.text_process_sort_cpu),
+                    stringResource(Res.string.text_process_sort_res),
+                    stringResource(Res.string.text_process_sort_pid),
+                    stringResource(Res.string.text_process_sort_none),
+                )
+                val selectedSortIndex = when (sortMode) {
+                    ProcessSortMode.Cpu -> 0
+                    ProcessSortMode.Res -> 1
+                    ProcessSortMode.Pid -> 2
+                    ProcessSortMode.None -> 3
+                }
+                TabRowWithContour(
+                    tabs = sortTabs,
+                    selectedTabIndex = selectedSortIndex,
+                    onTabSelected = { index ->
+                        onSortChange(
+                            when (index) {
+                                0 -> ProcessSortMode.Cpu
+                                1 -> ProcessSortMode.Res
+                                2 -> ProcessSortMode.Pid
+                                else -> ProcessSortMode.None
+                            }
                         )
                     },
-                    expanded = expanded,
-                    onExpandedChange = { expanded = it },
-                    modifier = Modifier.padding(bottom = 12.dp),
-                ) {}
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp),
+                )
+            }
+
+            AnimatedVisibility(visible = searchMode) {
+                ProcessManagerSearchField(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
+                )
             }
         },
         onSizeChanged = onSizeChanged,
     )
+}
+
+@Composable
+private fun ProcessManagerSearchField(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    SearchBar(
+        inputField = {
+            InputField(
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange,
+                onSearch = {},
+                expanded = expanded,
+                onExpandedChange = { expanded = it },
+                label = stringResource(Res.string.text_process_search_label),
+                modifier = Modifier.focusRequester(focusRequester),
+            )
+        },
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 12.dp),
+    ) {}
 }
 
 @Composable

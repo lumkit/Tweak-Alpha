@@ -101,6 +101,9 @@ class AppManagerViewModel: BaseViewModel() {
 
     fun setSearchMode(searchMode: Boolean) {
         _searchMode.value = searchMode
+        if (!searchMode) {
+            _searchQuery.value = ""
+        }
     }
 
     fun setSearchQuery(searchQuery: String) {
