@@ -61,4 +61,7 @@ sealed class Screen: NavKey {
         val requestId: String,
         val action: FilePickerAction,
     ) : Screen()
+
+    @Serializable
+    data object ChargeStatistics: Screen()
 }

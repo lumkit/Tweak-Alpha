@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.ui.screen.feature
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import io.github.lumkit.tweak.ui.screen.appManager.AppManagerProvider
+import io.github.lumkit.tweak.ui.screen.chargeStatistics.ChargeStatisticsProvider
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureCategory
 import io.github.lumkit.tweak.ui.screen.flashRom.FlashRomProvider
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordingProvider
@@ -45,6 +46,7 @@ object FeatureRegistry {
                 title = Res.string.text_feature_performance,
                 features = setOf(
                     FpsRecordingProvider,
+                    ChargeStatisticsProvider,
                 )
             )
         )
@@ -61,7 +63,7 @@ object FeatureRegistry {
             )
         )
 
-        // 应用管理
+        // 进阶功能
         registerProvider(
             FeatureCategory(
                 key = "Advanced",

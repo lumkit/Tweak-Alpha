@@ -373,4 +373,15 @@
     <string name="text_fps_record_thread_loads_description">查看此次记录线程负载曲线</string>
     <string name="text_thread_loads_empty">暂无线程负载数据</string>
     <string name="text_thread_load_avg_max">AVG: %.1f%%  MAX: %.1f%%</string>
+    <string name="text_charge_statistics">充电统计</string>
+    <string name="text_charge_statistics_description">查看充电情况</string>
+    <string name="text_charge_label_battery_status">电池状态</string>
+    <string name="text_charge_label_battery_status_charging">充电中</string>
+    <string name="text_charge_label_battery_status_discharging">放电中</string>
+    <string name="text_charge_label_battery_power">电池功率</string>
+    <string name="text_charge_label_average_power">平均功率</string>
+    <string name="text_charge_label_battery_temperature">电池温度</string>
+    <string name="text_charge_label_battery_voltage">当前电压</string>
+    <string name="text_charge_label_current">当前电流</string>
+    <string name="text_charge_label_battery_capacity">电池容量</string>
 </resources>

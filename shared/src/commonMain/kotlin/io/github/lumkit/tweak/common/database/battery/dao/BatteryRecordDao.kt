@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import io.github.lumkit.tweak.common.database.battery.BatteryPowerAggregate
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +38,17 @@ interface BatteryRecordDao {
     )
     suspend fun queryActiveSession(): BatteryRecordSessionEntity?
 
+    /** 观察当前活跃会话（0 或 1 条） */
+    @Query(
+        """
+        SELECT * FROM battery_record_session
+        WHERE deleted = 0 AND endedAt IS NULL
+        ORDER BY startedAt DESC
+        LIMIT 1
+        """,
+    )
+    fun observeActiveSessions(): Flow<List<BatteryRecordSessionEntity>>
+
     @Query(
         """
         SELECT * FROM battery_record_session
@@ -45,6 +57,16 @@ interface BatteryRecordDao {
         """,
     )
     fun queryConfirmedSessions(): Flow<List<BatteryRecordSessionEntity>>
+
+    @Query(
+        """
+        SELECT * FROM battery_record_session
+        WHERE deleted = 0 AND confirmed = 1 AND state = :state
+        ORDER BY startedAt DESC
+        LIMIT 1
+        """,
+    )
+    fun observeLatestConfirmedSessionByState(state: Int): Flow<List<BatteryRecordSessionEntity>>
 
     @Query(
         """
@@ -72,6 +94,34 @@ interface BatteryRecordDao {
         """,
     )
     fun observeSamplesBySessionId(sessionId: Long): Flow<List<BatteryRecordSampleEntity>>
+
+    /** 仅观察该会话最新一条采样（按自增 id） */
+    @Query(
+        """
+        SELECT * FROM battery_record_sample
+        WHERE sessionId = :sessionId
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+    )
+    fun observeLatestSamplesBySessionId(sessionId: Long): Flow<List<BatteryRecordSampleEntity>>
+
+    /**
+     * 会话功率 SQL 聚合：Σ|mA×mV| 与有效样本数。
+     * 表变更时由 SQLite 重算，不把全量行映射到 Kotlin。
+     */
+    @Query(
+        """
+        SELECT
+            COALESCE(SUM(ABS(currentMa * voltageMv)), 0) AS powerSumUw,
+            COUNT(*) AS sampleCount
+        FROM battery_record_sample
+        WHERE sessionId = :sessionId
+          AND currentMa IS NOT NULL
+          AND voltageMv IS NOT NULL
+        """,
+    )
+    fun observePowerAggregateBySessionId(sessionId: Long): Flow<BatteryPowerAggregate>
 
     @Query(
         """

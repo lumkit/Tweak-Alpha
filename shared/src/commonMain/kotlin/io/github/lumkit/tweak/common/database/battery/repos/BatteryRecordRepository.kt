@@ -1,12 +1,14 @@
 package io.github.lumkit.tweak.common.database.battery.repos
 
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
+import io.github.lumkit.tweak.common.database.battery.BatteryPowerAggregate
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDatabase
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import io.github.lumkit.tweak.common.utils.getDatabaseBuilder
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
 
 class BatteryRecordRepository {
@@ -60,8 +62,15 @@ class BatteryRecordRepository {
     suspend fun queryActiveSession(): BatteryRecordSessionEntity? =
         dao.queryActiveSession()
 
+    fun observeActiveSession(): Flow<BatteryRecordSessionEntity?> =
+        dao.observeActiveSessions().map { it.firstOrNull() }
+
     fun queryConfirmedSessions(): Flow<List<BatteryRecordSessionEntity>> =
         dao.queryConfirmedSessions()
+
+    fun observeLatestConfirmedChargingSession(): Flow<BatteryRecordSessionEntity?> =
+        dao.observeLatestConfirmedSessionByState(BatteryChargeState.CHARGING.code)
+            .map { it.firstOrNull() }
 
     fun querySessions(): Flow<List<BatteryRecordSessionEntity>> =
         dao.querySessions()
@@ -71,6 +80,12 @@ class BatteryRecordRepository {
 
     fun observeSamplesBySessionId(sessionId: Long): Flow<List<BatteryRecordSampleEntity>> =
         dao.observeSamplesBySessionId(sessionId)
+
+    fun observeLatestSampleBySessionId(sessionId: Long): Flow<BatteryRecordSampleEntity?> =
+        dao.observeLatestSamplesBySessionId(sessionId).map { it.firstOrNull() }
+
+    fun observePowerAggregateBySessionId(sessionId: Long): Flow<BatteryPowerAggregate> =
+        dao.observePowerAggregateBySessionId(sessionId)
 
     suspend fun confirmSession(sessionId: Long) =
         dao.confirmSession(sessionId)
