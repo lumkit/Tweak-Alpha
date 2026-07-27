@@ -58,6 +58,9 @@ class ChargeStatisticsViewModel : BaseViewModel() {
     private val _currentSessionSummary = MutableStateFlow<CurrentSessionSummary?>(null)
     val currentSessionSummary = _currentSessionSummary.asStateFlow()
 
+    private val _chartSamples = MutableStateFlow<List<ChargeChartSample>>(emptyList())
+    val chartSamples = _chartSamples.asStateFlow()
+
     private val _currentTime = MutableStateFlow(Clock.System.now().toEpochMilliseconds())
     val currentTime = _currentTime.asStateFlow()
 
@@ -81,7 +84,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                 .distinctUntilChangedBy { it?.id to it?.endedAt }
                 .flatMapLatest { session ->
                     if (session == null) {
-                        flowOf<CurrentSessionSummary?>(null)
+                        flowOf(null to emptyList<BatteryRecordSampleEntity>())
                     } else {
                         combine(
                             flowOf(session),
@@ -94,13 +97,15 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                                 sessions.firstOrNull(),
                                 samples,
                                 latest,
-                            )
+                            ) to samples
                         }
                     }
                 }
-                .collect { summary ->
+                .collect { (summary, samples) ->
+                    val chartSamples = buildChartSamples(samples)
                     withContext(Dispatchers.Main.immediate) {
                         _currentSessionSummary.value = summary
+                        _chartSamples.value = chartSamples
                     }
                 }
         }
@@ -225,6 +230,21 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         return (total * 1_000_000.0).toLong()
     }
 
+    private fun buildChartSamples(samples: List<BatteryRecordSampleEntity>): List<ChargeChartSample> {
+        if (samples.isEmpty()) return emptyList()
+        val startAt = samples.first().timestamp
+        return samples.map { sample ->
+            val powerUw = samplePowerUw(sample)
+            ChargeChartSample(
+                elapsedMs = (sample.timestamp - startAt).coerceAtLeast(0L),
+                powerW = powerUw?.let { it / 1_000_000f } ?: 0f,
+                currentMa = sample.currentMa?.let { abs(it).toFloat() } ?: 0f,
+                level = sample.level.toFloat(),
+                temperatureC = sample.temperatureC ?: 0f,
+            )
+        }
+    }
+
     /** 瞬时功率（µW）= |mA| × mV；缺电流或电压时返回 null */
     private fun samplePowerUw(sample: BatteryRecordSampleEntity): Long? {
         val currentMa = sample.currentMa ?: return null
@@ -250,5 +270,13 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         val startLevel: Int,
         val endLevel: Int?,
         val energyGainUw: Long,
+    )
+
+    data class ChargeChartSample(
+        val elapsedMs: Long,
+        val powerW: Float,
+        val currentMa: Float,
+        val level: Float,
+        val temperatureC: Float,
     )
 }

@@ -383,5 +383,11 @@
     <string name="text_charge_label_battery_temperature">电池温度</string>
     <string name="text_charge_label_battery_voltage">当前电压</string>
     <string name="text_charge_label_current">当前电流</string>
-    <string name="text_charge_label_battery_capacity">电池容量</string>
+    <string name="text_charge_label_battery_capacity">设计容量</string>
+    <string name="text_charge_chart_power_time">功率 / 时间</string>
+    <string name="text_charge_chart_current_time">电流 / 时间</string>
+    <string name="text_charge_chart_level_time">电量 / 时间</string>
+    <string name="text_charge_chart_temperature_time">温度 / 时间</string>
+    <string name="text_charge_chart_mode_power">功率</string>
+    <string name="text_charge_chart_mode_current">电流</string>
 </resources>

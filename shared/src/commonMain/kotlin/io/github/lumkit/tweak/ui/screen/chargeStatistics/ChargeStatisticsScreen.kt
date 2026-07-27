@@ -1,7 +1,11 @@
 package io.github.lumkit.tweak.ui.screen.chargeStatistics
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,24 +15,40 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.shapes.Rectangle
+import com.kyant.shapes.copy
+import io.github.lumkit.tweak.common.component.LineChartAxisType
+import io.github.lumkit.tweak.common.component.LineChartData
+import io.github.lumkit.tweak.common.component.LineChartXAxisData
 import io.github.lumkit.tweak.common.component.LintCurveChart
 import io.github.lumkit.tweak.common.component.ScreenSurface
+import io.github.lumkit.tweak.common.component.SmoothLineChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.utils.formatCurrent
+import io.github.lumkit.tweak.common.utils.formatElapsedTime
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.formatVoltage
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
@@ -38,24 +58,38 @@ import io.github.lumkit.tweak.ui.screen.feature.FeatureProvider
 import io.github.lumkit.tweak.ui.screen.feature.model.Capability
 import io.github.lumkit.tweak.ui.screen.feature.model.Feature
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.ConvertFile
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_charge
+import tweak_alpha.shared.generated.resources.text_battery_level
+import tweak_alpha.shared.generated.resources.text_charge_chart_current_time
+import tweak_alpha.shared.generated.resources.text_charge_chart_level_time
+import tweak_alpha.shared.generated.resources.text_charge_chart_mode_current
+import tweak_alpha.shared.generated.resources.text_charge_chart_mode_power
+import tweak_alpha.shared.generated.resources.text_charge_chart_power_time
+import tweak_alpha.shared.generated.resources.text_charge_chart_temperature_time
 import tweak_alpha.shared.generated.resources.text_charge_label_average_power
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_capacity
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_power
@@ -138,6 +172,15 @@ fun ChargeStatisticsScreen(
             ) {
                 item("ChargeStateContent") {
                     ChargeStateContent(viewModel)
+                }
+                item("ChargePowerTimeChart") {
+                    ChargePowerTimeChart(viewModel)
+                }
+                item("ChargeLevelTimeChart") {
+                    ChargeLevelTimeChart(viewModel)
+                }
+                item("ChargeTemperatureTimeChart") {
+                    ChargeTemperatureTimeChart(viewModel)
                 }
             }
         }
@@ -389,5 +432,304 @@ private fun formatEnergyGainWh(energyGainUw: Long): String {
         "${wh}Wh"
     } else {
         "${wh}.${fraction.toString().padStart(2, '0')}Wh"
+    }
+}
+
+private enum class ChargePowerChartMode {
+    Power,
+    Current,
+}
+
+@Composable
+private fun ChargePowerTimeChart(viewModel: ChargeStatisticsViewModel) {
+    val samples by viewModel.chartSamples.collectAsStateWithLifecycle()
+    var mode by rememberSaveable { mutableStateOf(ChargePowerChartMode.Power) }
+    var modePopupVisible by remember { mutableStateOf(false) }
+    val primaryColor = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
+    val batteryLevelColor = Color(0xFFFF8A65).copy(alpha = .31f)
+    val powerTitle = stringResource(Res.string.text_charge_chart_power_time)
+    val currentTitle = stringResource(Res.string.text_charge_chart_current_time)
+    val modePowerLabel = stringResource(Res.string.text_charge_chart_mode_power)
+    val modeCurrentLabel = stringResource(Res.string.text_charge_chart_mode_current)
+    val batteryLevelLabel = stringResource(Res.string.text_battery_level)
+    val title = when (mode) {
+        ChargePowerChartMode.Power -> powerTitle
+        ChargePowerChartMode.Current -> currentTitle
+    }
+    val modeLabel = when (mode) {
+        ChargePowerChartMode.Power -> modePowerLabel
+        ChargePowerChartMode.Current -> modeCurrentLabel
+    }
+
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), samples) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = samples.map { it.elapsedMs.formatElapsedTime() },
+            )
+        }
+    }
+    val chartData by produceState(
+        initialValue = emptyList(),
+        samples,
+        mode,
+        powerTitle,
+        currentTitle,
+        batteryLevelLabel,
+        primaryColor,
+        batteryLevelColor,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            if (samples.isEmpty()) {
+                emptyList()
+            } else {
+                val primary = when (mode) {
+                    ChargePowerChartMode.Power -> LineChartData(
+                        name = powerTitle,
+                        suffix = "W",
+                        dataSet = samples.map { it.powerW },
+                        color = primaryColor,
+                        axisType = LineChartAxisType.Primary,
+                    )
+                    ChargePowerChartMode.Current -> LineChartData(
+                        name = currentTitle,
+                        suffix = "mA",
+                        dataSet = samples.map { it.currentMa },
+                        color = primaryColor,
+                        axisType = LineChartAxisType.Primary,
+                    )
+                }
+                listOf(
+                    primary,
+                    LineChartData(
+                        name = batteryLevelLabel,
+                        suffix = "",
+                        dataSet = samples.map { it.level },
+                        color = batteryLevelColor,
+                        axisType = LineChartAxisType.Secondary,
+                    ),
+                )
+            }
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SmallTitle(text = title)
+            Spacer(modifier = Modifier.weight(1f))
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(Rectangle.copy(cornerRadius = 4.dp))
+                    .clickable { modePopupVisible = true }
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = modeLabel,
+                    style = MiuixTheme.textStyles.footnote2.copy(
+                        fontSize = 10.sp,
+                        lineHeight = 10.sp,
+                    ),
+                    color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                )
+                Icon(
+                    imageVector = MiuixIcons.ConvertFile,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MiuixTheme.colorScheme.primary.copy(.75f),
+                )
+            }
+            OverlayListPopup(
+                show = modePopupVisible,
+                alignment = PopupPositionProvider.Align.End,
+                onDismissRequest = { modePopupVisible = false },
+            ) {
+                ListPopupColumn {
+                    ChargePowerChartMode.entries.forEachIndexed { index, entry ->
+                        DropdownImpl(
+                            text = when (entry) {
+                                ChargePowerChartMode.Power -> modePowerLabel
+                                ChargePowerChartMode.Current -> modeCurrentLabel
+                            },
+                            optionSize = ChargePowerChartMode.entries.size,
+                            isSelected = mode == entry,
+                            index = index,
+                            onSelectedIndexChange = {
+                                mode = entry
+                                modePopupVisible = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        ChargeSmoothLineChartBody(
+            endPadding = 0.dp,
+            xAxis = xAxis,
+            chartData = chartData,
+            showAffix = true,
+        )
+        ChargeChartColorIndicator(chartData, modifier = Modifier.padding(bottom = 16.dp))
+    }
+}
+
+@Composable
+private fun ChargeLevelTimeChart(viewModel: ChargeStatisticsViewModel) {
+    val samples by viewModel.chartSamples.collectAsStateWithLifecycle()
+    val primaryColor = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
+    val title = stringResource(Res.string.text_charge_chart_level_time)
+
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), samples) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = samples.map { it.elapsedMs.formatElapsedTime() },
+            )
+        }
+    }
+    val chartData by produceState(
+        initialValue = emptyList(),
+        samples,
+        title,
+        primaryColor,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            if (samples.isEmpty()) {
+                emptyList()
+            } else {
+                listOf(
+                    LineChartData(
+                        name = title,
+                        suffix = "%",
+                        dataSet = samples.map { it.level },
+                        color = primaryColor,
+                        axisType = LineChartAxisType.Primary,
+                    ),
+                )
+            }
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        SmallTitle(text = title)
+        Spacer(modifier = Modifier.height(4.dp))
+        ChargeSmoothLineChartBody(endPadding = 16.dp, xAxis = xAxis, chartData = chartData)
+        ChargeChartColorIndicator(chartData, modifier = Modifier.padding(bottom = 16.dp))
+    }
+}
+
+@Composable
+private fun ChargeTemperatureTimeChart(viewModel: ChargeStatisticsViewModel) {
+    val samples by viewModel.chartSamples.collectAsStateWithLifecycle()
+    val primaryColor = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
+    val title = stringResource(Res.string.text_charge_chart_temperature_time)
+
+    val xAxis by produceState(initialValue = LineChartXAxisData(emptyList()), samples) {
+        value = withContext(Dispatchers.Default) {
+            LineChartXAxisData(
+                dataSet = samples.map { it.elapsedMs.formatElapsedTime() },
+            )
+        }
+    }
+    val chartData by produceState(
+        initialValue = emptyList(),
+        samples,
+        title,
+        primaryColor,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            if (samples.isEmpty()) {
+                emptyList()
+            } else {
+                listOf(
+                    LineChartData(
+                        name = title,
+                        suffix = "℃",
+                        dataSet = samples.map { it.temperatureC },
+                        color = primaryColor,
+                        axisType = LineChartAxisType.Primary,
+                    ),
+                )
+            }
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        SmallTitle(text = title)
+        Spacer(modifier = Modifier.height(4.dp))
+        ChargeSmoothLineChartBody(endPadding = 16.dp, xAxis = xAxis, chartData = chartData)
+        ChargeChartColorIndicator(chartData, modifier = Modifier.padding(bottom = 16.dp))
+    }
+}
+
+@Composable
+private fun ChargeSmoothLineChartBody(
+    endPadding: Dp,
+    xAxis: LineChartXAxisData,
+    chartData: List<LineChartData>,
+    showAffix: Boolean = false,
+) {
+    if (chartData.isNotEmpty() &&
+        xAxis.dataSet.isNotEmpty() &&
+        chartData.all { it.dataSet.size == xAxis.dataSet.size }
+    ) {
+        SmoothLineChart(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = endPadding)
+                .height(250.dp),
+            xAxis = xAxis,
+            data = chartData,
+            axisColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f),
+            tickTextColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
+            lineWidth = 1.dp,
+            showGrid = true,
+            gridColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .08f),
+            textStyle = MiuixTheme.textStyles.footnote2.copy(
+                fontSize = 10.sp,
+                lineHeight = 10.sp,
+            ),
+            showAffix = showAffix,
+        )
+    } else {
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(250.dp),
+        )
+    }
+}
+
+@Composable
+private fun ChargeChartColorIndicator(
+    chartData: List<LineChartData>,
+    modifier: Modifier = Modifier,
+) {
+    FlowRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        chartData.forEach { series ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clip(Rectangle.copy(4.dp))
+                        .background(series.color),
+                )
+                Text(
+                    text = series.name,
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = series.color,
+                )
+            }
+        }
     }
 }
