@@ -4,33 +4,28 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
-import android.os.IBinder
 import android.os.PowerManager
-import io.github.lumkit.tweak.application
-import io.github.lumkit.tweak.common.ConstCommon
-import io.github.lumkit.tweak.common.base.BaseService
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.utils.BatteryUtils
-import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
+import io.github.lumkit.tweak.model.GlobalViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * 电池记录采样服务。
- *
- * 由 Daemon / 特权 `am startservice` 按采样间隔反复带 [ACTION_SAMPLE] 唤起；
- * Service 可常驻，采完一笔即返回，不在单次采样后 [stopSelf]。
- * 需停止时发 [ACTION_STOP]。
+ * 电池记录采样器。
  *
  * 会话状态机：
  * ```
@@ -42,69 +37,60 @@ import kotlin.time.Clock
  *               confirmed=1         软删该充电 session
  * 充电采样中 ──检测到放电──▶ 结束充电 session，新建放电 session
  * ```
+ *
+ * 由 [TweakAccessibilityService] 连接后 [start]，销毁时 [stop]。
  */
-class BatteryRecordService : BaseService() {
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
+class BatteryRecordSampler(
+    private val context: Context,
+) {
     companion object {
-        const val TAG = "BatteryRecordService"
-
-        const val ACTION_SAMPLE = ConstCommon.BatteryRecord.ACTION_SAMPLE
-        const val ACTION_STOP = ConstCommon.BatteryRecord.ACTION_STOP
-
-        fun sample(context: Context = application) {
-            val intent = Intent(context, BatteryRecordService::class.java).apply {
-                action = ACTION_SAMPLE
-            }
-            context.startService(intent)
-        }
-
-        fun stop(context: Context = application) {
-            val intent = Intent(context, BatteryRecordService::class.java).apply {
-                action = ACTION_STOP
-            }
-            context.startService(intent)
-        }
+        private const val TAG = "BatteryRecordSampler"
     }
 
-    private val serviceJob = SupervisorJob()
-    private val serviceScope = CoroutineScope(serviceJob + Dispatchers.IO)
     private val sampleMutex = Mutex()
     private val repository by lazy { BatteryRecordRepository() }
-
     private val powerManager by lazy {
-        getSystemService(POWER_SERVICE) as PowerManager
+        context.getSystemService(Context.POWER_SERVICE) as PowerManager
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_SAMPLE -> {
-                serviceScope.launch {
-                    sampleMutex.withLock {
-                        runCatching { sampleOnce() }
-                            .onFailure { logE(it.stackTraceToString(), it, TAG) }
-                    }
+    private var supervisor: Job? = null
+    private var loopJob: Job? = null
+
+    @Volatile
+    var isRunning: Boolean = false
+        private set
+
+    fun start() {
+        if (loopJob?.isActive == true) return
+        val job = SupervisorJob()
+        supervisor = job
+        val scope = CoroutineScope(job + Dispatchers.IO)
+        isRunning = true
+        loopJob = scope.launch {
+            logD("sample loop started", TAG)
+            while (isActive) {
+                sampleMutex.withLock {
+                    runCatching { sampleOnce() }
+                        .onFailure { logE(it.stackTraceToString(), it, TAG) }
                 }
+                val intervalMs = GlobalViewModel.batteryRecordSampleIntervalMsState.value
+                    .coerceAtLeast(100)
+                delay(intervalMs.milliseconds)
             }
-
-            ACTION_STOP -> {
-                logD("ACTION_STOP", TAG)
-                stopSelf()
-            }
-
-            else -> Unit
         }
-        // 被杀后不空着重启，等下次带 action 再来
-        return START_NOT_STICKY
     }
 
-    override fun onDestroy() {
-        serviceJob.cancel()
-        super.onDestroy()
+    fun stop() {
+        isRunning = false
+        loopJob?.cancel()
+        loopJob = null
+        supervisor?.cancel()
+        supervisor = null
+        logD("sample loop stopped", TAG)
     }
 
-    private suspend fun sampleOnce() {
+    /** 执行一次采样并写入数据库 */
+    suspend fun sampleOnce() {
         val now = Clock.System.now().toEpochMilliseconds()
         val chargeState = resolveChargeState()
         val snapshot = BatteryUtils.getSnapshot()
@@ -135,19 +121,15 @@ class BatteryRecordService : BaseService() {
         )
     }
 
-    /**
-     * 保证存在与 [chargeState] 匹配的进行中 session，返回其 id。
-     */
     private suspend fun ensureActiveSession(
         chargeState: BatteryChargeState,
         now: Long,
     ): Long {
         val active = repository.queryActiveSession()
         if (active == null) {
-            val intervalMs = TweakDataStore.batteryRecordSampleIntervalMsFlow().first()
             return repository.startSession(
                 state = chargeState,
-                intervalMs = intervalMs,
+                intervalMs = sampleIntervalMs(),
                 startedAt = now,
             )
         }
@@ -156,20 +138,21 @@ class BatteryRecordService : BaseService() {
             return active.id
         }
 
-        // 状态切换：结束或丢弃旧 session，再开新 session
         if (active.chargeState == BatteryChargeState.CHARGING && !active.confirmed) {
             repository.softDeleteUnconfirmedSession(active.id, endedAt = now)
         } else {
             repository.endSession(active.id, endedAt = now)
         }
 
-        val intervalMs = TweakDataStore.batteryRecordSampleIntervalMsFlow().first()
         return repository.startSession(
             state = chargeState,
-            intervalMs = intervalMs,
+            intervalMs = sampleIntervalMs(),
             startedAt = now,
         )
     }
+
+    private fun sampleIntervalMs(): Int =
+        GlobalViewModel.batteryRecordSampleIntervalMsState.value.coerceAtLeast(100)
 
     private suspend fun maybeConfirmChargingSession(sessionId: Long, now: Long) {
         val session = repository.querySessionById(sessionId) ?: return
@@ -181,7 +164,7 @@ class BatteryRecordService : BaseService() {
     }
 
     private fun resolveChargeState(): BatteryChargeState {
-        val batteryIntent = registerReceiver(
+        val batteryIntent = context.registerReceiver(
             null,
             IntentFilter(Intent.ACTION_BATTERY_CHANGED),
         ) ?: return BatteryChargeState.DISCHARGING

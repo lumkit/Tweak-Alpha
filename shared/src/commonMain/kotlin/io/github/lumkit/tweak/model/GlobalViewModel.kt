@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.model
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -41,6 +42,16 @@ object GlobalViewModel: BaseViewModel() {
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = (TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_LEVEL * TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_RANGE).toLong()
+        )
+
+    /** 电池记录采样间隔（ms），Eagerly：无障碍采样循环可随时读 .value */
+    val batteryRecordSampleIntervalMsState = TweakDataStore.batteryRecordSampleIntervalMsFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = BatteryRecordDefaults.DEFAULT_INTERVAL_LEVEL *
+                BatteryRecordDefaults.INTERVAL_LEVEL_RANGE_MS,
         )
 
     val processInfoUpdateTimeState = TweakDataStore.processInfoUpdateTimeFlow()

@@ -21,10 +21,10 @@ import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 
 /**
- * 无障碍服务：前台应用监听 + Daemon 保活锚点。
+ * 无障碍服务：前台应用监听 + Daemon 保活锚点 + 电池采样。
  *
  * Daemon 在连接后持续巡检，用无障碍 Context 拉起 [KeepAliveService] / UpdateEngine，
- * 并维持 1x1 overlay 防止厂商冻结事件回调。
+ * 并维持 1x1 overlay 防止厂商冻结事件回调；同时启动 [BatteryRecordSampler] 采样循环。
  */
 @SuppressLint("AccessibilityPolicy")
 class TweakAccessibilityService : AccessibilityService() {
@@ -57,6 +57,7 @@ class TweakAccessibilityService : AccessibilityService() {
     private var resolveForegroundJob: Job? = null
     private val windowPackageCache = LruCache<Int, String>(16)
     private var daemon: AccessibilityDaemon? = null
+    private var batterySampler: BatteryRecordSampler? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -75,6 +76,7 @@ class TweakAccessibilityService : AccessibilityService() {
 
         addKeepAliveOverlay()
         startDaemon()
+        startBatterySampler()
         // 广播/系统拉活无障碍后：若用户启用了 Native Daemon，检测一次并按需启动 tweakd
         serviceScope.launch {
             val started = NativeDaemonController.ensureRunningIfEnabled()
@@ -95,6 +97,17 @@ class TweakAccessibilityService : AccessibilityService() {
     private fun stopDaemon() {
         daemon?.stop()
         daemon = null
+    }
+
+    private fun startBatterySampler() {
+        if (batterySampler?.isRunning == true) return
+        batterySampler = BatteryRecordSampler(this).also { it.start() }
+        logD("BatteryRecordSampler started", TAG)
+    }
+
+    private fun stopBatterySampler() {
+        batterySampler?.stop()
+        batterySampler = null
     }
 
     /**
@@ -259,6 +272,7 @@ class TweakAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopBatterySampler()
         stopDaemon()
         if (serviceReference?.get() === this) {
             serviceReference = null

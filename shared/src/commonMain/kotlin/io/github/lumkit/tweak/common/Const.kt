@@ -37,11 +37,4 @@ object ConstCommon {
     object Accessibility {
         const val SERVICE_CLASS = "io.github.lumkit.tweak.service.TweakAccessibilityService"
     }
-
-    object BatteryRecord {
-        const val ACTION_SAMPLE = "io.github.lumkit.tweak.action.BATTERY_RECORD_SAMPLE"
-        const val ACTION_STOP = "io.github.lumkit.tweak.action.BATTERY_RECORD_STOP"
-        /** 完整类名（am -n 用 `package/SERVICE_CLASS`） */
-        const val SERVICE_CLASS = "io.github.lumkit.tweak.service.BatteryRecordService"
-    }
 }
