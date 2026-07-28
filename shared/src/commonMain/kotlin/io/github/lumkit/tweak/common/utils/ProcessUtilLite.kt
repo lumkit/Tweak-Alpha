@@ -37,7 +37,11 @@ object ProcessUtilLite {
             return emptyList()
         }
 
-        val startIndex = if (rows.first().trim().let { it.contains("CPU") && it.contains("NAME") }) {
+        val startIndex = if (rows.first().trim().let {
+                it.contains("CPU", ignoreCase = true) &&
+                    (it.contains("PID", ignoreCase = true) || it.contains("NAME", ignoreCase = true))
+            }
+        ) {
             1
         } else {
             0
@@ -119,13 +123,32 @@ object ProcessUtilLite {
         probed = true
         psCommand = ""
 
-        val perfectCmd = "top -o %CPU,NAME,COMMAND,PID,USER -q -b -n 1 -m 65535"
-        val insideCmd = "ps -e -o %CPU,NAME,COMMAND,PID,USER"
-        // 旧设备可能不支持 USER 列
-        val perfectCmdNoUser = "top -o %CPU,NAME,COMMAND,PID -q -b -n 1 -m 65535"
-        val insideCmdNoUser = "ps -e -o %CPU,NAME,COMMAND,PID"
+        val outsideToybox = ToolkitInstaller.ensureToybox()
+        // 无 NAME，避免 CJK 改名弄乱列
+        val perfectCmd = "top -o %CPU,PID,USER,COMMAND -q -b -n 1 -m 65535"
+        val insideCmd = "ps -e -o %CPU,PID,USER,COMMAND"
+        val perfectCmdNoUser = "top -o %CPU,PID,COMMAND -q -b -n 1 -m 65535"
+        val insideCmdNoUser = "ps -e -o %CPU,PID,COMMAND"
+        val legacyPerfectCmd = "top -o %CPU,NAME,COMMAND,PID,USER -q -b -n 1 -m 65535"
+        val legacyInsideCmd = "ps -e -o %CPU,NAME,COMMAND,PID,USER"
 
-        for (cmd in listOf(perfectCmd, insideCmd, perfectCmdNoUser, insideCmdNoUser)) {
+        val candidates = buildList {
+            if (outsideToybox.isNotBlank()) {
+                add("$outsideToybox $perfectCmd")
+                add("$outsideToybox $perfectCmdNoUser")
+            }
+            add(perfectCmd)
+            add(insideCmd)
+            add(perfectCmdNoUser)
+            add(insideCmdNoUser)
+            if (outsideToybox.isNotBlank()) {
+                add("$outsideToybox $legacyPerfectCmd")
+                add("$outsideToybox $legacyInsideCmd")
+            }
+            add(legacyPerfectCmd)
+            add(legacyInsideCmd)
+        }
+        for (cmd in candidates) {
             if (isUsableListCommand(cmd)) {
                 psCommand = cmd
                 break
@@ -145,13 +168,53 @@ object ProcessUtilLite {
     }
 
     private fun readRow(row: String): ProcessInfo? {
-        val columns = row.split(whitespaceRegex)
-        if (columns.size < 4) {
+        val columns = row.split(whitespaceRegex).filter { it.isNotEmpty() }
+        if (columns.size < 3) {
             return null
         }
         return runCatching {
-            val name = columns[1]
-            val command = columns[2]
+            // 新布局：CPU PID USER COMMAND… 或 CPU PID COMMAND…
+            val pidAt1 = columns.getOrNull(1)?.toIntOrNull()
+            if (pidAt1 != null && pidAt1 > 0) {
+                val maybeUser = columns.getOrElse(2) { "" }
+                val command: String
+                val user: String
+                if (maybeUser.toIntOrNull() == null && columns.size >= 4) {
+                    user = maybeUser
+                    command = columns.drop(3).joinToString(" ")
+                } else {
+                    user = ""
+                    command = columns.drop(2).joinToString(" ")
+                }
+                val name = command.substringAfterLast('/').ifBlank { command }
+                if (isExcluded(name, command)) return null
+                return@runCatching ProcessInfo(
+                    cpu = columns[0].toFloat(),
+                    name = name,
+                    command = command,
+                    pid = pidAt1,
+                    user = user,
+                )
+            }
+
+            // 旧布局：CPU NAME COMMAND PID [USER]
+            val pidDirect = columns.getOrNull(3)?.toIntOrNull()
+            val name: String
+            val command: String
+            val pid: Int
+            val user: String
+            if (pidDirect != null && pidDirect > 0) {
+                name = columns[1]
+                command = columns[2]
+                pid = pidDirect
+                user = columns.getOrElse(4) { "" }
+            } else {
+                val pidAlt = columns.getOrNull(2)?.toIntOrNull()?.takeIf { it > 0 } ?: return null
+                name = columns[1]
+                command = ""
+                pid = pidAlt
+                user = columns.getOrElse(3) { "" }
+            }
             if (isExcluded(name, command)) {
                 return null
             }
@@ -159,8 +222,8 @@ object ProcessUtilLite {
                 cpu = columns[0].toFloat(),
                 name = name,
                 command = command,
-                pid = columns[3].toInt(),
-                user = columns.getOrElse(4) { "" },
+                pid = pid,
+                user = user,
             )
         }.getOrNull()
     }

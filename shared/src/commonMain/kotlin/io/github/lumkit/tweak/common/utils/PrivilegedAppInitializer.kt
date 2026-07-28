@@ -22,6 +22,7 @@ object PrivilegedAppInitializer {
     private val mutex = Mutex()
     private var appsReady = false
     private var daemonReady = false
+    private var toolkitReady = false
 
     suspend fun onPrivilegeReady() = withContext(NonCancellable + Dispatchers.IO) {
         mutex.withLock {
@@ -29,11 +30,31 @@ object PrivilegedAppInitializer {
                 AppsHelper.init()
                 appsReady = true
             }
+            if (!toolkitReady) {
+                toolkitReady = bootstrapToolkit()
+            }
             if (!daemonReady) {
                 daemonReady = bootstrapDaemon()
             } else {
                 logD("daemon already ready, skip", TAG)
             }
+        }
+    }
+
+    private suspend fun bootstrapToolkit(): Boolean {
+        return try {
+            val toybox = ToolkitInstaller.ensureToybox()
+            val busybox = ToolkitInstaller.ensureBusybox()
+            // 进程列表命令缓存依赖 toybox 路径，安装后强制重探
+            ProcessUtils.reset()
+            ProcessUtilLite.reset()
+            logD("toolkit ready toybox=${toybox.isNotBlank()} busybox=$busybox", TAG)
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logE("toolkit bootstrap failed: ${e.message}", e, TAG)
+            false
         }
     }
 

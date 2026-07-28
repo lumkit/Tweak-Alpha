@@ -28,6 +28,11 @@ actual object ShellExecutor {
     private var workPath: String = ""
     private var defaultWorkPath: String = ""
 
+    /** 将目录追加到特权 Shell 的 PATH（对齐 Scene setExtraEnvPath） */
+    fun setExtraEnvPath(path: String) {
+        workPath = path.trim()
+    }
+
     private fun smartWorkPath(): String? {
         if (workPath.isNotBlank()) {
             if (defaultWorkPath.isBlank()) {
