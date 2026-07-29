@@ -84,6 +84,13 @@
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
+        <provider
+            android:name=".provider.TweakBinderProvider"
+            android:authorities="${applicationId}.tweak.binder"
+            android:exported="true"
+            android:enabled="true"
+            tools:ignore="ExportedContentProvider" />
+
         <receiver
             android:name=".receiver.BootBroadcastReceiver"
             android:enabled="true"

@@ -117,6 +117,16 @@ interface NativeFileService {
      * 从绝对路径解压 ZIP 到目标目录。
      */
     suspend fun unzipFromPath(sourcePath: String, targetDir: String): NativeFileResult<Unit>
+
+    /**
+     * 在特权进程内异步执行 shell 命令（不等待结束）。
+     */
+    suspend fun execDetached(command: String): NativeFileResult<Unit>
+
+    /** 在特权进程内嵌入启动 TweakServer。 */
+    suspend fun startTweakServerEmbedded(packageName: String): NativeFileResult<Unit>
+
+    suspend fun stopTweakServerEmbedded(): NativeFileResult<Unit>
 }
 
 interface NativeFileServiceProvider {

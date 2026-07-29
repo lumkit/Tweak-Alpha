@@ -14,16 +14,16 @@ actual object TweakLog {
     }
 
     actual fun w(message: String, tag: String) {
-        if (enabled) Log.w(tag, message)
+        // warning 在 Release 也输出，便于排查 TweakServer / 特权路径
+        Log.w(tag, message)
     }
 
     actual fun e(message: String, throwable: Throwable?, tag: String) {
-        if (enabled) {
-            if (throwable != null) {
-                Log.e(tag, message, throwable)
-            } else {
-                Log.e(tag, message)
-            }
+        // error 始终输出（app_process 无 Application，仍需可见崩溃原因）
+        if (throwable != null) {
+            Log.e(tag, message, throwable)
+        } else {
+            Log.e(tag, message)
         }
     }
 }

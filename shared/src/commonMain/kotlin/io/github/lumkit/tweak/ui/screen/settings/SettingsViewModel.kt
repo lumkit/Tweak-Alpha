@@ -26,13 +26,17 @@ import kotlin.time.Duration.Companion.seconds
 
 class SettingsViewModel : BaseViewModel() {
 
+    companion object {
+        const val NATIVE_DAEMON_TOGGLE_LOAD_ID = "nativeDaemonToggle"
+    }
+
     private val _isIgnoringBatteryOptimizations = MutableStateFlow(false)
     val isIgnoringBatteryOptimizations = _isIgnoringBatteryOptimizations.asStateFlow()
 
     private val _notificationPermission = MutableStateFlow(false)
     val notificationPermission = _notificationPermission.asStateFlow()
 
-    /** 触发立即探测 tweakd 存活（开关切换 / 页面可见时） */
+    /** 触发立即探测 TweakServer 存活（开关切换 / 页面可见时） */
     private val nativeDaemonProbe =
         MutableSharedFlow<Unit>(
             replay = 1,
@@ -57,6 +61,14 @@ class SettingsViewModel : BaseViewModel() {
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false,
+        )
+
+    val a11yDaemonEnabled = TweakDataStore.a11yDaemonEnabledFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
             initialValue = false,
         )
 
@@ -193,10 +205,21 @@ class SettingsViewModel : BaseViewModel() {
         }
     }
 
-    fun setNativeDaemonEnabled(enable: Boolean) {
+    fun setNativeDaemonEnabled(enable: Boolean) = suspendLaunch(
+        id = NATIVE_DAEMON_TOGGLE_LOAD_ID,
+    ) {
+        loading()
+        NativeDaemonController.setEnabled(enable)
+        refreshNativeDaemonStatus()
+        success()
+    }
+
+    fun setA11yDaemonEnabled(enable: Boolean) {
         viewModelScope.launch {
-            NativeDaemonController.setEnabled(enable)
-            refreshNativeDaemonStatus()
+            TweakDataStore.setA11yDaemonEnabled(enable)
+            if (TweakDataStore.nativeDaemonEnabledFlow().first()) {
+                NativeDaemonController.ensureRunning()
+            }
         }
     }
 

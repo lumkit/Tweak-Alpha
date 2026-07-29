@@ -10,6 +10,9 @@ expect object Const {
 }
 
 object ConstCommon {
+    /** 无 applicationIdSuffix 时的默认包名；dev 为 `.alpha` 后缀，由 starter 传入 */
+    const val APP_PACKAGE_DEFAULT = "io.github.lumkit.tweak"
+
     object Navigation {
         const val ACTION_DEEPLINK_SELF = "io.github.lumkit.tweak.ACTION_DEEPLINK_SELF"
         const val EXTRA_NAV_INTENT = "nav_intent"

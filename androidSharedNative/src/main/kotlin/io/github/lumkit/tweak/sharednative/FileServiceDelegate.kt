@@ -274,6 +274,57 @@ internal object FileServiceDelegate {
         NativeFileBundles.failure(throwable)
     }
 
+    /**
+     * 在特权进程内异步拉起命令。
+     * 继承 file_service 环境但剔除 CLASSPATH / Zygote socket，避免嵌套 app_process 秒退；
+     * 也不使用 env -i 空环境（app_process 依赖更多系统变量）。
+     */
+    @JvmStatic
+    fun execDetached(command: String): Bundle = try {
+        val logFile = File("/data/local/tmp/tweak-alpha/daemon/starter.boot.log")
+        logFile.parentFile?.mkdirs()
+        val pb = ProcessBuilder("sh", "-c", command)
+        val env = pb.environment()
+        env.remove("CLASSPATH")
+        env.remove("LD_LIBRARY_PATH")
+        env.keys.filter { it.startsWith("ANDROID_SOCKET_") }.toList().forEach { env.remove(it) }
+        env.remove("ANDROID_ENTRYPOINT")
+        env["ANDROID_DATA"] = "/data"
+        env["ANDROID_ROOT"] = "/system"
+        if (env["PATH"].isNullOrBlank()) {
+            env["PATH"] = "/system/bin:/system/xbin:/vendor/bin:/product/bin"
+        }
+        pb.redirectErrorStream(true)
+        pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
+        pb.start()
+        NativeFileBundles.successUnit()
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
+    @JvmStatic
+    fun startTweakServerEmbedded(packageName: String): Bundle = try {
+        val clazz = Class.forName("io.github.lumkit.tweak.server.TweakServerMain")
+        val method = clazz.getMethod("startEmbedded", String::class.java)
+        val ok = method.invoke(null, packageName) as Boolean
+        if (!ok) {
+            error("TweakServerMain.startEmbedded returned false")
+        }
+        NativeFileBundles.successUnit()
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
+    @JvmStatic
+    fun stopTweakServerEmbedded(): Bundle = try {
+        val clazz = Class.forName("io.github.lumkit.tweak.server.TweakServerMain")
+        val method = clazz.getMethod("stopEmbedded")
+        method.invoke(null)
+        NativeFileBundles.successUnit()
+    } catch (throwable: Throwable) {
+        NativeFileBundles.failure(throwable)
+    }
+
     private fun buildWriteMode(truncate: Boolean): Int {
         var mode = ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE
         mode = if (truncate) {

@@ -27,6 +27,9 @@ interface BatteryRecordDao {
     @Query("SELECT * FROM battery_record_session WHERE id = :sessionId LIMIT 1")
     suspend fun querySessionById(sessionId: Long): BatteryRecordSessionEntity?
 
+    @Query("SELECT * FROM battery_record_session WHERE id = :sessionId LIMIT 1")
+    fun observeSessionById(sessionId: Long): Flow<BatteryRecordSessionEntity?>
+
     /** 当前未结束且未删除的会话（至多一条业务上应存在） */
     @Query(
         """
@@ -194,4 +197,22 @@ interface BatteryRecordDao {
 
     @Query("DELETE FROM battery_record_session WHERE id = :sessionId")
     suspend fun deleteSession(sessionId: Long)
+
+    @Query(
+        """
+        SELECT * FROM battery_record_session
+        WHERE startedAt = :startedAt AND state = :state
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun querySessionByStartedAtAndState(startedAt: Long, state: Int): BatteryRecordSessionEntity?
+
+    @Query(
+        """
+        SELECT MAX(timestamp) FROM battery_record_sample
+        WHERE sessionId = :sessionId
+        """,
+    )
+    suspend fun maxSampleTimestamp(sessionId: Long): Long?
 }

@@ -59,7 +59,7 @@ android {
         aidl = true
     }
 
-    // cmake POST_BUILD 会把 tweakd 拷到 assets/tweakd/<abi>/tweakd
+    // cmake 产出 libtweak_starter.so；tweakd 已移除（C2）
     sourceSets {
         getByName("main") {
             assets.srcDir("src/main/assets")
@@ -70,6 +70,7 @@ android {
         implementation(libs.androidx.activity.compose)
         compileOnly(libs.libsu.core)
         compileOnly(libs.libsu.service)
-        compileOnlyApi(fileTree("dir" to "libs", "include" to listOf("*.jar")))
+        // Hidden API stubs：仅本模块编译期可见，禁止泄漏到 App R8 classpath
+        compileOnly(fileTree("dir" to "libs", "include" to listOf("*.jar")))
     }
 }

@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.lumkit.tweak.common.daemon.A11yWatchDaemonConfig
+import io.github.lumkit.tweak.common.daemon.BatteryRecordDaemonConfig
 import io.github.lumkit.tweak.common.daemon.DaemonPaths
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.model.BatteryDisplayType
@@ -60,8 +61,10 @@ object TweakDataStore {
     private val batteryRecordSampleIntervalLevel = intPreferencesKey("battery_record_sample_interval_level")
     // 无障碍保活巡检间隔档位（×10s，默认 6 → 60s；无 UI，供 conf 写入）
     private val a11yWatchIntervalLevel = intPreferencesKey("a11y_watch_interval_level")
-    // Native Daemon（tweakd）开关
+    // Native Daemon（TweakServer）开关
     private val nativeDaemonEnabled = booleanPreferencesKey("native_daemon_enabled")
+    // 无障碍 Daemon：守护进程/广播是否拉起无障碍
+    private val a11yDaemonEnabled = booleanPreferencesKey("a11y_daemon_enabled")
     // 自动启动应用开关
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
     // 是否自动监听系统更新并推送通知（关闭后需进入系统更新页才发通知）
@@ -233,7 +236,7 @@ object TweakDataStore {
                 preferences[batteryRecordSampleIntervalLevel] = level
             }
         }
-        // 电池记录与 native daemon 解耦，不再写 battery_record.conf
+        BatteryRecordDaemonConfig.syncFromDataStore()
     }
 
     /**
@@ -256,7 +259,20 @@ object TweakDataStore {
             }
         }
         val intervalMs = safe * DaemonPaths.MIN_A11Y_INTERVAL_MS
-        A11yWatchDaemonConfig.write(intervalMs = intervalMs, enabled = true)
+        A11yWatchDaemonConfig.syncFromDataStore()
+    }
+
+    fun a11yDaemonEnabledFlow(): Flow<Boolean> = preferences.data.map {
+        it[a11yDaemonEnabled] ?: false
+    }
+
+    suspend fun setA11yDaemonEnabled(enable: Boolean) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[a11yDaemonEnabled] = enable
+            }
+        }
+        A11yWatchDaemonConfig.syncFromDataStore()
     }
 
     fun nativeDaemonEnabledFlow(): Flow<Boolean> = preferences.data.map {
@@ -269,6 +285,7 @@ object TweakDataStore {
                 preferences[nativeDaemonEnabled] = enable
             }
         }
+        BatteryRecordDaemonConfig.syncFromDataStore()
     }
 
     fun infoBatteryDisplayTypeFlow(): Flow<BatteryDisplayType> = preferences.data.map {

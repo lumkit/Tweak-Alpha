@@ -1,7 +1,7 @@
 package io.github.lumkit.tweak.common.daemon
 
 /**
- * 特权 native daemon（tweakd）状态快照。
+ * 特权常驻 TweakServer 状态快照。
  */
 data class TweakDaemonStatus(
     val running: Boolean,

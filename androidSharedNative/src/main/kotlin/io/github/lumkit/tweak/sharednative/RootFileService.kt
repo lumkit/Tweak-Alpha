@@ -92,6 +92,18 @@ class RootFileService : RootService() {
         override fun unzipPathToDir(sourcePath: String, targetDir: String): Bundle {
             return FileServiceDelegate.unzipPathToDir(sourcePath, targetDir)
         }
+
+        override fun execDetached(command: String): Bundle {
+            return FileServiceDelegate.execDetached(command)
+        }
+
+        override fun startTweakServerEmbedded(packageName: String): Bundle {
+            return FileServiceDelegate.startTweakServerEmbedded(packageName)
+        }
+
+        override fun stopTweakServerEmbedded(): Bundle {
+            return FileServiceDelegate.stopTweakServerEmbedded()
+        }
     }
 
     override fun onBind(intent: Intent): IBinder {

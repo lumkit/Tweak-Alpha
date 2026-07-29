@@ -1,36 +1,46 @@
 package io.github.lumkit.tweak.common.daemon
 
+import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 
 /**
- * Native daemon 工作路径：按 [RuntimeMode] 分流。
- * - Root → 应用私有数据目录（filesDir/tweak-alpha，0700）
- * - Shizuku → `/data/local/tmp/tweak-alpha`（ADB/shell 工作区）
+ * TweakServer 工作路径：统一使用 [ConstCommon.Path.TWEAK_ALPHA_ROOT]。
  */
 object DaemonPaths {
 
-    const val SHIZUKU_WORK_ROOT = "/data/local/tmp/tweak-alpha"
+    const val WORK_ROOT = ConstCommon.Path.TWEAK_ALPHA_ROOT
 
     const val A11Y_WATCH_CONF_NAME = "a11y_watch.conf"
+    const val BATTERY_RECORD_CONF_NAME = "battery_record.conf"
+    const val BATTERY_LOGS_DIR_NAME = "battery_logs"
+    const val SERVER_PID_NAME = "tweak_server.pid"
+    const val STARTER_BIN_NAME = "libtweak_starter.so"
+    /** 工作区缓存的 App APK 副本（Shizuku 独立 app_process 用） */
+    const val SERVER_APK_NAME = "server.apk"
+    /** 与 [SERVER_APK_NAME] 对应的版本戳，避免每次冷启整包复制 */
+    const val SERVER_APK_STAMP_NAME = "server.apk.stamp"
+    const val DEFAULT_BATTERY_LOG_MAX_PART_BYTES = 8L * 1024 * 1024
     const val DEFAULT_A11Y_INTERVAL_MS = 60_000
     const val MIN_A11Y_INTERVAL_MS = 10_000
 
     data class Resolved(
         val workRoot: String,
         val dir: String,
-        val bin: String,
-        val pid: String,
-        val port: String,
-        val log: String,
         val a11yConf: String,
-        /** 目录 chmod，Root 用 0700，Shizuku 用 0777 */
+        val batteryRecordConf: String,
+        val batteryLogsDir: String,
+        val serverPid: String,
+        val starterBin: String,
+        val serverApk: String,
+        val serverApkStamp: String,
+        /** 目录 chmod，统一 0777 */
         val dirMode: String,
         val runtimeMode: RuntimeMode,
     ) {
-        val isRootPrivate: Boolean get() = runtimeMode == RuntimeMode.Root
+        val isRootPrivate: Boolean get() = false
     }
 
     suspend fun resolve(): Resolved {
@@ -39,28 +49,21 @@ object DaemonPaths {
     }
 
     fun resolve(mode: RuntimeMode): Resolved {
-        val workRoot = when (mode) {
-            RuntimeMode.Root -> rootWorkRoot()
-            RuntimeMode.Shizuku, RuntimeMode.Unknow -> SHIZUKU_WORK_ROOT
-        }
+        val workRoot = WORK_ROOT
         val dir = "$workRoot/daemon"
-        val dirMode = when (mode) {
-            RuntimeMode.Root -> "0700"
-            RuntimeMode.Shizuku, RuntimeMode.Unknow -> "0777"
-        }
+        val dirMode = "0777"
         return Resolved(
             workRoot = workRoot,
             dir = dir,
-            bin = "$dir/tweakd",
-            pid = "$dir/tweakd.pid",
-            port = "$dir/tweakd.port",
-            log = "$dir/tweakd.log",
             a11yConf = "$dir/$A11Y_WATCH_CONF_NAME",
+            batteryRecordConf = "$dir/$BATTERY_RECORD_CONF_NAME",
+            batteryLogsDir = "$dir/$BATTERY_LOGS_DIR_NAME",
+            serverPid = "$dir/$SERVER_PID_NAME",
+            starterBin = "$dir/$STARTER_BIN_NAME",
+            serverApk = "$dir/$SERVER_APK_NAME",
+            serverApkStamp = "$dir/$SERVER_APK_STAMP_NAME",
             dirMode = dirMode,
             runtimeMode = mode,
         )
     }
 }
-
-/** Root 模式：应用私有 files 目录下的 tweak-alpha 工作区 */
-internal expect fun rootWorkRoot(): String

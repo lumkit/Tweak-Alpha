@@ -61,6 +61,9 @@ class BatteryRecordRepository {
     suspend fun querySessionById(sessionId: Long): BatteryRecordSessionEntity? =
         dao.querySessionById(sessionId)
 
+    fun observeSessionById(sessionId: Long): Flow<BatteryRecordSessionEntity?> =
+        dao.observeSessionById(sessionId)
+
     suspend fun queryActiveSession(): BatteryRecordSessionEntity? =
         dao.queryActiveSession()
 
@@ -130,4 +133,13 @@ class BatteryRecordRepository {
         dao.deleteSamplesBySessionId(sessionId)
         dao.deleteSession(sessionId)
     }
+
+    suspend fun querySessionByStartedAtAndState(
+        startedAt: Long,
+        state: BatteryChargeState,
+    ): BatteryRecordSessionEntity? =
+        dao.querySessionByStartedAtAndState(startedAt, state.code)
+
+    suspend fun maxSampleTimestamp(sessionId: Long): Long? =
+        dao.maxSampleTimestamp(sessionId)
 }

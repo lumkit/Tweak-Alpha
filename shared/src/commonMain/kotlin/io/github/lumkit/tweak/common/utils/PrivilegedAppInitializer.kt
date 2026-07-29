@@ -1,9 +1,13 @@
 package io.github.lumkit.tweak.common.utils
 
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogSync
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -24,6 +28,9 @@ object PrivilegedAppInitializer {
     private var daemonReady = false
     private var toolkitReady = false
 
+    /** 电池日志同步不阻塞启动；独立 Supervisor 避免被 Splash 取消 */
+    private val bgScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     suspend fun onPrivilegeReady() = withContext(NonCancellable + Dispatchers.IO) {
         mutex.withLock {
             if (!appsReady) {
@@ -37,6 +44,18 @@ object PrivilegedAppInitializer {
                 daemonReady = bootstrapDaemon()
             } else {
                 logD("daemon already ready, skip", TAG)
+            }
+            scheduleBatteryLogSync()
+        }
+    }
+
+    private fun scheduleBatteryLogSync() {
+        bgScope.launch {
+            runCatching {
+                // 增量 + 字节预算，禁止启动路径 syncAll 全量重扫
+                BatteryRecordLogSync.syncOnStartup()
+            }.onFailure {
+                logE("battery log sync failed: ${it.message}", it, TAG)
             }
         }
     }

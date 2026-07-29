@@ -173,11 +173,11 @@ class BatteryRecordSampler(
             BatteryManager.EXTRA_STATUS,
             BatteryManager.BATTERY_STATUS_UNKNOWN,
         )
+        val plugged = batteryIntent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
         return when (status) {
-            BatteryManager.BATTERY_STATUS_CHARGING,
-            BatteryManager.BATTERY_STATUS_FULL,
-            -> BatteryChargeState.CHARGING
-
+            BatteryManager.BATTERY_STATUS_CHARGING -> BatteryChargeState.CHARGING
+            BatteryManager.BATTERY_STATUS_FULL ->
+                if (plugged) BatteryChargeState.CHARGING else BatteryChargeState.DISCHARGING
             else -> BatteryChargeState.DISCHARGING
         }
     }

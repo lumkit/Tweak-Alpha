@@ -1,6 +1,5 @@
 package io.github.lumkit.tweak.common.daemon
 
-import android.os.Build
 import android.os.ParcelFileDescriptor
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.shell.ReusableShells
@@ -15,27 +14,29 @@ import io.github.lumkit.tweak.common.utils.openPrivilegedReadOnlyFd
 import io.github.lumkit.tweak.common.utils.openPrivilegedWriteOnlyFd
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.asNativeFileBackend
+import io.github.lumkit.tweak.server.TweakServerMain
+import io.github.lumkit.tweak.server.ipc.TweakServerConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.InputStream
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.security.MessageDigest
 import kotlin.time.Duration.Companion.milliseconds
 
 private const val TAG = "TweakDaemon"
-private const val ASSET_ROOT = "tweakd"
-private const val ASSET_BIN_NAME = "tweakd"
+private const val STARTER_SO_NAME = DaemonPaths.STARTER_BIN_NAME
 
+/**
+ * C2：工作区安装 starter +（按需）缓存 server.apk，再 fork 独立 `tweak_server`。
+ *
+ * 分层：
+ * - [install]：幂等准备产物（starter 按 sha、server.apk 按版本戳，绝非每次整包复制）
+ * - [start]：健康则直接返回；否则只负责拉起进程 + 等 Binder
+ */
 actual object TweakDaemon {
 
     @Volatile
@@ -45,102 +46,187 @@ actual object TweakDaemon {
         runCatching {
             val paths = DaemonPaths.resolve()
             ensureDaemonDir(paths)
-
-            val expectedSha = expectedAssetSha256()
-                ?: error("assets/$ASSET_ROOT/<abi>/$ASSET_BIN_NAME not found for ${Build.SUPPORTED_ABIS?.joinToString()}")
-
-            if (isInstalledBinaryPresent(paths)) {
-                val actualSha = hashInstalledBinary(paths)
-                if (actualSha != null && actualSha.equals(expectedSha, ignoreCase = true)) {
-                    setBinaryExecutable(paths.bin)
-                    logD(
-                        "tweakd already installed and intact, skip copy sha256=$actualSha dir=${paths.dir}",
-                        TAG,
-                    )
-                    return@runCatching true
-                }
-                logD(
-                    "tweakd corrupt or outdated actual=${actualSha ?: "unreadable"}, reinstall",
-                    TAG,
-                )
-                deleteBinary(paths.bin)
-            } else {
-                logD("tweakd not installed at ${paths.bin}, copy from assets", TAG)
-            }
-
-            val (assetPath, input) = openPackagedBinaryAsset()
-                ?: error("packaged asset missing during copy")
-            input.use { stream ->
-                copyAssetToBin(paths, stream)
-            }
-            setBinaryExecutable(paths.bin)
-
-            val len = binaryLength(paths.bin)
-            if (len <= 0L) {
-                error("installed binary empty: ${paths.bin}")
-            }
-            val afterSha = hashInstalledBinary(paths)
-            if (afterSha == null || !afterSha.equals(expectedSha, ignoreCase = true)) {
-                deleteBinary(paths.bin)
-                error("installed binary integrity failed expected=$expectedSha actual=$afterSha")
-            }
-            logD("installed tweakd -> ${paths.bin} len=$len asset=$assetPath sha256=$afterSha", TAG)
+            ensureStarterInstalled(paths)
+            ensureServerApkCached(paths)
             true
         }.onFailure {
             logE("install failed: ${it.message}", it, TAG)
         }.getOrDefault(false)
     }
 
-    private suspend fun ensureDaemonDir(paths: DaemonPaths.Resolved) {
-        if (paths.isRootPrivate) {
-            // Root：应用私有数据目录，直接本地创建，避免走 Root Binder 写 /data/adb 一类受限路径
-            File(paths.workRoot).mkdirs()
-            File(paths.dir).mkdirs()
-            File(paths.bin).parentFile?.mkdirs()
-        } else {
-            PrivilegedWorkDir.ensureWritable(
-                path = paths.dir,
-                workRoot = paths.workRoot,
-                mode = paths.dirMode,
-            )
-        }
-    }
+    actual suspend fun start(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            // 已有独立常驻进程：零 I/O 快路径
+            if (pingInternal() && shellServerAlive()) return@runCatching true
+            if (!install()) return@runCatching false
+            if (pingInternal() && shellServerAlive()) return@runCatching true
 
-    private suspend fun isInstalledBinaryPresent(paths: DaemonPaths.Resolved): Boolean {
-        if (paths.isRootPrivate) {
-            val f = File(paths.bin)
-            return f.isFile && f.length() > 0L
-        }
-        if (Files.exists(paths.bin).getOrNull() != true) return false
-        return (Files.length(paths.bin).getOrNull() ?: 0L) > 0L
-    }
-
-    private suspend fun hashInstalledBinary(paths: DaemonPaths.Resolved): String? = runCatching {
-        if (paths.isRootPrivate) {
-            FileInputStream(File(paths.bin)).use { sha256Hex(it) }
-        } else {
-            val backend = resolvePrivilegedBackend()
-            openPrivilegedReadOnlyFd(backend, paths.bin).use { pfd ->
-                ParcelFileDescriptor.AutoCloseInputStream(pfd).use { sha256Hex(it) }
+            val paths = DaemonPaths.resolve()
+            // 若之前嵌在 file_service：先停引擎并清掉误写的 pid，再拉独立进程
+            runCatching { Files.stopTweakServerEmbedded() }
+            val oldPid = readServerPid(paths)
+            if (oldPid > 0 && isFileServicePid(oldPid)) {
+                Files.delete(paths.serverPid)
+                TweakServerConnection.clear()
+            } else if (!shellServerAlive()) {
+                Files.delete(paths.serverPid)
+                TweakServerConnection.clear()
             }
+
+            val launchOut = launchStarter(paths)
+            logD("launch output:\n$launchOut", TAG)
+
+            var started = waitUntil({ pingInternal() && shellServerAlive() }, attempts = 30, delayMs = 50)
+            if (!started) {
+                started = waitUntil({ pingInternal() }, attempts = 20, delayMs = 50)
+            }
+            if (!started) {
+                val alive = isRunningInternal(paths)
+                logE(
+                    "start timeout; serverPidExists=${Files.exists(paths.serverPid).getOrNull()} " +
+                        "procAlive=$alive standalone=${shellServerAlive()} " +
+                        "binder=${TweakServerConnection.binder != null}\n$launchOut",
+                    null,
+                    TAG,
+                )
+                if (alive || shellServerAlive()) {
+                    return@runCatching true
+                }
+            }
+            started
+        }.onFailure {
+            logE("start failed: ${it.message}", it, TAG)
+        }.getOrDefault(false)
+    }
+
+    actual suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val paths = DaemonPaths.resolve()
+            val stoppedByBinder = runCatching {
+                TweakServerConnection.service?.stop()
+                true
+            }.getOrDefault(false)
+            runCatching { Files.stopTweakServerEmbedded() }
+            if (!stoppedByBinder) {
+                val pid = readServerPid(paths)
+                // 嵌入模式下 pid 是 file_service，绝不能杀
+                if (pid > 0 && !isFileServicePid(pid)) {
+                    ReusableShells.execSync("kill -TERM $pid 2>/dev/null; kill -KILL $pid 2>/dev/null")
+                }
+                ReusableShells.execSync(
+                    "pids=\$(pidof tweak_server 2>/dev/null); " +
+                        "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi",
+                )
+            }
+            waitUntil({ !isRunningInternal(paths) && !pingInternal() }, attempts = 20, delayMs = 100)
+            TweakServerConnection.clear()
+            Files.delete(paths.serverPid)
+            true
+        }.onFailure {
+            logE("stop failed: ${it.message}", it, TAG)
+        }.getOrDefault(false)
+    }
+
+    actual suspend fun isRunning(): Boolean = withContext(Dispatchers.IO) {
+        pingInternal() || isRunningInternal(DaemonPaths.resolve())
+    }
+
+    actual suspend fun ping(): Boolean = withContext(Dispatchers.IO) {
+        pingInternal()
+    }
+
+    actual suspend fun status(): TweakDaemonStatus? = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = TweakServerConnection.service?.status()?.trim().orEmpty()
+            if (!raw.startsWith("OK")) return@runCatching null
+            val map = raw.removePrefix("OK")
+                .trim()
+                .split(' ')
+                .mapNotNull { token ->
+                    val idx = token.indexOf('=')
+                    if (idx <= 0) null else token.substring(0, idx) to token.substring(idx + 1)
+                }
+                .toMap()
+            TweakDaemonStatus(
+                running = map["running"] == "1",
+                pid = map["pid"]?.toIntOrNull() ?: -1,
+                version = map["version"].orEmpty(),
+                sock = map["binder"] ?: "binder",
+                raw = raw,
+            )
+        }.onFailure {
+            logD("status failed: ${it.message}", TAG)
+        }.getOrNull()
+    }
+
+    actual suspend fun version(): String? = withContext(Dispatchers.IO) {
+        status()?.version?.takeIf { it.isNotBlank() } ?: TweakServerMain.VERSION
+    }
+
+    actual suspend fun reloadConfig(): Unit = withContext(Dispatchers.IO) {
+        runCatching { TweakServerConnection.service?.reloadConfig() }
+        Unit
+    }
+
+    private suspend fun ensureDaemonDir(paths: DaemonPaths.Resolved) {
+        PrivilegedWorkDir.ensureWritable(
+            path = paths.dir,
+            workRoot = paths.workRoot,
+            mode = paths.dirMode,
+        )
+        PrivilegedWorkDir.ensureWritable(
+            path = paths.batteryLogsDir,
+            workRoot = paths.workRoot,
+            mode = paths.dirMode,
+        )
+    }
+
+    private fun resolvePackagedStarter(): String? {
+        val dir = application.applicationInfo.nativeLibraryDir ?: return null
+        val f = File(dir, STARTER_SO_NAME)
+        return f.takeIf { it.isFile && it.length() > 0L }?.absolutePath
+    }
+
+    private suspend fun isInstalledStarterPresent(paths: DaemonPaths.Resolved): Boolean {
+        val local = File(paths.starterBin)
+        if (local.isFile && local.length() > 0L) return true
+        if (Files.exists(paths.starterBin).getOrNull() != true) return false
+        return (Files.length(paths.starterBin).getOrNull() ?: 0L) > 0L
+    }
+
+    private suspend fun hashInstalledStarter(paths: DaemonPaths.Resolved): String? = runCatching {
+        val local = File(paths.starterBin)
+        if (local.isFile && local.canRead()) {
+            return@runCatching hashFile(local)
+        }
+        val backend = resolvePrivilegedBackend()
+        openPrivilegedReadOnlyFd(backend, paths.starterBin).use { pfd ->
+            ParcelFileDescriptor.AutoCloseInputStream(pfd).use { sha256Hex(it) }
         }
     }.onFailure {
-        logE("hash installed binary failed: ${it.message}", it, TAG)
+        logE("hash installed starter failed: ${it.message}", it, TAG)
     }.getOrNull()
 
-    private suspend fun copyAssetToBin(paths: DaemonPaths.Resolved, input: InputStream) {
-        if (paths.isRootPrivate) {
-            val dest = File(paths.bin)
-            dest.parentFile?.mkdirs()
-            FileOutputStream(dest).use { output ->
-                input.copyTo(output)
-                output.flush()
+    private suspend fun copyStarterToWorkDir(paths: DaemonPaths.Resolved, packaged: File) {
+        val localDest = File(paths.starterBin)
+        // 工作区通常 App 也可写；失败再走特权
+        val copiedLocal = runCatching {
+            localDest.parentFile?.mkdirs()
+            packaged.inputStream().use { input ->
+                FileOutputStream(localDest).use { output ->
+                    input.copyTo(output)
+                    output.flush()
+                }
             }
-        } else {
-            val backend = resolvePrivilegedBackend()
+            localDest.isFile && localDest.length() > 0L
+        }.getOrDefault(false)
+        if (copiedLocal) return
+
+        val backend = resolvePrivilegedBackend()
+        packaged.inputStream().use { input ->
             openPrivilegedWriteOnlyFd(
                 backend = backend,
-                path = paths.bin,
+                path = paths.starterBin,
                 create = true,
                 truncate = true,
             ).use { writePfd ->
@@ -163,119 +249,226 @@ actual object TweakDaemon {
         runCatching { Files.delete(binPath) }
     }
 
-    private suspend fun binaryLength(binPath: String): Long {
-        val local = File(binPath)
-        if (local.isFile) return local.length()
-        return Files.length(binPath).getOrNull() ?: 0L
+    private suspend fun ensureStarterInstalled(paths: DaemonPaths.Resolved) {
+        val packaged = resolvePackagedStarter()
+            ?: error("$STARTER_SO_NAME missing in nativeLibraryDir (APK 未打包 starter)")
+        val expectedSha = hashFile(File(packaged))
+            ?: error("cannot hash packaged starter")
+        cachedAssetSha256 = expectedSha
+
+        if (isInstalledStarterPresent(paths)) {
+            val actualSha = hashInstalledStarter(paths)
+            if (actualSha != null && actualSha.equals(expectedSha, ignoreCase = true)) {
+                setBinaryExecutable(paths.starterBin)
+                logD("starter already installed sha=$actualSha", TAG)
+                return
+            }
+            logD("starter outdated/corrupt actual=$actualSha, reinstall", TAG)
+            deleteBinary(paths.starterBin)
+        }
+
+        copyStarterToWorkDir(paths, File(packaged))
+        setBinaryExecutable(paths.starterBin)
+        val after = hashInstalledStarter(paths)
+        if (after == null || !after.equals(expectedSha, ignoreCase = true)) {
+            deleteBinary(paths.starterBin)
+            error("starter integrity failed expected=$expectedSha actual=$after")
+        }
+        logD("installed starter -> ${paths.starterBin} sha=$after", TAG)
     }
 
-    actual suspend fun start(): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * 仅在 App 升级/换路径时同步 server.apk。
+     * 戳：sourceDir|versionCode|lastUpdateTime|length —— O(1) 判断，禁止每次冷启整包 cp。
+     */
+    private suspend fun ensureServerApkCached(paths: DaemonPaths.Resolved) {
+        val stamp = currentApkStamp()
+        val stampText = stamp.serialize()
+        val apkFile = File(paths.serverApk)
+        val stampFile = File(paths.serverApkStamp)
+
+        val cachedStamp = runCatching {
+            when {
+                stampFile.canRead() -> stampFile.readText().trim()
+                else -> Files.readText(paths.serverApkStamp).getOrNull()?.trim().orEmpty()
+            }
+        }.getOrDefault("")
+
+        val cachedLen = when {
+            apkFile.isFile -> apkFile.length()
+            else -> Files.length(paths.serverApk).getOrNull() ?: -1L
+        }
+        if (cachedStamp == stampText && cachedLen == stamp.length && cachedLen > 0L) {
+            logD("server.apk cache hit stamp=$stampText", TAG)
+            return
+        }
+
+        logD(
+            "server.apk cache miss oldStamp=${cachedStamp.take(80)} newStamp=$stampText, syncing",
+            TAG,
+        )
+        // 优先硬链（同分区瞬时完成）；失败再 cp 一次
+        val sync = ReusableShells.execSync(
+            "rm -f ${paths.serverApk.shellQuote()} ${paths.serverApkStamp.shellQuote()}; " +
+                "ln ${stamp.sourceDir.shellQuote()} ${paths.serverApk.shellQuote()} 2>/dev/null || " +
+                "cp -f ${stamp.sourceDir.shellQuote()} ${paths.serverApk.shellQuote()}; " +
+                "chmod 644 ${paths.serverApk.shellQuote()}; " +
+                "printf '%s\\n' ${stampText.shellQuote()} > ${paths.serverApkStamp.shellQuote()}; " +
+                "chmod 644 ${paths.serverApkStamp.shellQuote()}; " +
+                "stat -c '%s' ${paths.serverApk.shellQuote()} 2>/dev/null || " +
+                "wc -c < ${paths.serverApk.shellQuote()}",
+        ).trim().lines().lastOrNull()?.trim().orEmpty()
+        val afterLen = sync.toLongOrNull() ?: -1L
+        if (afterLen != stamp.length) {
+            error("server.apk sync failed expectedLen=${stamp.length} actualLen=$afterLen out=$sync")
+        }
+        logD("server.apk synced len=$afterLen via install", TAG)
+    }
+
+    private fun currentApkStamp(): ApkStamp {
+        val sourceDir = application.applicationInfo.sourceDir
+        val pkgInfo = application.packageManager.getPackageInfo(application.packageName, 0)
+        @Suppress("DEPRECATION")
+        val versionCode = if (android.os.Build.VERSION.SDK_INT >= 28) {
+            pkgInfo.longVersionCode
+        } else {
+            pkgInfo.versionCode.toLong()
+        }
+        val length = File(sourceDir).length()
+        return ApkStamp(
+            sourceDir = sourceDir,
+            versionCode = versionCode,
+            lastUpdateTime = pkgInfo.lastUpdateTime,
+            length = length,
+        )
+    }
+
+    private data class ApkStamp(
+        val sourceDir: String,
+        val versionCode: Long,
+        val lastUpdateTime: Long,
+        val length: Long,
+    ) {
+        fun serialize(): String = "$sourceDir|$versionCode|$lastUpdateTime|$length"
+    }
+
+    private suspend fun launchStarter(paths: DaemonPaths.Resolved): String {
+        val pkgName = application.packageName
+        val starter = paths.starterBin
+        val serverApk = paths.serverApk
+        val bootLog = "${paths.dir}/starter.boot.log"
+
+        require(File(serverApk).isFile || Files.exists(serverApk).getOrNull() == true) {
+            "server.apk missing, install() should have prepared it"
+        }
+
+        ReusableShells.execSync("chmod 755 ${starter.shellQuote()} 2>/dev/null || true")
+        ReusableShells.execSync("rm -f ${bootLog.shellQuote()} 2>/dev/null || true")
+
+        val envPrefix =
+            "export ANDROID_DATA=/data ANDROID_ROOT=/system " +
+                "PATH=/system/bin:/system/xbin:/vendor/bin:/product/bin; " +
+                "unset LD_LIBRARY_PATH CLASSPATH ANDROID_SOCKET_zygote ANDROID_ENTRYPOINT;"
+        val apkQ = serverApk.shellQuote()
+        val pkgQ = pkgName.shellQuote()
+        val starterQ = starter.shellQuote()
+
+        // 1) 独立进程：后台 setsid，脱离 App 生命周期（不再在此复制 APK）
+        val bg = ReusableShells.execSync(
+            "$envPrefix " +
+                "setsid $starterQ --apk=$apkQ --package=$pkgQ " +
+                ">>${bootLog.shellQuote()} 2>&1 < /dev/null & " +
+                "echo __BG_PID:\$!; " +
+                "echo __PIDOF:\$(pidof tweak_server 2>/dev/null)",
+        )
+        if (waitUntil({ pingInternal() && shellServerAlive() }, attempts = 30, delayMs = 50)) {
+            return "mode=standalone_bg\n$bg"
+        }
+        if (shellServerAlive()) {
+            val binderOk = waitUntil({ pingInternal() }, attempts = 20, delayMs = 50)
+            return "mode=standalone_alive binder=$binderOk\n$bg\n${readBootLog(bootLog)}"
+        }
+
+        // 2) file_service 旁路拉起
+        val startCmd = "$envPrefix $starterQ --apk=$apkQ --package=$pkgQ"
+        val viaService = runCatching {
+            when (val r = Files.execDetached(startCmd)) {
+                is NativeFileResult.Success -> "execDetached=ok"
+                is NativeFileResult.Failure -> "execDetached=fail:${r.error.message}"
+            }
+        }.getOrElse { "execDetached=error:${it.message}" }
+        if (waitUntil({ pingInternal() && shellServerAlive() }, attempts = 25, delayMs = 50)) {
+            return "mode=exec_detached\n$viaService\n$bg"
+        }
+
+        // 3) 最后回退嵌入（强停可能一起没）
+        val embedded = runCatching {
+            when (val r = Files.startTweakServerEmbedded(pkgName)) {
+                is NativeFileResult.Success -> "embedded=ok"
+                is NativeFileResult.Failure -> "embedded=fail:${r.error.message}"
+            }
+        }.getOrElse { "embedded=error:${it.message}" }
+        if (waitUntil({ pingInternal() }, attempts = 20, delayMs = 50)) {
+            return "mode=embedded_fallback\n$embedded\n$viaService\n$bg"
+        }
+
+        return "mode=all_failed dir=${paths.dir}\n$embedded\n$viaService\n$bg\n${readBootLog(bootLog)}"
+    }
+
+    private suspend fun readBootLog(bootLog: String): String =
         runCatching {
-            if (!install()) {
-                return@runCatching false
-            }
-            val paths = DaemonPaths.resolve()
-            if (isRunningInternal(paths) && pingInternal(paths)) {
-                return@runCatching true
-            }
-            Files.delete(paths.port)
-            Files.delete(paths.pid)
+            ReusableShells.execSync("cat ${bootLog.shellQuote()} 2>/dev/null || true")
+        }.getOrDefault("")
 
-            val launchOut = launchDaemonProcess(paths)
-            logD("launch output:\n$launchOut", TAG)
-
-            val started = waitUntil(
-                { isRunningInternal(paths) || pingInternal(paths) },
-                attempts = 40,
-                delayMs = 100,
-            )
-            if (!started) {
-                logStartFailure(paths, launchOut)
-            }
-            started
-        }.onFailure {
-            logE("start failed: ${it.message}", it, TAG)
-        }.getOrDefault(false)
+    private suspend fun isFileServicePid(pid: Int): Boolean {
+        if (pid <= 0) return false
+        val cmd = runCatching {
+            ReusableShells.execSync("tr '\\0' ' ' < /proc/$pid/cmdline 2>/dev/null || true")
+        }.getOrDefault("")
+        return cmd.contains("file_service")
     }
 
-    actual suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            val paths = DaemonPaths.resolve()
-            if (!isRunningInternal(paths) && !portExists(paths)) {
-                return@runCatching true
-            }
-            val stoppedByCmd = runCatching {
-                request(paths, "STOP").startsWith("OK")
-            }.getOrDefault(false)
-            if (!stoppedByCmd) {
-                val pid = readPid(paths)
-                if (pid > 0) {
-                    ReusableShells.execSync("kill -TERM $pid 2>/dev/null; kill -KILL $pid 2>/dev/null")
-                }
-            }
-            waitUntil({ !isRunningInternal(paths) }, attempts = 20, delayMs = 100)
-            Files.delete(paths.port)
-            Files.delete(paths.pid)
-            true
-        }.onFailure {
-            logE("stop failed: ${it.message}", it, TAG)
-        }.getOrDefault(false)
+    private fun pingInternal(): Boolean =
+        runCatching { TweakServerConnection.service?.ping() == "PONG" }.getOrDefault(false)
+
+    private suspend fun shellServerAlive(): Boolean {
+        val out = runCatching {
+            ReusableShells.execSync("pidof tweak_server 2>/dev/null || true")
+        }.getOrDefault("").trim()
+        return out.split(Regex("\\s+")).any { token ->
+            token.toIntOrNull()?.let { it > 0 } == true
+        }
     }
 
-    actual suspend fun isRunning(): Boolean = withContext(Dispatchers.IO) {
-        isRunningInternal(DaemonPaths.resolve())
+    private suspend fun isRunningInternal(paths: DaemonPaths.Resolved): Boolean {
+        if (shellServerAlive()) return true
+        val pid = readServerPid(paths)
+        if (pid <= 0) return false
+        return File("/proc/$pid").exists() || Files.exists("/proc/$pid").getOrNull() == true
     }
 
-    actual suspend fun ping(): Boolean = withContext(Dispatchers.IO) {
-        pingInternal(DaemonPaths.resolve())
+    private suspend fun readServerPid(paths: DaemonPaths.Resolved): Int {
+        val text = Files.readText(paths.serverPid).getOrNull()
+            ?.trim()
+            ?.lines()
+            ?.firstOrNull()
+            .orEmpty()
+        return text.toIntOrNull() ?: -1
     }
 
-    actual suspend fun status(): TweakDaemonStatus? = withContext(Dispatchers.IO) {
-        runCatching {
-            val raw = request(DaemonPaths.resolve(), "STATUS").trim()
-            if (!raw.startsWith("OK")) {
-                return@runCatching null
-            }
-            val map = raw.removePrefix("OK")
-                .trim()
-                .split(' ')
-                .mapNotNull { token ->
-                    val idx = token.indexOf('=')
-                    if (idx <= 0) null else token.substring(0, idx) to token.substring(idx + 1)
-                }
-                .toMap()
-            TweakDaemonStatus(
-                running = map["running"] == "1",
-                pid = map["pid"]?.toIntOrNull() ?: -1,
-                version = map["version"].orEmpty(),
-                sock = map["tcp"] ?: map["portfile"] ?: map["sock"].orEmpty(),
-                raw = raw,
-            )
-        }.onFailure {
-            logD("status failed: ${it.message}", TAG)
-        }.getOrNull()
+    private suspend fun resolvePrivilegedBackend(): NativeFileBackend {
+        val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        val backend = runtimeMode.asNativeFileBackend()
+        require(backend != NativeFileBackend.User) {
+            "当前运行模式不支持安装 starter"
+        }
+        return backend
     }
 
-    actual suspend fun version(): String? = withContext(Dispatchers.IO) {
-        runCatching {
-            val raw = request(DaemonPaths.resolve(), "VERSION").trim()
-            if (raw.startsWith("OK")) raw.removePrefix("OK").trim() else null
-        }.getOrNull()
-    }
+    private fun hashFile(file: File): String? =
+        runCatching { FileInputStream(file).use { sha256Hex(it) } }.getOrNull()
 
-    private suspend fun expectedAssetSha256(): String? {
-        cachedAssetSha256?.let { return it }
-        val sha = runCatching {
-            val (_, input) = openPackagedBinaryAsset() ?: return null
-            input.use { sha256Hex(it) }
-        }.onFailure {
-            logE("hash asset failed: ${it.message}", it, TAG)
-        }.getOrNull() ?: return null
-        cachedAssetSha256 = sha
-        return sha
-    }
-
-    private fun sha256Hex(input: InputStream): String {
+    private fun sha256Hex(input: java.io.InputStream): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val buf = ByteArray(DEFAULT_BUFFER_SIZE)
         while (true) {
@@ -284,142 +477,7 @@ actual object TweakDaemon {
             if (n == 0) continue
             digest.update(buf, 0, n)
         }
-        return digest.digest().joinToString(separator = "") { b -> "%02x".format(b) }
-    }
-
-    private suspend fun launchDaemonProcess(paths: DaemonPaths.Resolved): String {
-        val args = "--daemon --pid ${paths.pid.shellQuote()} --sock ${paths.port.shellQuote()}"
-        ReusableShells.execSync("chmod 755 ${paths.bin.shellQuote()} 2>/dev/null || true")
-
-        val direct = ReusableShells.execSync(
-            "${paths.bin.shellQuote()} $args 2>&1; echo __TWEAKD_EXIT:\$?",
-        )
-        if (waitUntil({ isRunningInternal(paths) || pingInternal(paths) }, attempts = 10, delayMs = 50)) {
-            return "mode=direct\n$direct"
-        }
-
-        val linker = when {
-            Build.SUPPORTED_64_BIT_ABIS.isNotEmpty() -> "/system/bin/linker64"
-            else -> "/system/bin/linker"
-        }
-        val viaLinker = ReusableShells.execSync(
-            "if [ -x ${linker.shellQuote()} ]; then " +
-                "${linker.shellQuote()} ${paths.bin.shellQuote()} $args 2>&1; echo __TWEAKD_EXIT:\$?; " +
-                "else echo __TWEAKD_NO_LINKER:$linker; fi",
-        )
-        return "mode=direct_then_linker\ndirect:\n$direct\nlinker:\n$viaLinker"
-    }
-
-    private suspend fun logStartFailure(paths: DaemonPaths.Resolved, launchOut: String) {
-        val daemonLog = Files.readText(paths.log).getOrNull().orEmpty()
-        val binLen = Files.length(paths.bin).getOrNull()
-        val pidExists = Files.exists(paths.pid).getOrNull()
-        val portExists = Files.exists(paths.port).getOrNull()
-        val diag = runCatching {
-            ReusableShells.execSync(
-                "id; ls -l ${paths.bin.shellQuote()} ${paths.pid.shellQuote()} ${paths.port.shellQuote()} 2>&1; " +
-                    "head -c 4 ${paths.bin.shellQuote()} | od -An -tx1 2>&1",
-            )
-        }.getOrDefault("diag failed")
-        logE(
-            "start timeout; binLen=$binLen pidExists=$pidExists portExists=$portExists dir=${paths.dir}\n" +
-                "launchOut=\n$launchOut\n" +
-                "diag=\n$diag\n" +
-                "logTail=\n${daemonLog.takeLast(2000)}",
-            null,
-            TAG,
-        )
-    }
-
-    private suspend fun isRunningInternal(paths: DaemonPaths.Resolved): Boolean {
-        val pid = readPid(paths)
-        if (pid <= 0) return false
-        return File("/proc/$pid").exists() || Files.exists("/proc/$pid").getOrNull() == true
-    }
-
-    private suspend fun pingInternal(paths: DaemonPaths.Resolved): Boolean =
-        runCatching { request(paths, "PING").trim() == "PONG" }.getOrDefault(false)
-
-    private suspend fun resolvePrivilegedBackend(): NativeFileBackend {
-        val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
-        val backend = runtimeMode.asNativeFileBackend()
-        require(backend != NativeFileBackend.User) {
-            "当前运行模式不支持通过特权 Binder 安装 tweakd"
-        }
-        return backend
-    }
-
-    private fun openPackagedBinaryAsset(): Pair<String, InputStream>? {
-        val am = application.assets
-        for (abi in Build.SUPPORTED_ABIS.orEmpty()) {
-            if (abi.isBlank()) continue
-            val assetPath = "$ASSET_ROOT/$abi/$ASSET_BIN_NAME"
-            val stream = runCatching { am.open(assetPath) }.getOrNull() ?: continue
-            logD("found asset: $assetPath", TAG)
-            return assetPath to stream
-        }
-        val listed = runCatching {
-            am.list(ASSET_ROOT)?.joinToString().orEmpty()
-        }.getOrDefault("")
-        logE(
-            "no tweakd asset for abis=${Build.SUPPORTED_ABIS?.joinToString()} under $ASSET_ROOT/[$listed]",
-            null,
-            TAG,
-        )
-        return null
-    }
-
-    private suspend fun readPid(paths: DaemonPaths.Resolved): Int {
-        val text = if (paths.isRootPrivate) {
-            runCatching { File(paths.pid).takeIf { it.isFile }?.readText() }.getOrNull()
-        } else {
-            Files.readText(paths.pid).getOrNull()
-        }?.trim()?.lines()?.firstOrNull().orEmpty()
-        return text.toIntOrNull() ?: -1
-    }
-
-    private suspend fun portExists(paths: DaemonPaths.Resolved): Boolean {
-        if (paths.isRootPrivate) {
-            return File(paths.port).isFile
-        }
-        return Files.exists(paths.port).getOrNull() == true
-    }
-
-    private suspend fun readDaemonPort(paths: DaemonPaths.Resolved): Int {
-        val text = if (paths.isRootPrivate) {
-            runCatching { File(paths.port).takeIf { it.isFile }?.readText() }.getOrNull()
-        } else {
-            Files.readText(paths.port).getOrNull()
-        }?.trim()?.lines()?.firstOrNull().orEmpty()
-        return text.toIntOrNull() ?: -1
-    }
-
-    private suspend fun request(paths: DaemonPaths.Resolved, command: String): String {
-        val port = readDaemonPort(paths)
-        if (port in 1..65535) {
-            runCatching {
-                return tcpRequest(port, command)
-            }.onFailure {
-                logD("TCP request failed, fallback shell: ${it.message}", TAG)
-            }
-            return ReusableShells.execSync(
-                "printf '%s\\n' ${command.shellQuote()} | timeout 2s nc 127.0.0.1 $port 2>/dev/null || " +
-                    "printf '%s\\n' ${command.shellQuote()} | timeout 2s busybox nc 127.0.0.1 $port 2>/dev/null",
-            ).trim()
-        }
-        return ""
-    }
-
-    private fun tcpRequest(port: Int, command: String): String {
-        Socket().use { socket ->
-            socket.connect(InetSocketAddress("127.0.0.1", port), 2_000)
-            socket.soTimeout = 2_000
-            val writer = OutputStreamWriter(socket.getOutputStream())
-            writer.write(command)
-            writer.write("\n")
-            writer.flush()
-            return BufferedReader(InputStreamReader(socket.getInputStream())).readLine().orEmpty()
-        }
+        return digest.digest().joinToString("") { b -> "%02x".format(b) }
     }
 
     private suspend fun waitUntil(
@@ -432,12 +490,6 @@ actual object TweakDaemon {
             delay(delayMs.milliseconds)
         }
         return condition()
-    }
-
-    private fun NativeFileResult<*>.throwIfFailed(op: String) {
-        if (this is NativeFileResult.Failure) {
-            error("$op failed: ${error.message}")
-        }
     }
 
     private fun String.shellQuote(): String = "'${replace("'", "'\\''")}'"

@@ -57,6 +57,17 @@ internal object RootFileServiceConnectionManager {
         }
     }
 
+    /** 解绑 Root UserService，释放我们拉起的特权子进程。 */
+    suspend fun release() = mutex.withLock {
+        val bound = connection
+        service = null
+        connection = null
+        if (bound == null) return@withLock
+        withContext(Dispatchers.Main.immediate) {
+            runCatching { RootService.unbind(bound) }
+        }
+    }
+
     private suspend fun bindLocked(): IRootFileService {
         val shell = withContext(Dispatchers.IO) { Shell.getShell() }
         if (!shell.isRoot) {
@@ -281,6 +292,24 @@ private object RootNativeFileService : NativeFileService {
         }
     }
 
+    override suspend fun execDetached(command: String): NativeFileResult<Unit> {
+        return executeUnit("execDetached", command) { service ->
+            service.execDetached(command)
+        }
+    }
+
+    override suspend fun startTweakServerEmbedded(packageName: String): NativeFileResult<Unit> {
+        return executeUnit("startTweakServerEmbedded", packageName) { service ->
+            service.startTweakServerEmbedded(packageName)
+        }
+    }
+
+    override suspend fun stopTweakServerEmbedded(): NativeFileResult<Unit> {
+        return executeUnit("stopTweakServerEmbedded", "") { service ->
+            service.stopTweakServerEmbedded()
+        }
+    }
+
     suspend fun <T> execute(
         operation: String,
         primaryPath: String,
@@ -342,11 +371,38 @@ internal object ShizukuFileServiceConnectionManager {
     @Volatile
     private var service: IRootFileService? = null
 
+    @Volatile
+    private var connection: ServiceConnection? = null
+
+    @Volatile
+    private var userServiceArgs: Shizuku.UserServiceArgs? = null
+
     suspend fun getService(): IRootFileService {
         service?.let { return it }
         return mutex.withLock {
             service?.let { return it }
             bindLocked()
+        }
+    }
+
+    /**
+     * 解绑 Shizuku UserService。
+     * [remove]=true 时销毁 `file_service` 子进程（重启 App / 切换运行模式时应销毁）。
+     */
+    suspend fun release(remove: Boolean = true) = mutex.withLock {
+        val args = userServiceArgs ?: Shizuku.UserServiceArgs(
+            ComponentName(application, ShizukuFileService::class.java),
+        )
+            .daemon(true)
+            .processNameSuffix("file_service")
+            .debuggable(isDebugBuild())
+            .tag("shizuku_file_service")
+        val bound = connection
+        service = null
+        connection = null
+        userServiceArgs = null
+        runCatching {
+            Shizuku.unbindUserService(args, bound, remove)
         }
     }
 
@@ -367,7 +423,7 @@ internal object ShizukuFileServiceConnectionManager {
                 .debuggable(isDebugBuild())
                 .tag("shizuku_file_service")
 
-            val connection = object : ServiceConnection {
+            val boundConnection = object : ServiceConnection {
                 override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
                     val remoteService = IRootFileService.Stub.asInterface(binder)
                     if (remoteService == null) {
@@ -379,6 +435,8 @@ internal object ShizukuFileServiceConnectionManager {
                         return
                     }
                     service = remoteService
+                    connection = this
+                    userServiceArgs = args
                     if (continuation.isActive) {
                         continuation.resume(remoteService)
                     }
@@ -386,20 +444,20 @@ internal object ShizukuFileServiceConnectionManager {
 
                 override fun onServiceDisconnected(name: ComponentName?) {
                     service = null
+                    connection = null
+                    userServiceArgs = null
                 }
             }
 
-            // PLACEHOLDER_SHIZUKU_BIND
-            
             continuation.invokeOnCancellation {
                 try {
-                    Shizuku.unbindUserService(args, connection, true)
+                    Shizuku.unbindUserService(args, boundConnection, false)
                 } catch (_: Throwable) {
                 }
             }
 
             try {
-                Shizuku.bindUserService(args, connection)
+                Shizuku.bindUserService(args, boundConnection)
             } catch (throwable: Throwable) {
                 if (continuation.isActive) {
                     continuation.resumeWithException(throwable)
@@ -407,6 +465,12 @@ internal object ShizukuFileServiceConnectionManager {
             }
         }
     }
+}
+
+/** 释放 Root / Shizuku 特权文件服务子进程。 */
+internal suspend fun releasePrivilegedFileServices() {
+    runCatching { RootFileServiceConnectionManager.release() }
+    runCatching { ShizukuFileServiceConnectionManager.release(remove = true) }
 }
 
 private object ShizukuNativeFileService : NativeFileService {
@@ -548,6 +612,24 @@ private object ShizukuNativeFileService : NativeFileService {
     override suspend fun unzipFromPath(sourcePath: String, targetDir: String): NativeFileResult<Unit> {
         return executeUnit("unzipFromPath", sourcePath, targetDir) { service ->
             service.unzipPathToDir(sourcePath, targetDir)
+        }
+    }
+
+    override suspend fun execDetached(command: String): NativeFileResult<Unit> {
+        return executeUnit("execDetached", command) { service ->
+            service.execDetached(command)
+        }
+    }
+
+    override suspend fun startTweakServerEmbedded(packageName: String): NativeFileResult<Unit> {
+        return executeUnit("startTweakServerEmbedded", packageName) { service ->
+            service.startTweakServerEmbedded(packageName)
+        }
+    }
+
+    override suspend fun stopTweakServerEmbedded(): NativeFileResult<Unit> {
+        return executeUnit("stopTweakServerEmbedded", "") { service ->
+            service.stopTweakServerEmbedded()
         }
     }
 

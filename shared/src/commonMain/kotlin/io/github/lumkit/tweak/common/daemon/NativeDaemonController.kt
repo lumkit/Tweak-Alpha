@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
- * Native Daemon（tweakd）启停统一入口。
+ * 特权常驻进程（TweakServer）启停统一入口。
  * 受 [TweakDataStore.nativeDaemonEnabledFlow] 控制；无障碍 connected / 特权就绪时仅在启用时拉活。
  */
 object NativeDaemonController {
@@ -37,16 +37,18 @@ object NativeDaemonController {
     suspend fun ensureRunning(): Boolean = withContext(Dispatchers.IO) {
         try {
             A11yWatchDaemonConfig.syncFromDataStore()
+            BatteryRecordDaemonConfig.syncFromDataStore()
             val status = TweakDaemon.status()
             val needsUpgrade =
                 status == null ||
-                    !status.raw.contains("a11y_watch=1") ||
-                    !status.raw.contains("idle_poll=1") ||
-                    !status.raw.contains("tcp=")
+                    !status.version.contains("c2") ||
+                    !status.raw.contains("binder=1")
             if (needsUpgrade && TweakDaemon.isRunning()) {
                 TweakDaemon.stop()
             }
             val started = TweakDaemon.start()
+            // 已在跑时 start 会早退，仍需让 Server 重读刚写入的 conf
+            TweakDaemon.reloadConfig()
             logD("ensureRunning => $started needsUpgrade=$needsUpgrade", TAG)
             started
         } catch (e: CancellationException) {

@@ -7,6 +7,8 @@ import io.github.lumkit.tweak.common.component.LintCurveChartState
 import io.github.lumkit.tweak.common.component.bounds
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.database.battery.BatteryPowerAggregate
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogSync
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogWatcher
 import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.Closeable
 import kotlin.math.abs
 import kotlin.time.Clock
 
@@ -86,6 +89,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
 
     private var chargingChartsJob: Job? = null
     private var liveSessionJob: Job? = null
+    private var batteryLogWatcher: Closeable? = null
 
     private val _chartsSessionOverrideId = MutableStateFlow<Long?>(null)
 
@@ -98,6 +102,25 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         observeChargingSessionCharts()
         observeLiveActiveSession()
         refreshBatterySnapshotOnce()
+        startBatteryLogWatcher()
+    }
+
+    private fun startBatteryLogWatcher() {
+        batteryLogWatcher?.close()
+        batteryLogWatcher = BatteryRecordLogWatcher.start(
+            onCreated = { path -> BatteryRecordLogSync.syncOnLogCreated(path) },
+            onAppended = { path -> BatteryRecordLogSync.syncOnLogAppended(path) },
+            onRemoved = { path -> BatteryRecordLogSync.syncOnLogRemoved(path) },
+        )
+    }
+
+    override fun onCleared() {
+        batteryLogWatcher?.close()
+        batteryLogWatcher = null
+        chargingChartsJob?.cancel()
+        liveSessionJob?.cancel()
+        historyObserveJob?.cancel()
+        super.onCleared()
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -115,8 +138,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                     when {
                         overrideId != null -> {
                             combine(
-                                repository.observeChargingSessions()
-                                    .map { sessions -> sessions.firstOrNull { it.id == overrideId } }
+                                repository.observeSessionById(overrideId)
                                     .distinctUntilChangedBy { session -> session?.id to session?.endedAt },
                                 repository.observeSamplesBySessionId(overrideId),
                             ) { session, samples ->
@@ -125,7 +147,8 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                         }
                         defaultSession != null -> {
                             combine(
-                                flowOf(defaultSession),
+                                repository.observeSessionById(defaultSession.id)
+                                    .distinctUntilChangedBy { session -> session?.id to session?.endedAt },
                                 repository.observeSamplesBySessionId(defaultSession.id),
                             ) { chargingSession, samples ->
                                 ChargingSessionChartsUpdate(chargingSession, samples)
@@ -232,12 +255,6 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                 _batterySnapshot.value = snapshot
             }
         }
-    }
-
-    override fun onCleared() {
-        chargingChartsJob?.cancel()
-        liveSessionJob?.cancel()
-        historyObserveJob?.cancel()
     }
 
     private data class ChargingSessionChartsUpdate(

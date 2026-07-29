@@ -25,4 +25,9 @@ interface IRootFileService {
     Bundle getInstalledApp(String packageName);
     Bundle unzipToDir(in ParcelFileDescriptor pfd, String targetDir);
     Bundle unzipPathToDir(String sourcePath, String targetDir);
+    /** 在特权进程内异步启动命令（不阻塞等待），用于拉起独立 TweakServer 进程。 */
+    Bundle execDetached(String command);
+    /** 在当前特权进程内嵌入启动 TweakServer（Shizuku file_service 推荐路径）。 */
+    Bundle startTweakServerEmbedded(String packageName);
+    Bundle stopTweakServerEmbedded();
 }

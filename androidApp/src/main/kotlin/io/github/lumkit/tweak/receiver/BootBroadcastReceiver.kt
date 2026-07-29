@@ -34,8 +34,13 @@ class BootBroadcastReceiver : BroadcastReceiver() {
                         val autoStart = TweakDataStore.autoStartAppSwitchFlow().first()
                         logD("autoStart=$autoStart", TAG)
                         if (autoStart) {
-                            val enabled = AccessibilityBootstrap.enableIfPrivileged()
-                            logD("ensure accessibility: $enabled", TAG)
+                            val a11yDaemon = TweakDataStore.a11yDaemonEnabledFlow().first()
+                            if (a11yDaemon) {
+                                val enabled = AccessibilityBootstrap.enableIfPrivileged()
+                                logD("ensure accessibility: $enabled", TAG)
+                            } else {
+                                logD("a11y daemon disabled, skip boot accessibility", TAG)
+                            }
                         }
                     } finally {
                         pendingResult.finish()

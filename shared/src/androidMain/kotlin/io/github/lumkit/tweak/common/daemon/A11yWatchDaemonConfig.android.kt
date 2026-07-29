@@ -2,16 +2,12 @@ package io.github.lumkit.tweak.common.daemon
 
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.ConstCommon
-import io.github.lumkit.tweak.common.utils.Files
-import io.github.lumkit.tweak.common.utils.NativeFileResult
-import io.github.lumkit.tweak.common.utils.PrivilegedWorkDir
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import java.io.File
 
 actual object A11yWatchDaemonConfig {
 
@@ -30,19 +26,14 @@ actual object A11yWatchDaemonConfig {
             append("component=").append(component).append('\n')
         }
         try {
-            if (paths.isRootPrivate) {
-                File(paths.workRoot).mkdirs()
-                File(paths.dir).mkdirs()
-                File(paths.a11yConf).writeText(text)
-            } else {
-                PrivilegedWorkDir.ensureWritable(
-                    path = paths.dir,
-                    workRoot = paths.workRoot,
-                    mode = paths.dirMode,
-                )
-                Files.writeText(paths.a11yConf, text).throwIfFailed("writeText ${paths.a11yConf}")
-                Files.chmod(paths.a11yConf, "0644").throwIfFailed("chmod ${paths.a11yConf}")
-            }
+            DaemonConfIo.write(
+                path = paths.a11yConf,
+                text = text,
+                workRoot = paths.workRoot,
+                dir = paths.dir,
+                dirMode = paths.dirMode,
+                isRootPrivate = paths.isRootPrivate,
+            )
             logD(
                 "wrote a11y conf intervalMs=$safeInterval enabled=$enabled path=${paths.a11yConf}",
                 TAG,
@@ -54,12 +45,7 @@ actual object A11yWatchDaemonConfig {
 
     actual suspend fun syncFromDataStore() {
         val intervalMs = TweakDataStore.a11yWatchIntervalMsFlow().first()
-        write(intervalMs = intervalMs, enabled = true)
-    }
-
-    private fun NativeFileResult<*>.throwIfFailed(op: String) {
-        if (this is NativeFileResult.Failure) {
-            error("$op failed: ${error.message}")
-        }
+        val enabled = TweakDataStore.a11yDaemonEnabledFlow().first()
+        write(intervalMs = intervalMs, enabled = enabled)
     }
 }

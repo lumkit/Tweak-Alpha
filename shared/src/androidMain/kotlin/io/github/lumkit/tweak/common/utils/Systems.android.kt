@@ -29,15 +29,25 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import io.github.lumkit.tweak.application
+import io.github.lumkit.tweak.common.daemon.NativeDaemonController
+import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.service.KeepAliveService
 import io.github.lumkit.tweak.shared.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlin.system.exitProcess
 
 actual fun isDebugBuild(): Boolean {
-    return (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    // app_process / TweakServer 没有 Application，不能碰 lateinit application
+    return runCatching {
+        (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }.getOrDefault(false)
 }
 
 actual fun restartApp() {
+    runCatching { shutdownOwnedProcessesForRestart() }
+
     val packageManager = application.packageManager
     val launchIntent = packageManager.getLaunchIntentForPackage(application.packageName)
         ?: return
@@ -54,6 +64,50 @@ actual fun restartApp() {
 actual fun exitApp() {
     Process.killProcess(Process.myPid())
     exitProcess(0)
+}
+
+/**
+ * 重启前清理我们拉起的进程：
+ * 1. Native Daemon（`tweak_server`）
+ * 2. Root / Shizuku 特权文件服务子进程（如 `:file_service`）
+ * 3. 同 UID 下其它 App 子进程
+ */
+private fun shutdownOwnedProcessesForRestart() {
+    runBlocking {
+        withContext(Dispatchers.IO) {
+            runCatching { NativeDaemonController.stop() }
+            runCatching { releasePrivilegedFileServices() }
+            runCatching { killDetachedOwnedProcessesByShell() }
+        }
+    }
+    killSiblingAppProcesses()
+}
+
+private suspend fun killDetachedOwnedProcessesByShell() {
+    val pkg = application.packageName
+    // Shizuku UserService 常以 shell uid 运行，App 侧 Process.killProcess 杀不掉
+    ReusableShells.execSync(
+        "pids=\$(ps -A -o PID=,NAME= 2>/dev/null | awk -v n=\"$pkg:file_service\" '\$2==n {print \$1}'); " +
+            "if [ -z \"\$pids\" ]; then pids=\$(pidof \"$pkg:file_service\" 2>/dev/null); fi; " +
+            "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi; " +
+            "pids=\$(pidof tweak_server 2>/dev/null); " +
+            "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi",
+    )
+}
+
+private fun killSiblingAppProcesses() {
+    val myPid = Process.myPid()
+    val pkg = application.packageName
+    val am = application.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    am.runningAppProcesses
+        ?.asSequence()
+        ?.filter { info ->
+            info.pid != myPid &&
+                (info.processName == pkg || info.processName.startsWith("$pkg:"))
+        }
+        ?.forEach { info ->
+            runCatching { Process.killProcess(info.pid) }
+        }
 }
 
 actual val SDK_INT: Int

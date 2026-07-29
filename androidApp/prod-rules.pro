@@ -51,3 +51,20 @@
 -keep class io.github.lumkit.tweak.sharednative.IRootFileService$Stub { *; }
 -keep class io.github.lumkit.tweak.sharednative.IRootFileService$Stub$Proxy { *; }
 
+# TweakServer（app_process 按类名反射入口，禁止混淆/裁剪）
+-keep class io.github.lumkit.tweak.server.TweakServerMain { *; }
+-keep class io.github.lumkit.tweak.server.** { *; }
+-keep class io.github.lumkit.tweak.server.ITweakServer { *; }
+-keep class io.github.lumkit.tweak.server.ITweakServer$Stub { *; }
+-keep class io.github.lumkit.tweak.server.ITweakServer$Stub$Proxy { *; }
+-keep class io.github.lumkit.tweak.provider.TweakBinderProvider { *; }
+
+# framework.jar stubs / Hidden API 引用（运行时由系统提供）
+-dontwarn android.app.IAlarmManager
+-dontwarn android.app.PropertyInvalidatedCache**
+-dontwarn android.app.timedetector.**
+-dontwarn android.util.MemoryIntArray
+-dontwarn android.util.Singleton
+-dontwarn com.android.internal.**
+-dontwarn dalvik.system.BlockGuard$VmPolicy
+

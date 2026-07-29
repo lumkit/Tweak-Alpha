@@ -55,6 +55,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // 解压到 nativeLibraryDir，便于 Root/Shizuku exec libtweak_starter.so
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
     buildTypes {
         release {

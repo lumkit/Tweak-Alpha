@@ -227,6 +227,19 @@ object Files {
         return getService().unzipFromPath(sourcePath, targetDir)
     }
 
+    /** 在特权进程内异步执行命令（用于拉起独立 TweakServer 进程）。 */
+    suspend fun execDetached(command: String): NativeFileResult<Unit> {
+        return getService().execDetached(command)
+    }
+
+    suspend fun startTweakServerEmbedded(packageName: String): NativeFileResult<Unit> {
+        return getService().startTweakServerEmbedded(packageName)
+    }
+
+    suspend fun stopTweakServerEmbedded(): NativeFileResult<Unit> {
+        return getService().stopTweakServerEmbedded()
+    }
+
 }
 
 

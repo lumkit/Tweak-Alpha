@@ -17,8 +17,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -31,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.LocalSnackBarHostState
+import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.component.Block
 import io.github.lumkit.tweak.common.component.Logo
 import io.github.lumkit.tweak.common.component.TopBar
@@ -60,11 +64,13 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SnackbarResult
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
@@ -73,8 +79,11 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.window.WindowDialog
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_logo_qq
+import tweak_alpha.shared.generated.resources.text_a11y_daemon
+import tweak_alpha.shared.generated.resources.text_a11y_daemon_description
 import tweak_alpha.shared.generated.resources.text_about
 import tweak_alpha.shared.generated.resources.text_apk_export_dir
 import tweak_alpha.shared.generated.resources.text_apk_export_dir_description
@@ -89,6 +98,7 @@ import tweak_alpha.shared.generated.resources.text_battery_record_sample_interva
 import tweak_alpha.shared.generated.resources.text_battery_record_sample_interval_description
 import tweak_alpha.shared.generated.resources.text_native_daemon
 import tweak_alpha.shared.generated.resources.text_native_daemon_description
+import tweak_alpha.shared.generated.resources.text_native_daemon_loading
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar_description
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar_enable_liquidity
@@ -137,6 +147,30 @@ fun SettingsPage(
     val direction = LocalLayoutDirection.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
+    var nativeDaemonLoading by remember { mutableStateOf(false) }
+
+    viewModel.LoadStateLaunchEffect {
+        Watch(SettingsViewModel.NATIVE_DAEMON_TOGGLE_LOAD_ID) {
+            nativeDaemonLoading = it is BaseViewModel.LoadState.Loading
+        }
+    }
+
+    WindowDialog(
+        show = nativeDaemonLoading,
+        enableWindowDim = true,
+        onDismissRequest = {},
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            InfiniteProgressIndicator()
+            Text(
+                text = stringResource(Res.string.text_native_daemon_loading),
+                style = MiuixTheme.textStyles.main,
+            )
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -418,6 +452,7 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
             val autoStart by viewModel.autoStartApp.collectAsStateWithLifecycle()
             val isIgnoringBatteryOptimizations by viewModel.isIgnoringBatteryOptimizations.collectAsStateWithLifecycle()
             val nativeDaemonRunning by viewModel.nativeDaemonRunning.collectAsStateWithLifecycle()
+            val a11yDaemonEnabled by viewModel.a11yDaemonEnabled.collectAsStateWithLifecycle()
 
             SwitchPreference(
                 title = stringResource(Res.string.text_auto_start),
@@ -445,6 +480,12 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                         summary = stringResource(Res.string.text_native_daemon_description),
                         checked = nativeDaemonRunning,
                         onCheckedChange = viewModel::setNativeDaemonEnabled,
+                    )
+                    SwitchPreference(
+                        title = stringResource(Res.string.text_a11y_daemon),
+                        summary = stringResource(Res.string.text_a11y_daemon_description),
+                        checked = a11yDaemonEnabled,
+                        onCheckedChange = viewModel::setA11yDaemonEnabled,
                     )
                 }
             }
