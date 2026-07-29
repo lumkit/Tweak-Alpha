@@ -7,6 +7,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -37,13 +39,19 @@ object PrivilegedAppInitializer {
                 AppsHelper.init()
                 appsReady = true
             }
-            if (!toolkitReady) {
-                toolkitReady = bootstrapToolkit()
-            }
-            if (!daemonReady) {
-                daemonReady = bootstrapDaemon()
-            } else {
-                logD("daemon already ready, skip", TAG)
+            coroutineScope {
+                val toolkitJob = async {
+                    if (!toolkitReady) {
+                        toolkitReady = bootstrapToolkit()
+                    }
+                }
+                val daemonJob = async {
+                    if (!daemonReady) {
+                        daemonReady = bootstrapDaemon()
+                    }
+                }
+                toolkitJob.await()
+                daemonJob.await()
             }
             scheduleBatteryLogSync()
         }

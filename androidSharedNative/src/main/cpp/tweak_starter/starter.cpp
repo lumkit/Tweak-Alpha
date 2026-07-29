@@ -93,7 +93,22 @@ static void run_server(const char *dex_path, const char *package_name) {
     exit(EXIT_FATAL_APP_PROCESS);
 }
 
+static bool tweak_server_running() {
+    FILE *f = popen("pidof tweak_server 2>/dev/null", "r");
+    if (f == nullptr) return false;
+    char line[128] = {0};
+    const bool running = fgets(line, sizeof(line), f) != nullptr && atoi(line) > 0;
+    pclose(f);
+    return running;
+}
+
 static void start_server(const char *dex_path, const char *package_name) {
+    if (tweak_server_running()) {
+        boot_log("skip: tweak_server already running");
+        fprintf(stdout, "info: tweak_server already running\n");
+        fprintf(stdout, "info: tweak_starter exit with 0\n");
+        exit(EXIT_SUCCESS);
+    }
     // 双重 fork：彻底脱离 Shizuku newProcess / shell 进程组，避免命令结束时被带走
     int pipefd[2];
     if (pipe(pipefd) != 0) {

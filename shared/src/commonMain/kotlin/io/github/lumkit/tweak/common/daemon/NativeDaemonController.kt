@@ -36,20 +36,31 @@ object NativeDaemonController {
 
     suspend fun ensureRunning(): Boolean = withContext(Dispatchers.IO) {
         try {
-            A11yWatchDaemonConfig.syncFromDataStore()
-            BatteryRecordDaemonConfig.syncFromDataStore()
-            val status = TweakDaemon.status()
-            val needsUpgrade =
-                status == null ||
+            if (TweakDaemon.ping()) {
+                syncDaemonConfFromDataStore()
+                val status = TweakDaemon.status()
+                val needsUpgrade = status != null && (
                     !status.version.contains("c2") ||
-                    !status.raw.contains("binder=1")
-            if (needsUpgrade && TweakDaemon.isRunning()) {
-                TweakDaemon.stop()
+                        !status.raw.contains("binder=1")
+                )
+                if (needsUpgrade) {
+                    TweakDaemon.stop()
+                } else {
+                    TweakDaemon.reloadConfig()
+                    return@withContext true
+                }
+            } else if (TweakDaemon.isRunning()) {
+                val started = TweakDaemon.start()
+                syncDaemonConfFromDataStore()
+                TweakDaemon.reloadConfig()
+                logD("ensureRunning attach existing => $started", TAG)
+                return@withContext started
             }
+
+            syncDaemonConfFromDataStore()
             val started = TweakDaemon.start()
-            // 已在跑时 start 会早退，仍需让 Server 重读刚写入的 conf
             TweakDaemon.reloadConfig()
-            logD("ensureRunning => $started needsUpgrade=$needsUpgrade", TAG)
+            logD("ensureRunning => $started", TAG)
             started
         } catch (e: CancellationException) {
             throw e
@@ -57,6 +68,11 @@ object NativeDaemonController {
             logE("ensureRunning failed: ${e.message}", e, TAG)
             false
         }
+    }
+
+    private suspend fun syncDaemonConfFromDataStore() {
+        A11yWatchDaemonConfig.syncFromDataStore()
+        BatteryRecordDaemonConfig.syncFromDataStore()
     }
 
     suspend fun stop(): Boolean = withContext(Dispatchers.IO) {

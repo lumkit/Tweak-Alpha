@@ -12,6 +12,8 @@ import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogWatcher
 import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
+import io.github.lumkit.tweak.common.daemon.NativeDaemonController
+import io.github.lumkit.tweak.common.daemon.TweakDaemon
 import io.github.lumkit.tweak.common.utils.BatterySnapshot
 import io.github.lumkit.tweak.common.utils.BatteryUtils
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +40,10 @@ import kotlin.time.Clock
  * - **顶部实时标签 + 迷你曲线**：绑定「当前活跃会话」的最新采样（无活跃会话时清空实时项，不影响图表）
  */
 class ChargeStatisticsViewModel : BaseViewModel() {
+
+    companion object {
+        const val NATIVE_DAEMON_ENABLE_LOAD_ID = "chargeStatisticsNativeDaemon"
+    }
 
     private val repository = BatteryRecordRepository()
 
@@ -314,7 +320,50 @@ class ChargeStatisticsViewModel : BaseViewModel() {
     private val _chargeHistoryUiState = MutableStateFlow(ChargeHistoryUiState())
     val chargeHistoryUiState = _chargeHistoryUiState.asStateFlow()
 
+    /** null：尚未检测；true：需提示开启 Native Daemon；false：采样进程已运行 */
+    private val _chargeHistoryNativeDaemonPrompt = MutableStateFlow<Boolean?>(null)
+    val chargeHistoryNativeDaemonPrompt = _chargeHistoryNativeDaemonPrompt.asStateFlow()
+
     private var historyObserveJob: Job? = null
+
+    private var pendingChargeHistoryOpen: (() -> Unit)? = null
+
+    fun tryOpenChargeHistory(onAllowed: () -> Unit) {
+        viewModelScope.launch {
+            val running = isBatterySamplerRunning()
+            if (running) {
+                _chargeHistoryNativeDaemonPrompt.value = false
+                onAllowed()
+            } else {
+                pendingChargeHistoryOpen = onAllowed
+                _chargeHistoryNativeDaemonPrompt.value = true
+            }
+        }
+    }
+
+    fun dismissChargeHistoryNativeDaemonPrompt() {
+        pendingChargeHistoryOpen = null
+        _chargeHistoryNativeDaemonPrompt.value = false
+    }
+
+    fun enableNativeDaemonForChargeHistory() = suspendLaunch(id = NATIVE_DAEMON_ENABLE_LOAD_ID) {
+        loading()
+        NativeDaemonController.setEnabled(true)
+        if (isBatterySamplerRunning()) {
+            _chargeHistoryNativeDaemonPrompt.value = false
+            pendingChargeHistoryOpen?.invoke()
+            pendingChargeHistoryOpen = null
+            success()
+        } else {
+            failure(IllegalStateException("native daemon not running"))
+        }
+    }
+
+    private suspend fun isBatterySamplerRunning(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            TweakDaemon.isRunning() || TweakDaemon.ping()
+        }.getOrDefault(false)
+    }
 
     fun onChargeHistorySheetOpened() {
         if (historyObserveJob?.isActive == true) return

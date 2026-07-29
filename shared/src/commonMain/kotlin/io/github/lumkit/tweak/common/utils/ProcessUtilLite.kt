@@ -20,8 +20,11 @@ object ProcessUtilLite {
     private val staticExcludes = setOf(
         "toybox-outside",
         "toybox-outside64",
+        "toybox",
         "ps",
         "top",
+        "tweak_server",
+        "ub.lumkit.tweak",
     )
 
     suspend fun supported(): Boolean = mutex.withLock {

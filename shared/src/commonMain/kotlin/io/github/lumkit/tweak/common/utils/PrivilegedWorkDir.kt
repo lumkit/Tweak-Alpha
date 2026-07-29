@@ -22,6 +22,10 @@ object PrivilegedWorkDir {
         workRoot: String,
         mode: String = "0777",
     ) {
+        if (Files.exists(path).getOrNull() == true && probeWritable(path)) {
+            return
+        }
+
         val normalizedMode = mode.trim().trimStart('0').padStart(3, '0').takeLast(3)
 
         if (Files.exists(path).getOrNull() == true) {

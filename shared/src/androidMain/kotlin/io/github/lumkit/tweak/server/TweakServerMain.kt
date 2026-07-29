@@ -145,6 +145,10 @@ object TweakServerMain {
             logE("already running pidfile=${pidFile.absolutePath}", null, TAG)
             exitProcess(2)
         }
+        if (!embedded && alreadyRunningStandalone(pidFile)) {
+            logE("already running standalone tweak_server", null, TAG)
+            exitProcess(2)
+        }
         writePid(pidFile)
 
         val batteryEngine = BatteryEngine.createDefault(daemonDir)
@@ -191,17 +195,20 @@ object TweakServerMain {
             embedded = embedded,
         )
 
-        var redeliverCount = 0
-        val redeliver = object : Runnable {
+        fun redeliverOnce() {
+            val current = session ?: return
+            BinderDelivery.sendToApp(current.packageName, current.serverBinder)
+        }
+
+        val periodicRedeliver = object : Runnable {
             override fun run() {
-                val current = session ?: return
-                BinderDelivery.sendToApp(current.packageName, current.serverBinder)
-                redeliverCount++
-                val next = if (redeliverCount < 30) 2_000L else BINDER_REDELIVER_MS
-                mainHandler.postDelayed(this, next)
+                redeliverOnce()
+                mainHandler.postDelayed(this, BINDER_REDELIVER_MS)
             }
         }
-        mainHandler.postDelayed(redeliver, 2_000L)
+        mainHandler.postDelayed({ redeliverOnce() }, 350L)
+        mainHandler.postDelayed({ redeliverOnce() }, 1_000L)
+        mainHandler.postDelayed(periodicRedeliver, 2_000L)
     }
 
     private fun resolveAppPackageName(args: Array<String>): String {
@@ -225,5 +232,22 @@ object TweakServerMain {
             Os.kill(pid, 0)
             true
         }.getOrDefault(false)
+    }
+
+    /** pidfile 丢失时，避免再拉起第二个 tweak_server */
+    private fun alreadyRunningStandalone(pidFile: File): Boolean {
+        val selfPid = Process.myPid()
+        val pidText = runCatching {
+            Runtime.getRuntime()
+                .exec(arrayOf("sh", "-c", "pidof tweak_server 2>/dev/null"))
+                .inputStream
+                .bufferedReader()
+                .readText()
+                .trim()
+        }.getOrDefault("")
+        val pid = pidText.split(Regex("\\s+")).firstOrNull()?.toIntOrNull() ?: return false
+        if (pid <= 0 || pid == selfPid) return false
+        runCatching { pidFile.writeText("$pid\n") }
+        return true
     }
 }

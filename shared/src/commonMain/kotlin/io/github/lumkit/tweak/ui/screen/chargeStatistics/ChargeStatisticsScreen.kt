@@ -51,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
+import io.github.lumkit.tweak.common.component.AlertDialog
 import io.github.lumkit.tweak.common.component.LineChartAxisType
 import io.github.lumkit.tweak.common.component.LineChartData
 import io.github.lumkit.tweak.common.component.LineChartXAxisData
@@ -58,6 +59,7 @@ import io.github.lumkit.tweak.common.component.LintCurveChart
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.SmoothLineChart
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.utils.formatCurrent
 import io.github.lumkit.tweak.common.utils.formatElapsedTime
@@ -100,6 +102,7 @@ import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.window.WindowDialog
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_charge
 import tweak_alpha.shared.generated.resources.ic_charge_fill
@@ -111,6 +114,8 @@ import tweak_alpha.shared.generated.resources.text_charge_chart_mode_current
 import tweak_alpha.shared.generated.resources.text_charge_chart_mode_power
 import tweak_alpha.shared.generated.resources.text_charge_chart_power_time
 import tweak_alpha.shared.generated.resources.text_charge_chart_temperature_time
+import tweak_alpha.shared.generated.resources.text_charge_history_native_daemon_required
+import tweak_alpha.shared.generated.resources.text_charge_history_open_native_daemon
 import tweak_alpha.shared.generated.resources.text_charge_history_title
 import tweak_alpha.shared.generated.resources.text_charge_label_average_power
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_capacity
@@ -126,6 +131,7 @@ import tweak_alpha.shared.generated.resources.text_charge_statistics_description
 import tweak_alpha.shared.generated.resources.text_dialog_confirm
 import tweak_alpha.shared.generated.resources.text_dialog_delete_charge_history_notes
 import tweak_alpha.shared.generated.resources.text_dialog_tip
+import tweak_alpha.shared.generated.resources.text_native_daemon_loading
 import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_go_back
 
@@ -160,6 +166,44 @@ fun ChargeStatisticsScreen(
     val direction = LocalLayoutDirection.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
+    val nativeDaemonPrompt by viewModel.chargeHistoryNativeDaemonPrompt.collectAsStateWithLifecycle()
+    var nativeDaemonEnabling by remember { mutableStateOf(false) }
+
+    viewModel.LoadStateLaunchEffect {
+        Watch(ChargeStatisticsViewModel.NATIVE_DAEMON_ENABLE_LOAD_ID) {
+            nativeDaemonEnabling = it is BaseViewModel.LoadState.Loading
+        }
+    }
+
+    AlertDialog(
+        show = nativeDaemonPrompt == true,
+        summary = stringResource(Res.string.text_charge_history_native_daemon_required),
+        confirmText = stringResource(Res.string.text_charge_history_open_native_daemon),
+        dismissOnOutsideOrBack = false,
+        onDismissRequest = {},
+        onConfirm = { viewModel.enableNativeDaemonForChargeHistory() },
+        onCancel = {
+            viewModel.dismissChargeHistoryNativeDaemonPrompt()
+            navigator.goBack()
+        },
+    )
+
+    WindowDialog(
+        show = nativeDaemonEnabling,
+        enableWindowDim = true,
+        onDismissRequest = {},
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            InfiniteProgressIndicator()
+            Text(
+                text = stringResource(Res.string.text_native_daemon_loading),
+                style = MiuixTheme.textStyles.main,
+            )
+        }
+    }
 
     ScreenSurface {
         Scaffold(
@@ -717,7 +761,9 @@ private fun ChargeChartColorIndicator(
 }
 
 @Composable
-private fun ActionHistory(viewModel: ChargeStatisticsViewModel) {
+private fun ActionHistory(
+    viewModel: ChargeStatisticsViewModel,
+) {
     var showSheet by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val historyState by viewModel.chargeHistoryUiState.collectAsStateWithLifecycle()
@@ -740,7 +786,11 @@ private fun ActionHistory(viewModel: ChargeStatisticsViewModel) {
     }
 
     IconButton(
-        onClick = { showSheet = true },
+        onClick = {
+            viewModel.tryOpenChargeHistory {
+                showSheet = true
+            }
+        },
     ) {
         Icon(
             painter = painterResource(Res.drawable.ic_history),

@@ -46,7 +46,7 @@ actual fun isDebugBuild(): Boolean {
 }
 
 actual fun restartApp() {
-    runCatching { shutdownOwnedProcessesForRestart() }
+//    runCatching { shutdownOwnedProcessesForRestart() }
 
     val packageManager = application.packageManager
     val launchIntent = packageManager.getLaunchIntentForPackage(application.packageName)

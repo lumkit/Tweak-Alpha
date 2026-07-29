@@ -396,5 +396,7 @@
     <string name="text_charge_chart_mode_power">功率</string>
     <string name="text_charge_chart_mode_current">电流</string>
     <string name="text_charge_history_title">充电记录</string>
+    <string name="text_charge_history_native_daemon_required">电池采样进程未运行，请先开启 Native Daemon 后再查看充电记录。</string>
+    <string name="text_charge_history_open_native_daemon">打开 Native Daemon</string>
     <string name="text_dialog_delete_charge_history_notes">确定要删除选中的充电记录吗？将同时删除相关采样数据，删除后无法恢复。</string>
 </resources>

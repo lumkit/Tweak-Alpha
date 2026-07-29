@@ -20,6 +20,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
@@ -29,6 +31,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private const val TAG = "TweakDaemon"
 private const val STARTER_SO_NAME = DaemonPaths.STARTER_BIN_NAME
+private const val STARTER_SHA_SIDECAR = "libtweak_starter.so.sha256"
 
 /**
  * C2：工作区安装 starter +（按需）缓存 server.apk，再 fork 独立 `tweak_server`。
@@ -42,12 +45,36 @@ actual object TweakDaemon {
     @Volatile
     private var cachedAssetSha256: String? = null
 
+    @Volatile
+    private var cachedPackagedStarterSha: String? = null
+
+    @Volatile
+    private var installFastPathKey: String? = null
+
+    @Volatile
+    private var cachedPrivilegedBackend: NativeFileBackend? = null
+
+    private val startMutex = Mutex()
+
     actual suspend fun install(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val paths = DaemonPaths.resolve()
-            ensureDaemonDir(paths)
+            if (installFastPathKey == paths.dir && quickArtifactsReady(paths)) {
+                logD("install fast path", TAG)
+                return@runCatching true
+            }
+            if (!daemonDirsLookReady(paths)) {
+                ensureDaemonDir(paths)
+            } else {
+                PrivilegedWorkDir.ensureWritable(
+                    path = paths.batteryLogsDir,
+                    workRoot = paths.workRoot,
+                    mode = paths.dirMode,
+                )
+            }
             ensureStarterInstalled(paths)
             ensureServerApkCached(paths)
+            installFastPathKey = paths.dir
             true
         }.onFailure {
             logE("install failed: ${it.message}", it, TAG)
@@ -55,41 +82,65 @@ actual object TweakDaemon {
     }
 
     actual suspend fun start(): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            // 已有独立常驻进程：零 I/O 快路径
-            if (pingInternal() && shellServerAlive()) return@runCatching true
-            if (!install()) return@runCatching false
-            if (pingInternal() && shellServerAlive()) return@runCatching true
+        startMutex.withLock {
+            startLocked()
+        }
+    }
 
+    private suspend fun startLocked(): Boolean =
+        runCatching {
             val paths = DaemonPaths.resolve()
-            // 若之前嵌在 file_service：先停引擎并清掉误写的 pid，再拉独立进程
-            runCatching { Files.stopTweakServerEmbedded() }
+
+            if (pingInternal()) return@runCatching true
+
+            // 独立 tweak_server 已在跑：只等 Binder 重投递，禁止再 fork（冷启动常见）
+            if (standaloneServerAlive(paths)) {
+                logD("tweak_server already alive, wait for binder attach", TAG)
+                waitForBinderAttach(attempts = 48, delayMs = 25)
+                return@runCatching pingInternal() || standaloneServerAlive(paths)
+            }
+
+            if (!install()) return@runCatching false
+
+            if (pingInternal()) return@runCatching true
+            if (standaloneServerAlive(paths)) {
+                waitForBinderAttach(attempts = 32, delayMs = 25)
+                return@runCatching pingInternal() || standaloneServerAlive(paths)
+            }
+
             val oldPid = readServerPid(paths)
             if (oldPid > 0 && isFileServicePid(oldPid)) {
                 Files.delete(paths.serverPid)
                 TweakServerConnection.clear()
-            } else if (!shellServerAlive()) {
+            } else if (!standaloneServerAlive(paths)) {
                 Files.delete(paths.serverPid)
                 TweakServerConnection.clear()
             }
 
+            if (standaloneServerAlive(paths)) {
+                logD("tweak_server appeared before launch, skip starter", TAG)
+                waitForBinderAttach(attempts = 32, delayMs = 25)
+                return@runCatching pingInternal() || standaloneServerAlive(paths)
+            }
+
+            runCatching { Files.stopTweakServerEmbedded() }
+
             val launchOut = launchStarter(paths)
             logD("launch output:\n$launchOut", TAG)
 
-            var started = waitUntil({ pingInternal() && shellServerAlive() }, attempts = 30, delayMs = 50)
+            var started = waitUntil({ pingInternal() && standaloneServerAlive(paths) }, attempts = 40, delayMs = 25)
             if (!started) {
-                started = waitUntil({ pingInternal() }, attempts = 20, delayMs = 50)
+                started = waitUntil({ pingInternal() }, attempts = 24, delayMs = 25)
             }
             if (!started) {
-                val alive = isRunningInternal(paths)
+                val alive = standaloneServerAlive(paths)
                 logE(
                     "start timeout; serverPidExists=${Files.exists(paths.serverPid).getOrNull()} " +
-                        "procAlive=$alive standalone=${shellServerAlive()} " +
-                        "binder=${TweakServerConnection.binder != null}\n$launchOut",
+                        "procAlive=$alive binder=${TweakServerConnection.binder != null}\n$launchOut",
                     null,
                     TAG,
                 )
-                if (alive || shellServerAlive()) {
+                if (alive) {
                     return@runCatching true
                 }
             }
@@ -97,7 +148,6 @@ actual object TweakDaemon {
         }.onFailure {
             logE("start failed: ${it.message}", it, TAG)
         }.getOrDefault(false)
-    }
 
     actual suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
@@ -181,6 +231,54 @@ actual object TweakDaemon {
         )
     }
 
+    private suspend fun daemonDirsLookReady(paths: DaemonPaths.Resolved): Boolean {
+        return Files.exists(paths.dir).getOrNull() == true &&
+            Files.exists(paths.batteryLogsDir).getOrNull() == true
+    }
+
+    private suspend fun quickArtifactsReady(paths: DaemonPaths.Resolved): Boolean {
+        if (!isInstalledStarterPresent(paths)) return false
+        val expectedSha = packagedStarterSha() ?: return false
+        val sidecar = starterShaSidecarPath(paths)
+        val recorded = readTextQuick(sidecar)?.trim().orEmpty()
+        if (!recorded.equals(expectedSha, ignoreCase = true)) return false
+
+        val stampText = currentApkStamp().serialize()
+        val cachedStamp = readTextQuick(paths.serverApkStamp)?.trim().orEmpty()
+        if (cachedStamp != stampText) return false
+        val len = File(paths.serverApk).takeIf { it.isFile }?.length()
+            ?: Files.length(paths.serverApk).getOrNull()
+            ?: -1L
+        return len == currentApkStamp().length && len > 0L
+    }
+
+    private fun starterShaSidecarPath(paths: DaemonPaths.Resolved): String =
+        "${paths.dir}/$STARTER_SHA_SIDECAR"
+
+    private suspend fun readTextQuick(path: String): String? {
+        val local = File(path)
+        if (local.isFile && local.canRead()) {
+            return runCatching { local.readText() }.getOrNull()
+        }
+        return Files.readText(path).getOrNull()
+    }
+
+    private suspend fun writeStarterShaSidecar(paths: DaemonPaths.Resolved, sha: String) {
+        val path = starterShaSidecarPath(paths)
+        runCatching { File(path).writeText("$sha\n") }
+        Files.writeText(path, "$sha\n")
+    }
+
+    private fun packagedStarterSha(): String? {
+        cachedPackagedStarterSha?.let { return it }
+        cachedAssetSha256?.let { return it }
+        val packaged = resolvePackagedStarter() ?: return null
+        return hashFile(File(packaged))?.also {
+            cachedPackagedStarterSha = it
+            cachedAssetSha256 = it
+        }
+    }
+
     private fun resolvePackagedStarter(): String? {
         val dir = application.applicationInfo.nativeLibraryDir ?: return null
         val f = File(dir, STARTER_SO_NAME)
@@ -199,7 +297,7 @@ actual object TweakDaemon {
         if (local.isFile && local.canRead()) {
             return@runCatching hashFile(local)
         }
-        val backend = resolvePrivilegedBackend()
+        val backend = resolvePrivilegedBackendCached()
         openPrivilegedReadOnlyFd(backend, paths.starterBin).use { pfd ->
             ParcelFileDescriptor.AutoCloseInputStream(pfd).use { sha256Hex(it) }
         }
@@ -222,7 +320,7 @@ actual object TweakDaemon {
         }.getOrDefault(false)
         if (copiedLocal) return
 
-        val backend = resolvePrivilegedBackend()
+        val backend = resolvePrivilegedBackendCached()
         packaged.inputStream().use { input ->
             openPrivilegedWriteOnlyFd(
                 backend = backend,
@@ -239,7 +337,11 @@ actual object TweakDaemon {
     }
 
     private suspend fun setBinaryExecutable(binPath: String) {
-        runCatching { File(binPath).setExecutable(true, false) }
+        val local = File(binPath)
+        if (local.isFile && local.canExecute()) {
+            return
+        }
+        runCatching { local.setExecutable(true, false) }
         Files.chmod(binPath, "0755")
         ReusableShells.execSync("chmod 755 ${binPath.shellQuote()} 2>/dev/null || true")
     }
@@ -252,13 +354,19 @@ actual object TweakDaemon {
     private suspend fun ensureStarterInstalled(paths: DaemonPaths.Resolved) {
         val packaged = resolvePackagedStarter()
             ?: error("$STARTER_SO_NAME missing in nativeLibraryDir (APK 未打包 starter)")
-        val expectedSha = hashFile(File(packaged))
+        val expectedSha = packagedStarterSha()
             ?: error("cannot hash packaged starter")
-        cachedAssetSha256 = expectedSha
 
         if (isInstalledStarterPresent(paths)) {
+            val sidecarSha = readTextQuick(starterShaSidecarPath(paths))?.trim()
+            if (sidecarSha.equals(expectedSha, ignoreCase = true)) {
+                setBinaryExecutable(paths.starterBin)
+                logD("starter sidecar hit sha=$sidecarSha", TAG)
+                return
+            }
             val actualSha = hashInstalledStarter(paths)
             if (actualSha != null && actualSha.equals(expectedSha, ignoreCase = true)) {
+                writeStarterShaSidecar(paths, expectedSha)
                 setBinaryExecutable(paths.starterBin)
                 logD("starter already installed sha=$actualSha", TAG)
                 return
@@ -274,6 +382,7 @@ actual object TweakDaemon {
             deleteBinary(paths.starterBin)
             error("starter integrity failed expected=$expectedSha actual=$after")
         }
+        writeStarterShaSidecar(paths, expectedSha)
         logD("installed starter -> ${paths.starterBin} sha=$after", TAG)
     }
 
@@ -353,6 +462,10 @@ actual object TweakDaemon {
     }
 
     private suspend fun launchStarter(paths: DaemonPaths.Resolved): String {
+        if (standaloneServerAlive(paths)) {
+            return "mode=skip_already_running pidof=tweak_server"
+        }
+
         val pkgName = application.packageName
         val starter = paths.starterBin
         val serverApk = paths.serverApk
@@ -362,8 +475,10 @@ actual object TweakDaemon {
             "server.apk missing, install() should have prepared it"
         }
 
-        ReusableShells.execSync("chmod 755 ${starter.shellQuote()} 2>/dev/null || true")
-        ReusableShells.execSync("rm -f ${bootLog.shellQuote()} 2>/dev/null || true")
+        ReusableShells.execSync(
+            "chmod 755 ${starter.shellQuote()} 2>/dev/null; " +
+                "rm -f ${bootLog.shellQuote()} 2>/dev/null || true",
+        )
 
         val envPrefix =
             "export ANDROID_DATA=/data ANDROID_ROOT=/system " +
@@ -381,11 +496,11 @@ actual object TweakDaemon {
                 "echo __BG_PID:\$!; " +
                 "echo __PIDOF:\$(pidof tweak_server 2>/dev/null)",
         )
-        if (waitUntil({ pingInternal() && shellServerAlive() }, attempts = 30, delayMs = 50)) {
+        if (waitUntil({ pingInternal() && standaloneServerAlive(paths) }, attempts = 40, delayMs = 25)) {
             return "mode=standalone_bg\n$bg"
         }
-        if (shellServerAlive()) {
-            val binderOk = waitUntil({ pingInternal() }, attempts = 20, delayMs = 50)
+        if (standaloneServerAlive(paths)) {
+            val binderOk = waitUntil({ pingInternal() }, attempts = 24, delayMs = 25)
             return "mode=standalone_alive binder=$binderOk\n$bg\n${readBootLog(bootLog)}"
         }
 
@@ -397,7 +512,7 @@ actual object TweakDaemon {
                 is NativeFileResult.Failure -> "execDetached=fail:${r.error.message}"
             }
         }.getOrElse { "execDetached=error:${it.message}" }
-        if (waitUntil({ pingInternal() && shellServerAlive() }, attempts = 25, delayMs = 50)) {
+        if (waitUntil({ pingInternal() && standaloneServerAlive(paths) }, attempts = 32, delayMs = 25)) {
             return "mode=exec_detached\n$viaService\n$bg"
         }
 
@@ -408,7 +523,7 @@ actual object TweakDaemon {
                 is NativeFileResult.Failure -> "embedded=fail:${r.error.message}"
             }
         }.getOrElse { "embedded=error:${it.message}" }
-        if (waitUntil({ pingInternal() }, attempts = 20, delayMs = 50)) {
+        if (waitUntil({ pingInternal() }, attempts = 20, delayMs = 25)) {
             return "mode=embedded_fallback\n$embedded\n$viaService\n$bg"
         }
 
@@ -440,20 +555,42 @@ actual object TweakDaemon {
         }
     }
 
-    private suspend fun isRunningInternal(paths: DaemonPaths.Resolved): Boolean {
-        if (shellServerAlive()) return true
+    /** 独立 tweak_server 是否存活（先读 pidfile，必要时再 pidof） */
+    private suspend fun standaloneServerAlive(paths: DaemonPaths.Resolved): Boolean {
         val pid = readServerPid(paths)
-        if (pid <= 0) return false
-        return File("/proc/$pid").exists() || Files.exists("/proc/$pid").getOrNull() == true
+        if (pid > 0 && !isFileServicePid(pid)) {
+            if (File("/proc/$pid").exists()) {
+                return true
+            }
+            if (Files.exists("/proc/$pid").getOrNull() == true) {
+                return true
+            }
+        }
+        return shellServerAlive()
     }
 
+    private suspend fun waitForBinderAttach(attempts: Int, delayMs: Long): Boolean =
+        waitUntil({ pingInternal() }, attempts, delayMs)
+
+    private suspend fun isRunningInternal(paths: DaemonPaths.Resolved): Boolean =
+        standaloneServerAlive(paths)
+
     private suspend fun readServerPid(paths: DaemonPaths.Resolved): Int {
-        val text = Files.readText(paths.serverPid).getOrNull()
+        val local = File(paths.serverPid)
+        val text = when {
+            local.isFile && local.canRead() -> runCatching { local.readText() }.getOrNull()
+            else -> Files.readText(paths.serverPid).getOrNull()
+        }
             ?.trim()
             ?.lines()
             ?.firstOrNull()
             .orEmpty()
         return text.toIntOrNull() ?: -1
+    }
+
+    private suspend fun resolvePrivilegedBackendCached(): NativeFileBackend {
+        cachedPrivilegedBackend?.let { return it }
+        return resolvePrivilegedBackend().also { cachedPrivilegedBackend = it }
     }
 
     private suspend fun resolvePrivilegedBackend(): NativeFileBackend {
@@ -485,11 +622,12 @@ actual object TweakDaemon {
         attempts: Int,
         delayMs: Long,
     ): Boolean {
+        if (condition()) return true
         repeat(attempts) {
-            if (condition()) return true
             delay(delayMs.milliseconds)
+            if (condition()) return true
         }
-        return condition()
+        return false
     }
 
     private fun String.shellQuote(): String = "'${replace("'", "'\\''")}'"
