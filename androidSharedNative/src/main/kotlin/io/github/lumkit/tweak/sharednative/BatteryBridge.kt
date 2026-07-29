@@ -73,7 +73,38 @@ object BatteryBridge {
             }
         }
 
+        readBatteryPropertiesCurrentNow()?.let { return it }
+
         return Int.MIN_VALUE
+    }
+
+    /**
+     * 对齐 BatteryRecorder [DumpsysSampler]：`IBatteryPropertiesRegistrar` 的 CURRENT_NOW（µA）。
+     */
+    private fun readBatteryPropertiesCurrentNow(): Int? {
+        return runCatching {
+            val sm = Class.forName("android.os.ServiceManager")
+            val getService = sm.getMethod("getService", String::class.java)
+            val binder = getService.invoke(null, "batteryproperties") as? android.os.IBinder
+                ?: return@runCatching null
+            val registrar = Class.forName("android.os.IBatteryPropertiesRegistrar\$Stub")
+                .getMethod("asInterface", android.os.IBinder::class.java)
+                .invoke(null, binder) ?: return@runCatching null
+            val prop = Class.forName("android.os.BatteryProperty").getConstructor().newInstance()
+            val getProperty = registrar.javaClass.methods.firstOrNull {
+                it.name == "getProperty" && it.parameterTypes.size == 2
+            } ?: return@runCatching null
+            getProperty.invoke(
+                registrar,
+                BatteryManager.BATTERY_PROPERTY_CURRENT_NOW,
+                prop,
+            )
+            val getLong = prop.javaClass.methods.firstOrNull {
+                it.name == "getLong" && it.parameterTypes.isEmpty()
+            } ?: return@runCatching null
+            val ua = getLong.invoke(prop) as Long
+            if (ua == Long.MIN_VALUE) null else ua.toInt()
+        }.getOrNull()?.takeIf { it != 0 && it != Int.MIN_VALUE }
     }
 
     /**
@@ -158,5 +189,11 @@ object BatteryBridge {
     fun getStatus(): Int {
         return lastBatteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, Int.MIN_VALUE)
             ?: Int.MIN_VALUE
+    }
+
+    /** 是否插入电源（USB/AC/无线等）。 */
+    @JvmStatic
+    fun isPlugged(): Boolean {
+        return (lastBatteryStatus?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
     }
 }

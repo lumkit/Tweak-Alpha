@@ -11,6 +11,7 @@ import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.server.a11y.A11yWatchEngine
 import io.github.lumkit.tweak.server.battery.BatteryEngine
 import io.github.lumkit.tweak.server.fakecontext.FakeContext
+import io.github.lumkit.tweak.sharednative.BatteryBridge
 import io.github.lumkit.tweak.server.ipc.BinderDelivery
 import io.github.lumkit.tweak.server.ipc.TweakServerBinder
 import java.io.File
@@ -133,6 +134,8 @@ object TweakServerMain {
         }
 
         FakeContext.systemContext
+        runCatching { BatteryBridge.init(FakeContext.systemContext) }
+            .onFailure { logE("BatteryBridge.init failed: ${it.message}", it, TAG) }
         val daemonDir = File(DaemonPaths.WORK_ROOT, "daemon")
         if (!daemonDir.mkdirs() && !daemonDir.isDirectory) {
             error("cannot create daemon dir: ${daemonDir.absolutePath}")

@@ -9,6 +9,12 @@ internal actual object PlatformBatterySource {
         return value.toLong()
     }
 
+    actual fun getCurrentAverage(): Long? {
+        val value = BatteryBridge.getCurrentAverage()
+        if (value == Int.MIN_VALUE) return null
+        return value.toLong()
+    }
+
     actual fun getVoltage(): Int? {
         val value = BatteryBridge.getVoltage()
         if (value == Int.MIN_VALUE) return null

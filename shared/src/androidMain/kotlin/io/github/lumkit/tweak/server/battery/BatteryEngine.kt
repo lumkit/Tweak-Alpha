@@ -166,7 +166,7 @@ class BatteryEngine(
         fun createDefault(daemonDir: File): BatteryEngine {
             val conf = File(daemonDir, DaemonPaths.BATTERY_RECORD_CONF_NAME).absolutePath
             val logs = File(daemonDir, DaemonPaths.BATTERY_LOGS_DIR_NAME)
-            val sampler = SysfsBatterySampler.tryCreate() ?: BinderBatterySampler()
+            val sampler = AppProcessAlignedBatterySampler()
             logD("sampler=${sampler::class.java.simpleName}", TAG)
             return BatteryEngine(conf, logs, sampler)
         }
