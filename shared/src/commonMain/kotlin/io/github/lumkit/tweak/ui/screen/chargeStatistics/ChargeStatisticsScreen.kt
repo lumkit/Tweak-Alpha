@@ -51,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
 import com.kyant.shapes.copy
+import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.component.AlertDialog
 import io.github.lumkit.tweak.common.component.LineChartAxisType
 import io.github.lumkit.tweak.common.component.LineChartData
@@ -59,7 +60,6 @@ import io.github.lumkit.tweak.common.component.LintCurveChart
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.SmoothLineChart
 import io.github.lumkit.tweak.common.component.TopBar
-import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.utils.formatCurrent
 import io.github.lumkit.tweak.common.utils.formatElapsedTime
@@ -132,9 +132,9 @@ import tweak_alpha.shared.generated.resources.text_charge_statistics_description
 import tweak_alpha.shared.generated.resources.text_dialog_confirm
 import tweak_alpha.shared.generated.resources.text_dialog_delete_charge_history_notes
 import tweak_alpha.shared.generated.resources.text_dialog_tip
-import tweak_alpha.shared.generated.resources.text_native_daemon_loading
 import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_go_back
+import tweak_alpha.shared.generated.resources.text_native_daemon_loading
 
 internal val ChargeStatisticsProvider = object : FeatureProvider {
     override val feature: Feature
@@ -174,6 +174,10 @@ fun ChargeStatisticsScreen(
         Watch(ChargeStatisticsViewModel.NATIVE_DAEMON_ENABLE_LOAD_ID) {
             nativeDaemonEnabling = it is BaseViewModel.LoadState.Loading
         }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.ensureNativeDaemonOnEnter()
     }
 
     AlertDialog(
@@ -788,11 +792,7 @@ private fun ActionHistory(
     }
 
     IconButton(
-        onClick = {
-            viewModel.tryOpenChargeHistory {
-                showSheet = true
-            }
-        },
+        onClick = { showSheet = true },
     ) {
         Icon(
             painter = painterResource(Res.drawable.ic_history),

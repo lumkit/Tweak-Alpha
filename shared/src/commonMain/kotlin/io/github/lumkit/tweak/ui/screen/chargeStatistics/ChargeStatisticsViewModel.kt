@@ -5,6 +5,8 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.component.ChartState
 import io.github.lumkit.tweak.common.component.LintCurveChartState
 import io.github.lumkit.tweak.common.component.bounds
+import io.github.lumkit.tweak.common.daemon.NativeDaemonController
+import io.github.lumkit.tweak.common.daemon.TweakDaemon
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.database.battery.BatteryPowerAggregate
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogSync
@@ -12,8 +14,6 @@ import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogWatcher
 import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
-import io.github.lumkit.tweak.common.daemon.NativeDaemonController
-import io.github.lumkit.tweak.common.daemon.TweakDaemon
 import io.github.lumkit.tweak.common.utils.BatterySnapshot
 import io.github.lumkit.tweak.common.utils.BatteryUtils
 import kotlinx.coroutines.Dispatchers
@@ -326,23 +326,15 @@ class ChargeStatisticsViewModel : BaseViewModel() {
 
     private var historyObserveJob: Job? = null
 
-    private var pendingChargeHistoryOpen: (() -> Unit)? = null
-
-    fun tryOpenChargeHistory(onAllowed: () -> Unit) {
+    /** 进入充电统计页时检测采样进程；未运行则弹出开启提示。 */
+    fun ensureNativeDaemonOnEnter() {
+        if (_chargeHistoryNativeDaemonPrompt.value != null) return
         viewModelScope.launch {
-            val running = isBatterySamplerRunning()
-            if (running) {
-                _chargeHistoryNativeDaemonPrompt.value = false
-                onAllowed()
-            } else {
-                pendingChargeHistoryOpen = onAllowed
-                _chargeHistoryNativeDaemonPrompt.value = true
-            }
+            _chargeHistoryNativeDaemonPrompt.value = !isBatterySamplerRunning()
         }
     }
 
     fun dismissChargeHistoryNativeDaemonPrompt() {
-        pendingChargeHistoryOpen = null
         _chargeHistoryNativeDaemonPrompt.value = false
     }
 
@@ -351,8 +343,6 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         NativeDaemonController.setEnabled(true)
         if (isBatterySamplerRunning()) {
             _chargeHistoryNativeDaemonPrompt.value = false
-            pendingChargeHistoryOpen?.invoke()
-            pendingChargeHistoryOpen = null
             success()
         } else {
             failure(IllegalStateException("native daemon not running"))
