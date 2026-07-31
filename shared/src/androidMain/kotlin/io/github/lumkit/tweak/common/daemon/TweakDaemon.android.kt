@@ -65,6 +65,13 @@ actual object TweakDaemon {
                 logD("install fast path", TAG)
                 return@runCatching true
             }
+            // 产物过期/残缺时先停进程并清空工作区（保留 battery_logs），
+            // 避免 Shizuku 无法完整覆写 Root/旧权限留下的 server.apk 等文件。
+            if (!quickArtifactsReady(paths)) {
+                stopRunningServerForReinstall(paths)
+                clearDaemonArtifactsPreservingLogs(paths)
+                installFastPathKey = null
+            }
             if (!daemonDirsLookReady(paths)) {
                 ensureDaemonDir(paths)
             } else {
@@ -272,6 +279,47 @@ actual object TweakDaemon {
             workRoot = paths.workRoot,
             mode = paths.dirMode,
         )
+    }
+
+    /**
+     * 清空 daemon 工作区安装产物，**保留** [DaemonPaths.BATTERY_LOGS_DIR_NAME] 采样记录。
+     * 用于重装前规避「无法覆写旧文件」导致的 server.apk 长度校验失败。
+     */
+    private suspend fun clearDaemonArtifactsPreservingLogs(paths: DaemonPaths.Resolved) {
+        val preserve = DaemonPaths.BATTERY_LOGS_DIR_NAME
+        logD("clear daemon artifacts, preserve=$preserve dir=${paths.dir}", TAG)
+
+        val localDir = File(paths.dir)
+        if (localDir.isDirectory) {
+            localDir.listFiles()?.forEach { child ->
+                if (child.name == preserve) return@forEach
+                runCatching {
+                    if (child.isDirectory) child.deleteRecursively() else child.delete()
+                }
+            }
+        }
+
+        // 特权壳再清一遍（覆盖 App 无权限删除的 root/shell 属主文件）
+        ReusableShells.execSync(
+            "d=${paths.dir.shellQuote()}; " +
+                "preserve=${preserve.shellQuote()}; " +
+                "if [ -d \"\$d\" ]; then " +
+                "for f in \"\$d\"/* \"\$d\"/.[!.]* \"\$d\"/..?*; do " +
+                "[ -e \"\$f\" ] || continue; " +
+                "b=\$(basename \"\$f\"); " +
+                "[ \"\$b\" = \"\$preserve\" ] && continue; " +
+                "rm -rf \"\$f\"; " +
+                "done; " +
+                "fi",
+        )
+
+        val listed = Files.list(paths.dir).getOrNull().orEmpty()
+        for (name in listed) {
+            val base = name.substringAfterLast('/').substringAfterLast('\\')
+            if (base.isEmpty() || base == preserve || base == "." || base == "..") continue
+            val path = if (name.startsWith(paths.dir)) name else "${paths.dir}/$base"
+            runCatching { Files.delete(path, recursive = true) }
+        }
     }
 
     private suspend fun daemonDirsLookReady(paths: DaemonPaths.Resolved): Boolean {
@@ -492,7 +540,11 @@ actual object TweakDaemon {
         )
         // 旧 app_process 仍映射旧 dex：换 server.apk 前必须停 Daemon
         stopRunningServerForReinstall(paths)
-        // 优先硬链（同分区瞬时完成）；失败再 cp 一次
+        // 先删目标再链/拷，避免 Shizuku 对残缺旧文件 truncate/覆写失败
+        runCatching { File(paths.serverApk).delete() }
+        runCatching { File(paths.serverApkStamp).delete() }
+        runCatching { Files.delete(paths.serverApk) }
+        runCatching { Files.delete(paths.serverApkStamp) }
         val sync = ReusableShells.execSync(
             "rm -f ${paths.serverApk.shellQuote()} ${paths.serverApkStamp.shellQuote()}; " +
                 "ln ${stamp.sourceDir.shellQuote()} ${paths.serverApk.shellQuote()} 2>/dev/null || " +
