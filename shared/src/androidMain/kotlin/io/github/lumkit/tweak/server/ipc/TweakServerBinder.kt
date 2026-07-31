@@ -25,9 +25,13 @@ class TweakServerBinder(
     @Volatile
     private var stopRequested = false
 
-    override fun ping(): String = "PONG"
+    override fun ping(): String {
+        check(!stopRequested) { "tweak_server stopping" }
+        return "PONG"
+    }
 
     override fun status(): String {
+        check(!stopRequested) { "tweak_server stopping" }
         val extra = statusExtra().trim()
         return buildString {
             append("OK")
@@ -62,6 +66,7 @@ class TweakServerBinder(
     }
 
     override fun reloadConfig() {
+        check(!stopRequested) { "tweak_server stopping" }
         onReload()
     }
 

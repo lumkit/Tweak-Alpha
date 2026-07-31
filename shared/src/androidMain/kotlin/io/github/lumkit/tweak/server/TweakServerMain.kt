@@ -175,6 +175,7 @@ object TweakServerMain {
                 if (!embedded) {
                     exitProcess(0)
                 }
+                // embedded：不杀 file_service 进程；Binder 侧 stopRequested 后 ping/status 会失败
             },
             onReload = {
                 batteryEngine.reloadConfig()

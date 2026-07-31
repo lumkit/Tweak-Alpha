@@ -176,6 +176,7 @@ actual object TweakDaemon {
     actual suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val paths = DaemonPaths.resolve()
+            val hadStandalone = standaloneServerAlive(paths)
             // 优先 Binder 自退出：Root 拉起的 tweak_server 在切到 Shizuku 后，shell kill 常无效
             val svc = TweakServerConnection.service
             val binderStopSent = if (svc != null) {
@@ -193,11 +194,21 @@ actual object TweakDaemon {
 
             runCatching { Files.stopTweakServerEmbedded() }
 
+            // embedded：停引擎后进程仍在，但 binder ping 应变为失败；尽快清本地连接
             var exited = waitUntil(
-                condition = { !isRunningInternal(paths) && !pingInternal() },
+                condition = { !pingInternal() && !standaloneServerAlive(paths) },
                 attempts = if (binderStopSent) 40 else 5,
                 delayMs = 50,
             )
+
+            if (!exited && binderStopSent && !hadStandalone && !standaloneServerAlive(paths)) {
+                // 仅嵌入式：无独立 tweak_server，Binder 已请求停止 → 清连接即视为成功
+                TweakServerConnection.clear()
+                if (!pingInternal()) {
+                    logD("embedded stop accepted after binder stop", TAG)
+                    exited = true
+                }
+            }
 
             if (!exited) {
                 logD("daemon still alive after binder/embedded stop, try shell kill fallback", TAG)
@@ -210,7 +221,7 @@ actual object TweakDaemon {
                         "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi",
                 )
                 exited = waitUntil(
-                    condition = { !isRunningInternal(paths) && !pingInternal() },
+                    condition = { !pingInternal() && !standaloneServerAlive(paths) },
                     attempts = 20,
                     delayMs = 100,
                 )
@@ -218,8 +229,17 @@ actual object TweakDaemon {
 
             TweakServerConnection.clear()
             Files.delete(paths.serverPid)
+            // 清连接后再确认一次：embedded 场景下本地无 binder 即算停干净
+            if (!exited && !standaloneServerAlive(paths) && !pingInternal()) {
+                exited = true
+            }
             if (!exited) {
-                logE("stop incomplete: tweak_server may still be running (e.g. Root daemon under Shizuku)", null, TAG)
+                logE(
+                    "stop incomplete: standalone tweak_server may still be running " +
+                        "(e.g. Root daemon under Shizuku)",
+                    null,
+                    TAG,
+                )
             }
             exited
         }.onFailure {
