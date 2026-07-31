@@ -7,53 +7,75 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * 特权（Root / Shizuku）校验通过后的统一初始化入口。
  * 后续依赖特权的初始化逻辑都放在这里。
  *
- * 使用 [NonCancellable]：Splash 跳转 Main 时 composition / LaunchedEffect 会被取消，
- * 不能让 daemon 安装启动跟着被掐断。
+ * Splash 只等待轻量步骤（AppsHelper.init）；Daemon / toolkit / 无障碍启用
+ * 在独立 [bgScope] + [NonCancellable] 中执行，避免 shell 卡住或重装 server.apk
+ * 时阻塞进首页。跳转 Main 后 composition 取消也不会掐断后台安装。
  */
 object PrivilegedAppInitializer {
 
     private const val TAG = "PrivilegedAppInitializer"
 
+    /** Daemon / toolkit 安装在极端机型上可能很慢；超时后交由无障碍 connected 等路径重试 */
+    private val heavyBootstrapTimeout = 90.seconds
+
     private val mutex = Mutex()
     private var appsReady = false
-    private var daemonReady = false
-    private var toolkitReady = false
+    private var heavyBootstrapScheduled = false
 
-    /** 电池日志同步不阻塞启动；独立 Supervisor 避免被 Splash 取消 */
+    /** 电池日志同步与 heavy bootstrap 均不阻塞启动 */
     private val bgScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * 尽快返回：仅保证 AppsHelper 已注册；其余在后台跑。
+     */
     suspend fun onPrivilegeReady() = withContext(NonCancellable + Dispatchers.IO) {
         mutex.withLock {
             if (!appsReady) {
                 AppsHelper.init()
                 appsReady = true
             }
-            coroutineScope {
-                val toolkitJob = async {
-                    if (!toolkitReady) {
-                        toolkitReady = bootstrapToolkit()
-                    }
+            if (!heavyBootstrapScheduled) {
+                heavyBootstrapScheduled = true
+                bgScope.launch(NonCancellable) {
+                    runHeavyBootstrap()
                 }
-                val daemonJob = async {
-                    if (!daemonReady) {
-                        daemonReady = bootstrapDaemon()
-                    }
-                }
-                toolkitJob.await()
-                daemonJob.await()
             }
             scheduleBatteryLogSync()
+        }
+    }
+
+    private suspend fun runHeavyBootstrap() {
+        try {
+            withTimeout(heavyBootstrapTimeout) {
+                coroutineScope {
+                    val toolkitJob = async { bootstrapToolkit() }
+                    val daemonJob = async { bootstrapDaemon() }
+                    val a11yJob = async { bootstrapAccessibility() }
+                    toolkitJob.await()
+                    daemonJob.await()
+                    a11yJob.await()
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            logE("privilege heavy bootstrap timeout after $heavyBootstrapTimeout", e, TAG)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logE("privilege heavy bootstrap failed: ${e.message}", e, TAG)
         }
     }
 
@@ -99,6 +121,19 @@ object PrivilegedAppInitializer {
             throw e
         } catch (e: Exception) {
             logE("daemon bootstrap failed: ${e.message}", e, TAG)
+            false
+        }
+    }
+
+    private suspend fun bootstrapAccessibility(): Boolean {
+        return try {
+            val ok = ensureAccessibilityServiceEnabled()
+            logD("ensureAccessibilityServiceEnabled => $ok", TAG)
+            ok
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logE("accessibility bootstrap failed: ${e.message}", e, TAG)
             false
         }
     }

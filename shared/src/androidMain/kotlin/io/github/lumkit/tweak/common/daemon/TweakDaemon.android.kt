@@ -9,6 +9,7 @@ import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.NativeFileBackend
 import io.github.lumkit.tweak.common.utils.NativeFileResult
 import io.github.lumkit.tweak.common.utils.PrivilegedWorkDir
+import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
@@ -25,11 +26,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 private const val TAG = "TweakDaemon"
 private const val STARTER_SO_NAME = DaemonPaths.STARTER_BIN_NAME
@@ -970,7 +973,11 @@ actual object TweakDaemon {
     }
 
     private suspend fun resolvePrivilegedBackend(): NativeFileBackend {
-        val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        val runtimeMode = GlobalViewModel.runtimeModeState.value
+            ?: withTimeoutOrNull(5.seconds) {
+                GlobalViewModel.runtimeModeState.filterNotNull().first()
+            }
+            ?: TweakDataStore.runtimeModeFlow().first()
         val backend = runtimeMode.asNativeFileBackend()
         require(backend != NativeFileBackend.User) {
             "当前运行模式不支持安装 starter"

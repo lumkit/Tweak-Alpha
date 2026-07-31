@@ -6,6 +6,8 @@ import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.asNativeFileBackend
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * 统一的 Native 文件访问入口。
@@ -25,7 +27,11 @@ import kotlinx.coroutines.flow.first
 object Files {
 
     private suspend fun resolveBackend(): NativeFileBackend {
-        val mode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        val mode = GlobalViewModel.runtimeModeState.value
+            ?: withTimeoutOrNull(5.seconds) {
+                GlobalViewModel.runtimeModeState.filterNotNull().first()
+            }
+            ?: TweakDataStore.runtimeModeFlow().first()
         return mode.asNativeFileBackend()
     }
 

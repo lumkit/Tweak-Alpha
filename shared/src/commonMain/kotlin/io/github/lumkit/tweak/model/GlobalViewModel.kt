@@ -19,11 +19,15 @@ object GlobalViewModel: BaseViewModel() {
      */
     fun create(){}
 
+    /**
+     * Eagerly：Daemon / Files / Shell 等路径会 [filterNotNull].first()，
+     * WhileSubscribed 在无收集者时可能长期停在 null，导致 Splash/Daemon 概率性永久挂起。
+     */
     val runtimeModeState = TweakDataStore.runtimeModeFlow()
         .distinctUntilChanged()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = null
         )
 

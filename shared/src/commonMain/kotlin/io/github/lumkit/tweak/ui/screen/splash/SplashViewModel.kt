@@ -5,7 +5,6 @@ import io.github.lumkit.tweak.common.utils.LibSuX
 import io.github.lumkit.tweak.common.utils.PrivilegedAppInitializer
 import io.github.lumkit.tweak.common.utils.ShizukuX
 import io.github.lumkit.tweak.common.utils.TweakDataStore
-import io.github.lumkit.tweak.common.utils.ensureAccessibilityServiceEnabled
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +12,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 class SplashViewModel : BaseViewModel() {
@@ -36,8 +36,10 @@ class SplashViewModel : BaseViewModel() {
     suspend fun checkRuntime(
         block: () -> Unit
     ) {
+        // StateFlow 可能仍为 null（Eagerly 首次读盘前）；回退 DataStore，避免静默 return 卡在 Splash
         val mode = runtimeModeState.value
-        if (mode == null || mode == RuntimeMode.Unknow) return
+            ?: withContext(Dispatchers.IO) { TweakDataStore.runtimeModeFlow().first() }
+        if (mode == RuntimeMode.Unknow) return
 
         withCheckLoading {
             when (mode) {
@@ -104,11 +106,11 @@ class SplashViewModel : BaseViewModel() {
 
     /**
      * 特权校验通过后调用（Splash 自动检测与手动选模式共用）。
-     * 与 Splash composition 生命周期解耦，避免跳转 Main 时被取消。
+     * [PrivilegedAppInitializer] 仅同步完成轻量 init；Daemon / toolkit / 无障碍在后台跑，
+     * 避免卡住进首页；后台任务使用 NonCancellable，跳转 Main 时不会被掐断。
      */
     suspend fun onPrivilegeReady() = withContext(NonCancellable + Dispatchers.IO) {
         PrivilegedAppInitializer.onPrivilegeReady()
-        ensureAccessibilityServiceEnabled()
     }
 
     private suspend fun <T> withCheckLoading(block: suspend () -> T): T {
