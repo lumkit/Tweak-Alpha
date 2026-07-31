@@ -1,5 +1,9 @@
 package io.github.lumkit.tweak.common.daemon
 
+import io.github.lumkit.tweak.common.daemon.TweakDaemon.install
+import io.github.lumkit.tweak.common.daemon.TweakDaemon.stop
+
+
 /**
  * 特权常驻进程控制面（C2：`libtweak_starter.so` → `app_process` TweakServer）。
  *
@@ -9,6 +13,12 @@ package io.github.lumkit.tweak.common.daemon
 expect object TweakDaemon {
     /** 确保工作目录可写，并确认 starter 存在 */
     suspend fun install(): Boolean
+
+    /**
+     * 工作区 starter / server.apk 是否与当前 App 包内产物不一致。
+     * 为 true 时应先 [stop] 再 [install]，否则已在跑的 app_process 仍会用旧 dex。
+     */
+    suspend fun artifactsOutdated(): Boolean
 
     /** 后台启动 TweakServer；已能 ping 则视为成功 */
     suspend fun start(): Boolean

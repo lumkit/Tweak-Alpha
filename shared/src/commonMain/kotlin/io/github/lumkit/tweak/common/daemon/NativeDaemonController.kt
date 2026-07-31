@@ -36,6 +36,21 @@ object NativeDaemonController {
 
     suspend fun ensureRunning(): Boolean = withContext(Dispatchers.IO) {
         try {
+            // App 升级后工作区 starter / server.apk 与包内不一致：停旧 Daemon 再重装 app_process 产物
+            if (TweakDaemon.artifactsOutdated()) {
+                logD("daemon artifacts outdated, stop + reinstall before ensureRunning", TAG)
+                TweakDaemon.stop()
+                if (!TweakDaemon.install()) {
+                    logE("reinstall outdated artifacts failed", null, TAG)
+                    return@withContext false
+                }
+                syncDaemonConfFromDataStore()
+                val started = TweakDaemon.start()
+                TweakDaemon.reloadConfig()
+                logD("ensureRunning after reinstall => $started", TAG)
+                return@withContext started
+            }
+
             if (TweakDaemon.ping()) {
                 syncDaemonConfFromDataStore()
                 val status = TweakDaemon.status()

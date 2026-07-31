@@ -2,6 +2,8 @@ package io.github.lumkit.tweak.common.daemon
 
 import android.os.ParcelFileDescriptor
 import io.github.lumkit.tweak.application
+import io.github.lumkit.tweak.common.daemon.TweakDaemon.install
+import io.github.lumkit.tweak.common.daemon.TweakDaemon.start
 import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.NativeFileBackend
@@ -81,6 +83,13 @@ actual object TweakDaemon {
         }.getOrDefault(false)
     }
 
+    actual suspend fun artifactsOutdated(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val paths = DaemonPaths.resolve()
+            !quickArtifactsReady(paths)
+        }.getOrDefault(true)
+    }
+
     actual suspend fun start(): Boolean = withContext(Dispatchers.IO) {
         startMutex.withLock {
             startLocked()
@@ -90,6 +99,14 @@ actual object TweakDaemon {
     private suspend fun startLocked(): Boolean =
         runCatching {
             val paths = DaemonPaths.resolve()
+
+            // App 升级后工作区 starter/server.apk 可能过期：必须先停再装，禁止沿用旧 app_process
+            if (!quickArtifactsReady(paths)) {
+                logD("artifacts outdated before start, stop + reinstall", TAG)
+                installFastPathKey = null
+                stopRunningServerForReinstall(paths)
+                if (!install()) return@runCatching false
+            }
 
             if (pingInternal()) return@runCatching true
 
@@ -351,6 +368,34 @@ actual object TweakDaemon {
         runCatching { Files.delete(binPath) }
     }
 
+    /**
+     * 重装产物前停掉独立 tweak_server（嵌入 file_service 用 stopEmbedded，不杀父进程）。
+     */
+    private suspend fun stopRunningServerForReinstall(paths: DaemonPaths.Resolved) {
+        val alive = pingInternal() || standaloneServerAlive(paths)
+        if (!alive) {
+            runCatching { Files.stopTweakServerEmbedded() }
+            TweakServerConnection.clear()
+            return
+        }
+        logD("stopping running daemon before artifact reinstall", TAG)
+        runCatching {
+            TweakServerConnection.service?.stop()
+        }
+        runCatching { Files.stopTweakServerEmbedded() }
+        val pid = readServerPid(paths)
+        if (pid > 0 && !isFileServicePid(pid)) {
+            ReusableShells.execSync("kill -TERM $pid 2>/dev/null; kill -KILL $pid 2>/dev/null")
+        }
+        ReusableShells.execSync(
+            "pids=\$(pidof tweak_server 2>/dev/null); " +
+                "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi",
+        )
+        waitUntil({ !standaloneServerAlive(paths) && !pingInternal() }, attempts = 30, delayMs = 50)
+        TweakServerConnection.clear()
+        Files.delete(paths.serverPid)
+    }
+
     private suspend fun ensureStarterInstalled(paths: DaemonPaths.Resolved) {
         val packaged = resolvePackagedStarter()
             ?: error("$STARTER_SO_NAME missing in nativeLibraryDir (APK 未打包 starter)")
@@ -372,7 +417,10 @@ actual object TweakDaemon {
                 return
             }
             logD("starter outdated/corrupt actual=$actualSha, reinstall", TAG)
+            // 二进制被替换前先停进程，避免仍在执行旧 starter / 映射旧 dex
+            stopRunningServerForReinstall(paths)
             deleteBinary(paths.starterBin)
+            deleteBinary(starterShaSidecarPath(paths))
         }
 
         copyStarterToWorkDir(paths, File(packaged))
@@ -416,6 +464,8 @@ actual object TweakDaemon {
             "server.apk cache miss oldStamp=${cachedStamp.take(80)} newStamp=$stampText, syncing",
             TAG,
         )
+        // 旧 app_process 仍映射旧 dex：换 server.apk 前必须停 Daemon
+        stopRunningServerForReinstall(paths)
         // 优先硬链（同分区瞬时完成）；失败再 cp 一次
         val sync = ReusableShells.execSync(
             "rm -f ${paths.serverApk.shellQuote()} ${paths.serverApkStamp.shellQuote()}; " +

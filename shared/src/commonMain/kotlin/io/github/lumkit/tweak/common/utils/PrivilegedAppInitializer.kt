@@ -87,6 +87,8 @@ object PrivilegedAppInitializer {
 
     /**
      * @return true 表示已处理（含用户未启用时的跳过，或启动成功/已在跑）
+     *
+     * 产物过期时由 [NativeDaemonController.ensureRunning] 停旧进程并重装 starter/server.apk。
      */
     private suspend fun bootstrapDaemon(): Boolean {
         return try {
