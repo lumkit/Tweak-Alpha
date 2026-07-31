@@ -44,11 +44,28 @@ object BatteryBridge {
                 }
             }, filter)
         }
-        lastBatteryStatus = runCatching {
-            appContext?.registerReceiver(null, filter)
-        }.getOrNull()
-
+        refreshStickyBatteryStatus()
         initRegistrar()
+    }
+
+    /** FakeContext / app_process 下粘性广播可能首次失败，读 extras 前再试一次。 */
+    private fun refreshStickyBatteryStatus() {
+        val ctx = appContext ?: return
+        val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        val sticky = runCatching {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            ctx.registerReceiver(null, filter)
+        }.getOrNull()
+        if (sticky != null) {
+            lastBatteryStatus = sticky
+        }
+    }
+
+    private fun batteryStatusIntent(): Intent? {
+        if (lastBatteryStatus == null) {
+            refreshStickyBatteryStatus()
+        }
+        return lastBatteryStatus
     }
 
     private fun initRegistrar() {
@@ -96,7 +113,10 @@ object BatteryBridge {
         readRegistrarLong(BatteryManager.BATTERY_PROPERTY_CAPACITY)?.let {
             return it.toInt().coerceIn(0, 100)
         }
-        return batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val fromBm = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        if (fromBm != null && fromBm in 0..100) return fromBm
+        return batteryStatusIntent()
+            ?.getIntExtra(BatteryManager.EXTRA_LEVEL, Int.MIN_VALUE)
             ?: Int.MIN_VALUE
     }
 
@@ -108,19 +128,19 @@ object BatteryBridge {
 
     @JvmStatic
     fun getVoltage(): Int {
-        return lastBatteryStatus?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, Int.MIN_VALUE)
+        return batteryStatusIntent()?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, Int.MIN_VALUE)
             ?: Int.MIN_VALUE
     }
 
     @JvmStatic
     fun getTemperature(): Int {
-        return lastBatteryStatus?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+        return batteryStatusIntent()?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
             ?: Int.MIN_VALUE
     }
 
     @JvmStatic
     fun getHealth(): Int {
-        return lastBatteryStatus?.getIntExtra(BatteryManager.EXTRA_HEALTH, Int.MIN_VALUE)
+        return batteryStatusIntent()?.getIntExtra(BatteryManager.EXTRA_HEALTH, Int.MIN_VALUE)
             ?: Int.MIN_VALUE
     }
 
@@ -130,13 +150,13 @@ object BatteryBridge {
         readRegistrarLong(BatteryManager.BATTERY_PROPERTY_STATUS)?.let {
             return it.toInt()
         }
-        return lastBatteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, Int.MIN_VALUE)
+        return batteryStatusIntent()?.getIntExtra(BatteryManager.EXTRA_STATUS, Int.MIN_VALUE)
             ?: Int.MIN_VALUE
     }
 
     @JvmStatic
     fun isPlugged(): Boolean {
-        return (lastBatteryStatus?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+        return (batteryStatusIntent()?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
     }
 
     private fun readRegistrarLong(propertyId: Int): Long? {

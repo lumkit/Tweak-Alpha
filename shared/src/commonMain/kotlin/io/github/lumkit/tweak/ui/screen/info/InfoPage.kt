@@ -875,26 +875,38 @@ private fun FlowRowScope.BatteryContent(
                 Row {
                     Text(
                         text = batteryModel?.levelText ?: "N/A",
-                        style = MiuixTheme.textStyles.footnote2,
+                        style = MiuixTheme.textStyles.footnote2
+                            .copy(
+                                fontSize = 8.sp
+                            ),
                         color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                     )
                     Spacer(modifier = Modifier.weight(1f).defaultMinSize(minWidth = 4.dp))
                     Text(
                         text = batteryModel?.currentText ?: "N/A",
-                        style = MiuixTheme.textStyles.footnote2,
+                        style = MiuixTheme.textStyles.footnote2
+                            .copy(
+                                fontSize = 8.sp
+                            ),
                         color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                     )
                 }
                 Row {
                     Text(
                         text = batteryModel?.temperatureText ?: "N/A",
-                        style = MiuixTheme.textStyles.footnote2,
+                        style = MiuixTheme.textStyles.footnote2
+                            .copy(
+                                fontSize = 8.sp
+                            ),
                         color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                     )
                     Spacer(modifier = Modifier.weight(1f).defaultMinSize(minWidth = 4.dp))
                     Text(
                         text = batteryModel?.powerText ?: "N/A",
-                        style = MiuixTheme.textStyles.footnote2,
+                        style = MiuixTheme.textStyles.footnote2
+                            .copy(
+                                fontSize = 8.sp
+                            ),
                         color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                     )
                 }
@@ -946,19 +958,28 @@ private fun FlowRowScope.StorageContent(
                 Text(
                     text = stringResource(Res.string.text_storage_free)
                         .format(storageModel?.freeText ?: "N/A"),
-                    style = MiuixTheme.textStyles.footnote2,
+                    style = MiuixTheme.textStyles.footnote2
+                        .copy(
+                            fontSize = 8.sp
+                        ),
                     color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                 )
                 Text(
                     text = stringResource(Res.string.text_storage_total)
                         .format(storageModel?.totalText ?: "N/A"),
-                    style = MiuixTheme.textStyles.footnote2,
+                    style = MiuixTheme.textStyles.footnote2
+                        .copy(
+                            fontSize = 8.sp
+                        ),
                     color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                 )
                 Text(
                     text = stringResource(Res.string.text_storage_flash_type)
                         .format(storageModel?.flashType ?: "N/A"),
-                    style = MiuixTheme.textStyles.footnote2,
+                    style = MiuixTheme.textStyles.footnote2
+                        .copy(
+                            fontSize = 8.sp
+                        ),
                     color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                 )
             }

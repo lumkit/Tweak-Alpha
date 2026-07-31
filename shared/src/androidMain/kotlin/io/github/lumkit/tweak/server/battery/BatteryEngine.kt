@@ -80,9 +80,18 @@ class BatteryEngine(
                 val now = System.currentTimeMillis()
                 val sample = sampler.sample()
                 if (sample == null || !sample.hasValidLevel) {
+                    logD("sample skipped null_or_invalid_level", TAG)
                     sleepInterruptible(cfg.intervalMs.toLong())
                     continue
                 }
+                logD(
+                    "sample level=${sample.level}% " +
+                        "V=${fmtMv(sample.voltageMv)} " +
+                        "I=${fmtMa(sample.currentMa)} " +
+                        "T=${fmtTemp(sample.tempCenti)} " +
+                        "state=${sample.state} screen=${sample.screenOn}",
+                    TAG,
+                )
 
                 val newState = sample.state
                 if (active == null) {
@@ -174,6 +183,19 @@ class BatteryEngine(
 
     companion object {
         private const val TAG = "BatteryEngine"
+
+        private fun fmtMv(voltageMv: Int): String =
+            if (voltageMv == Int.MIN_VALUE) "n/a" else "${voltageMv}mV"
+
+        private fun fmtMa(currentMa: Int): String =
+            if (currentMa == Int.MIN_VALUE) "n/a" else "${currentMa}mA"
+
+        private fun fmtTemp(tempCenti: Short): String =
+            if (tempCenti == Short.MIN_VALUE) {
+                "n/a"
+            } else {
+                String.format("%.2fC", tempCenti / 100.0)
+            }
 
         fun createDefault(daemonDir: File): BatteryEngine {
             val conf = File(daemonDir, DaemonPaths.BATTERY_RECORD_CONF_NAME).absolutePath

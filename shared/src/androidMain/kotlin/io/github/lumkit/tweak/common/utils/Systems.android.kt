@@ -40,8 +40,20 @@ import kotlin.system.exitProcess
 
 actual fun isDebugBuild(): Boolean {
     // app_process / TweakServer 没有 Application，不能碰 lateinit application
+    runCatching {
+        return (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
+    // Daemon：通过系统 Context 查 App 是否 debuggable，否则 logD 全被吞掉
     return runCatching {
-        (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        val atClass = Class.forName("android.app.ActivityThread")
+        var thread = atClass.getMethod("currentActivityThread").invoke(null)
+        if (thread == null) {
+            thread = atClass.getMethod("systemMain").invoke(null)
+        }
+        val ctx = atClass.getMethod("getSystemContext").invoke(thread) as? Context
+            ?: return@runCatching false
+        val ai = ctx.packageManager.getApplicationInfo("io.github.lumkit.tweak", 0)
+        (ai.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     }.getOrDefault(false)
 }
 

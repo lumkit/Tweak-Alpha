@@ -16,6 +16,7 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleE
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import io.github.lumkit.tweak.common.utils.BatterySnapshot
 import io.github.lumkit.tweak.common.utils.BatteryUtils
+import io.github.lumkit.tweak.common.utils.logD
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -188,6 +189,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
             repository.observeActiveSession()
                 .distinctUntilChangedBy { session -> session?.id to session?.state }
                 .flatMapLatest { session ->
+                    logD("session = $session", "observeLiveActiveSession")
                     if (session == null) {
                         flowOf<LiveSessionUpdate?>(null)
                     } else {
@@ -201,6 +203,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                     }
                 }
                 .collect { update ->
+                    logD("update = $update", "observeLiveActiveSession")
                     withContext(Dispatchers.Main.immediate) {
                         _currentTime.value = Clock.System.now().toEpochMilliseconds()
                         if (update == null) {
