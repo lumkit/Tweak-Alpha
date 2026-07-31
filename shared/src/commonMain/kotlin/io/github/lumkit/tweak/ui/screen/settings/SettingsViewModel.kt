@@ -188,6 +188,9 @@ class SettingsViewModel : BaseViewModel() {
 
     fun setRuntimeMode(mode: RuntimeMode, after: (() -> Unit)? = null) {
         viewModelScope.launch {
+            // 切模式（尤其 Root→Shizuku）前先经 Binder 让旧守护进程自行退出；
+            // Shizuku shell 通常杀不掉 Root 拉起的 tweak_server。
+            runCatching { NativeDaemonController.stop() }
             TweakDataStore.setRuntimeMode(mode)
             after?.invoke()
         }

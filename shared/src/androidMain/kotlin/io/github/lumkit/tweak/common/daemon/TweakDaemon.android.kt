@@ -169,14 +169,32 @@ actual object TweakDaemon {
     actual suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val paths = DaemonPaths.resolve()
-            val stoppedByBinder = runCatching {
-                TweakServerConnection.service?.stop()
-                true
-            }.getOrDefault(false)
+            // 优先 Binder 自退出：Root 拉起的 tweak_server 在切到 Shizuku 后，shell kill 常无效
+            val svc = TweakServerConnection.service
+            val binderStopSent = if (svc != null) {
+                runCatching {
+                    svc.stop()
+                    logD("sent binder stop to tweak_server", TAG)
+                    true
+                }.onFailure {
+                    logE("binder stop failed: ${it.message}", it, TAG)
+                }.getOrDefault(false)
+            } else {
+                logD("no binder; cannot request self-stop", TAG)
+                false
+            }
+
             runCatching { Files.stopTweakServerEmbedded() }
-            if (!stoppedByBinder) {
+
+            var exited = waitUntil(
+                condition = { !isRunningInternal(paths) && !pingInternal() },
+                attempts = if (binderStopSent) 40 else 5,
+                delayMs = 50,
+            )
+
+            if (!exited) {
+                logD("daemon still alive after binder/embedded stop, try shell kill fallback", TAG)
                 val pid = readServerPid(paths)
-                // 嵌入模式下 pid 是 file_service，绝不能杀
                 if (pid > 0 && !isFileServicePid(pid)) {
                     ReusableShells.execSync("kill -TERM $pid 2>/dev/null; kill -KILL $pid 2>/dev/null")
                 }
@@ -184,11 +202,19 @@ actual object TweakDaemon {
                     "pids=\$(pidof tweak_server 2>/dev/null); " +
                         "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi",
                 )
+                exited = waitUntil(
+                    condition = { !isRunningInternal(paths) && !pingInternal() },
+                    attempts = 20,
+                    delayMs = 100,
+                )
             }
-            waitUntil({ !isRunningInternal(paths) && !pingInternal() }, attempts = 20, delayMs = 100)
+
             TweakServerConnection.clear()
             Files.delete(paths.serverPid)
-            true
+            if (!exited) {
+                logE("stop incomplete: tweak_server may still be running (e.g. Root daemon under Shizuku)", null, TAG)
+            }
+            exited
         }.onFailure {
             logE("stop failed: ${it.message}", it, TAG)
         }.getOrDefault(false)

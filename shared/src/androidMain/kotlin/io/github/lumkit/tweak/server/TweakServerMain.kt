@@ -162,10 +162,12 @@ object TweakServerMain {
         val binder = TweakServerBinder(
             version = VERSION,
             packageName = packageName,
+            mainHandler = mainHandler,
             statusExtra = {
                 "${batteryEngine.lastStatusLine} ${a11yEngine.lastStatusLine}"
             },
             onStop = {
+                logE("self-stop begin embedded=$embedded pid=${Process.myPid()}", null, TAG)
                 batteryEngine.stop()
                 a11yEngine.stop()
                 runCatching { pidFile.delete() }
