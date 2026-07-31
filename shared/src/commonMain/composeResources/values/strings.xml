@@ -407,4 +407,5 @@
     <string name="text_charge_history_native_daemon_required">采样进程未运行，需要先开启 Native Daemon 后才支持数据写入，是否开启？</string>
     <string name="text_charge_history_open_native_daemon">打开</string>
     <string name="text_dialog_delete_charge_history_notes">确定要删除选中的充电记录吗？将同时删除相关采样数据，删除后无法恢复。</string>
+    <string name="text_charge_history_empty">暂无充电记录</string>
 </resources>

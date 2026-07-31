@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.ui.screen.chargeStatistics
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -49,6 +51,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventInfo
@@ -120,6 +125,7 @@ import tweak_alpha.shared.generated.resources.text_charge_chart_mode_current
 import tweak_alpha.shared.generated.resources.text_charge_chart_mode_power
 import tweak_alpha.shared.generated.resources.text_charge_chart_power_time
 import tweak_alpha.shared.generated.resources.text_charge_chart_temperature_time
+import tweak_alpha.shared.generated.resources.text_charge_history_empty
 import tweak_alpha.shared.generated.resources.text_charge_history_native_daemon_required
 import tweak_alpha.shared.generated.resources.text_charge_history_open_native_daemon
 import tweak_alpha.shared.generated.resources.text_charge_history_title
@@ -175,6 +181,7 @@ fun ChargeStatisticsScreen(
     val backdrop = rememberLayerBackdropColor()
     val nativeDaemonPrompt by viewModel.chargeHistoryNativeDaemonPrompt.collectAsStateWithLifecycle()
     var nativeDaemonEnabling by remember { mutableStateOf(false) }
+    val chargeSample by viewModel.chartSamples.collectAsStateWithLifecycle()
 
     viewModel.LoadStateLaunchEffect {
         Watch(ChargeStatisticsViewModel.NATIVE_DAEMON_ENABLE_LOAD_ID) {
@@ -184,6 +191,17 @@ fun ChargeStatisticsScreen(
 
     LaunchedEffect(Unit) {
         viewModel.ensureNativeDaemonOnEnter()
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.ensureNativeDaemonOnEnter()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     AlertDialog(
@@ -261,14 +279,30 @@ fun ChargeStatisticsScreen(
                 item {
                     ChargeStateContent(viewModel)
                 }
-                item {
-                    ChargePowerTimeChart(viewModel)
-                }
-                item {
-                    ChargeLevelTimeChart(viewModel)
-                }
-                item {
-                    ChargeTemperatureTimeChart(viewModel)
+                if (chargeSample.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
+                                .size(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.text_charge_history_empty),
+                                style = MiuixTheme.textStyles.body2,
+                                color = MiuixTheme.colorScheme.onSurface.copy(.5f)
+                            )
+                        }
+                    }
+                } else {
+                    item {
+                        ChargePowerTimeChart( chargeSample)
+                    }
+                    item {
+                        ChargeLevelTimeChart(chargeSample)
+                    }
+                    item {
+                        ChargeTemperatureTimeChart(chargeSample)
+                    }
                 }
             }
         }
@@ -278,6 +312,7 @@ fun ChargeStatisticsScreen(
 @Composable
 private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
     val state = viewModel.chartState
+    val chargeHistory by viewModel.chartSamples.collectAsStateWithLifecycle()
     val chargeState by viewModel.chargeState.collectAsStateWithLifecycle()
     val currentPowerMw by viewModel.currentPowerMw.collectAsStateWithLifecycle()
     val currentMa by viewModel.currentMa.collectAsStateWithLifecycle()
@@ -377,45 +412,51 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.width(12.dp))
-
-        // session摘要
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+        AnimatedVisibility(
+            visible = chargeHistory.isNotEmpty()
         ) {
-            currentSessionSummary?.let { summary ->
-                val endedAt = if (summary.isCurrentChargingSession) currentTime else summary.endedAt
-                Text(
-                    text = buildChargeSessionTimeText(
-                        summary.startedAt,
-                        endedAt,
-                        summary.isCurrentChargingSession,
-                    ),
-                    style = MiuixTheme.textStyles.footnote2,
-                    color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = formatChargeSessionDuration(summary.startedAt, endedAt),
-                    style = MiuixTheme.textStyles.footnote2,
-                    color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = formatChargeLevelGain(summary.startLevel, summary.endLevel ?: summary.startLevel),
-                    style = MiuixTheme.textStyles.footnote2,
-                    color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = formatChargeEnergyGainWh(summary.energyGainUw),
-                    style = MiuixTheme.textStyles.footnote2,
-                    color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-                )
+            Column {
+                Spacer(modifier = Modifier.width(12.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // session摘要
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    currentSessionSummary?.let { summary ->
+                        val endedAt = if (summary.isCurrentChargingSession) currentTime else summary.endedAt
+                        Text(
+                            text = buildChargeSessionTimeText(
+                                summary.startedAt,
+                                endedAt,
+                                summary.isCurrentChargingSession,
+                            ),
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = formatChargeSessionDuration(summary.startedAt, endedAt),
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = formatChargeLevelGain(summary.startLevel, summary.endLevel ?: summary.startLevel),
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = formatChargeEnergyGainWh(summary.energyGainUw),
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                        )
+                    }
+                }
             }
         }
     }
@@ -453,8 +494,9 @@ private enum class ChargePowerChartMode {
 }
 
 @Composable
-private fun ChargePowerTimeChart(viewModel: ChargeStatisticsViewModel) {
-    val samples by viewModel.chartSamples.collectAsStateWithLifecycle()
+private fun ChargePowerTimeChart(
+    samples: List<ChargeStatisticsViewModel.ChargeChartSample>
+) {
     var mode by rememberSaveable { mutableStateOf(ChargePowerChartMode.Power) }
     var modePopupVisible by remember { mutableStateOf(false) }
     val primaryColor = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
@@ -551,8 +593,9 @@ private fun ChargePowerTimeChart(viewModel: ChargeStatisticsViewModel) {
 }
 
 @Composable
-private fun ChargeLevelTimeChart(viewModel: ChargeStatisticsViewModel) {
-    val samples by viewModel.chartSamples.collectAsStateWithLifecycle()
+private fun ChargeLevelTimeChart(
+    samples: List<ChargeStatisticsViewModel.ChargeChartSample>
+) {
     val primaryColor = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
     val title = stringResource(Res.string.text_charge_chart_level_time)
 
@@ -578,8 +621,9 @@ private fun ChargeLevelTimeChart(viewModel: ChargeStatisticsViewModel) {
 }
 
 @Composable
-private fun ChargeTemperatureTimeChart(viewModel: ChargeStatisticsViewModel) {
-    val samples by viewModel.chartSamples.collectAsStateWithLifecycle()
+private fun ChargeTemperatureTimeChart(
+    samples: List<ChargeStatisticsViewModel.ChargeChartSample>
+) {
     val primaryColor = MiuixTheme.colorScheme.primary.copy(alpha = .5f)
     val title = stringResource(Res.string.text_charge_chart_temperature_time)
 
@@ -894,7 +938,7 @@ private fun ActionHistory(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = "—",
+                            text = stringResource(Res.string.text_charge_history_empty),
                             style = MiuixTheme.textStyles.footnote2,
                             color = MiuixTheme.colorScheme.onSurface.copy(.31f),
                         )

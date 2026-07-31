@@ -16,6 +16,7 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleE
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import io.github.lumkit.tweak.common.utils.BatterySnapshot
 import io.github.lumkit.tweak.common.utils.BatteryUtils
+import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -329,11 +331,13 @@ class ChargeStatisticsViewModel : BaseViewModel() {
 
     private var historyObserveJob: Job? = null
 
-    /** 进入充电统计页时检测采样进程；未运行则弹出开启提示。 */
+    /**
+     * 进入/回到充电统计页时检测采样进程。
+     * 每次都重新探测：关闭 Daemon 后再进入必须能再次弹窗（不能缓存 false）。
+     */
     fun ensureNativeDaemonOnEnter() {
-        if (_chargeHistoryNativeDaemonPrompt.value != null) return
         viewModelScope.launch {
-            _chargeHistoryNativeDaemonPrompt.value = !isBatterySamplerRunning()
+            _chargeHistoryNativeDaemonPrompt.value = needsNativeDaemonPrompt()
         }
     }
 
@@ -344,7 +348,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
     fun enableNativeDaemonForChargeHistory() = suspendLaunch(id = NATIVE_DAEMON_ENABLE_LOAD_ID) {
         loading()
         NativeDaemonController.setEnabled(true)
-        if (isBatterySamplerRunning()) {
+        if (!needsNativeDaemonPrompt()) {
             _chargeHistoryNativeDaemonPrompt.value = false
             success()
         } else {
@@ -352,9 +356,19 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         }
     }
 
+    /**
+     * Release 下 stop 后 Binder 可能仍短暂可 ping；以 DataStore 开关为准，
+     * 再辅以进程存活，避免关 Daemon 后不弹窗。
+     */
+    private suspend fun needsNativeDaemonPrompt(): Boolean {
+        val enabled = TweakDataStore.nativeDaemonEnabledFlow().first()
+        if (!enabled) return true
+        return !isBatterySamplerRunning()
+    }
+
     private suspend fun isBatterySamplerRunning(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            TweakDaemon.isRunning() || TweakDaemon.ping()
+            TweakDaemon.ping() || TweakDaemon.isRunning()
         }.getOrDefault(false)
     }
 
