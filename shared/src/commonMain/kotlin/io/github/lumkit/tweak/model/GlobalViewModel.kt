@@ -3,8 +3,10 @@ package io.github.lumkit.tweak.model
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
+import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -89,6 +91,23 @@ object GlobalViewModel: BaseViewModel() {
     init {
         viewModelScope.launch {
             enabledFloatNavBar.collect {  }
+        }
+        // 进程启动即加载电流校准，并持续与 DataStore 同步
+        viewModelScope.launch {
+            TweakDataStore.refreshBatteryCurrentCalibration()
+            TweakDataStore.batteryDualCellFlow()
+                .combine(TweakDataStore.batteryCurrentScaleFlow()) { dual, scale ->
+                    dual to scale
+                }
+                .distinctUntilChanged()
+                .collect { (dual, scale) ->
+                    BatteryReadingNormalize.updateCalibration(
+                        BatteryReadingNormalize.CurrentCalibration(
+                            dualCell = dual,
+                            scale = scale,
+                        ),
+                    )
+                }
         }
     }
 }

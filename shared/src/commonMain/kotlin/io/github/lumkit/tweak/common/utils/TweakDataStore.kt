@@ -59,6 +59,10 @@ object TweakDataStore {
     private val processInfoUpdateTime = longPreferencesKey("process_info_update_time")
     // 电池记录采样间隔档位（×500ms，与面板刷新一致）
     private val batteryRecordSampleIntervalLevel = intPreferencesKey("battery_record_sample_interval_level")
+    // 双电芯测量：规范化后电流 ×2
+    private val batteryDualCell = booleanPreferencesKey("battery_dual_cell")
+    // 电流数量级缩放（默认 -1000：µA→mA）
+    private val batteryCurrentScale = longPreferencesKey("battery_current_scale")
     // 无障碍保活巡检间隔档位（×10s，默认 6 → 60s；无 UI，供 conf 写入）
     private val a11yWatchIntervalLevel = intPreferencesKey("a11y_watch_interval_level")
     // Native Daemon（TweakServer）开关
@@ -237,6 +241,50 @@ object TweakDataStore {
             }
         }
         BatteryRecordDaemonConfig.syncFromDataStore()
+    }
+
+    fun batteryDualCellFlow(): Flow<Boolean> = preferences.data.map {
+        it[batteryDualCell] ?: false
+    }
+
+    suspend fun setBatteryDualCell(enabled: Boolean) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[batteryDualCell] = enabled
+            }
+        }
+        refreshBatteryCurrentCalibration()
+        BatteryRecordDaemonConfig.syncFromDataStore()
+    }
+
+    fun batteryCurrentScaleFlow(): Flow<Long> = preferences.data.map {
+        BatteryReadingNormalize.coerceScale(
+            it[batteryCurrentScale] ?: BatteryReadingNormalize.DEFAULT_SCALE,
+        )
+    }
+
+    suspend fun setBatteryCurrentScale(scale: Long) {
+        val coerced = BatteryReadingNormalize.coerceScale(scale)
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[batteryCurrentScale] = coerced
+            }
+        }
+        refreshBatteryCurrentCalibration()
+        BatteryRecordDaemonConfig.syncFromDataStore()
+    }
+
+    /** 从 DataStore 当前值刷新进程内电流校准缓存。 */
+    suspend fun refreshBatteryCurrentCalibration() {
+        val dual = batteryDualCellFlow().firstOrNull() ?: false
+        val scale = batteryCurrentScaleFlow().firstOrNull()
+            ?: BatteryReadingNormalize.DEFAULT_SCALE
+        BatteryReadingNormalize.updateCalibration(
+            BatteryReadingNormalize.CurrentCalibration(
+                dualCell = dual,
+                scale = scale,
+            ),
+        )
     }
 
     /**

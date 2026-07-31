@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.server.battery
 
 import io.github.lumkit.tweak.common.daemon.DaemonPaths
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
+import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import java.io.File
@@ -60,8 +61,15 @@ class BatteryEngine(
             while (running.get()) {
                 val cfg = BatteryRecordConf.read(confPath)
                 confRef.set(cfg)
+                BatteryReadingNormalize.updateCalibration(
+                    BatteryReadingNormalize.CurrentCalibration(
+                        dualCell = cfg.dualCell,
+                        scale = cfg.currentScale,
+                    ),
+                )
                 lastStatusLine =
-                    "battery_enabled=${if (cfg.enabled) 1 else 0} battery_interval_ms=${cfg.intervalMs}"
+                    "battery_enabled=${if (cfg.enabled) 1 else 0} battery_interval_ms=${cfg.intervalMs}" +
+                        " dual_cell=${if (cfg.dualCell) 1 else 0} current_scale=${cfg.currentScale}"
 
                 if (!cfg.enabled) {
                     active = endActive(active, System.currentTimeMillis())

@@ -28,7 +28,7 @@ class AppProcessAlignedBatterySampler : BatterySampler {
             timestampMs = System.currentTimeMillis(),
             level = level,
             voltageMv = voltageMv,
-            currentMa = currentUa.let { BatteryReadingNormalize.microAmpToMilliAmp(it) },
+            currentMa = BatteryReadingNormalize.normalizeCurrent(currentUa),
             tempCenti = tempCenti ?: Short.MIN_VALUE,
             screenOn = ScreenStateReader.isInteractive(),
             state = chargeState.code,

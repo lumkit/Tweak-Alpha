@@ -41,6 +41,7 @@ import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_CODE
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_NAME
+import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
 import io.github.lumkit.tweak.common.utils.hasNotificationPermission
 import io.github.lumkit.tweak.common.utils.isIgnoringBatteryOptimizations
 import io.github.lumkit.tweak.common.utils.jumpToAppInfo
@@ -71,6 +72,7 @@ import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SnackbarResult
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
@@ -92,13 +94,16 @@ import tweak_alpha.shared.generated.resources.text_auto_listen_system_update
 import tweak_alpha.shared.generated.resources.text_auto_listen_system_update_description
 import tweak_alpha.shared.generated.resources.text_auto_start
 import tweak_alpha.shared.generated.resources.text_auto_start_description
+import tweak_alpha.shared.generated.resources.text_battery_current_scale
+import tweak_alpha.shared.generated.resources.text_battery_current_scale_description
+import tweak_alpha.shared.generated.resources.text_battery_dual_cell
+import tweak_alpha.shared.generated.resources.text_battery_dual_cell_description
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list
 import tweak_alpha.shared.generated.resources.text_battery_ignore_optimization_white_list_description
 import tweak_alpha.shared.generated.resources.text_battery_record_sample_interval
 import tweak_alpha.shared.generated.resources.text_battery_record_sample_interval_description
-import tweak_alpha.shared.generated.resources.text_native_daemon
-import tweak_alpha.shared.generated.resources.text_native_daemon_description
-import tweak_alpha.shared.generated.resources.text_native_daemon_loading
+import tweak_alpha.shared.generated.resources.text_battery_unit_calibration
+import tweak_alpha.shared.generated.resources.text_battery_unit_calibration_description
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar_description
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar_enable_liquidity
@@ -113,6 +118,9 @@ import tweak_alpha.shared.generated.resources.text_github
 import tweak_alpha.shared.generated.resources.text_github_web
 import tweak_alpha.shared.generated.resources.text_join_qq
 import tweak_alpha.shared.generated.resources.text_jump_to_app_info
+import tweak_alpha.shared.generated.resources.text_native_daemon
+import tweak_alpha.shared.generated.resources.text_native_daemon_description
+import tweak_alpha.shared.generated.resources.text_native_daemon_loading
 import tweak_alpha.shared.generated.resources.text_navigation_bar_enable_blur
 import tweak_alpha.shared.generated.resources.text_navigation_bar_enable_blur_description
 import tweak_alpha.shared.generated.resources.text_notification_permission
@@ -435,6 +443,23 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
             )
         }
 
+        // 电池单位校准
+        Block {
+            var showCalibrationSheet by remember { mutableStateOf(false) }
+
+            ArrowPreference(
+                title = stringResource(Res.string.text_battery_unit_calibration),
+                summary = stringResource(Res.string.text_battery_unit_calibration_description),
+                onClick = { showCalibrationSheet = true },
+            )
+
+            BatteryUnitCalibrationSheet(
+                show = showCalibrationSheet,
+                viewModel = viewModel,
+                onDismiss = { showCalibrationSheet = false },
+            )
+        }
+
         // 进程信息概览
         Block {
             val enabled by viewModel.enableProcessInfoOverview.collectAsStateWithLifecycle()
@@ -614,6 +639,56 @@ private fun AboutContent() {
                     openUrl(qqUrl)
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun BatteryUnitCalibrationSheet(
+    show: Boolean,
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit,
+) {
+    val dualCell by viewModel.batteryDualCell.collectAsStateWithLifecycle()
+    val scale by viewModel.batteryCurrentScale.collectAsStateWithLifecycle()
+    val scaleIndex = remember(scale) {
+        BatteryReadingNormalize.scaleIndex(scale).toFloat()
+    }
+    val maxIndex = (BatteryReadingNormalize.SCALE_STEPS.lastIndex).toFloat()
+
+    OverlayBottomSheet(
+        show = show,
+        title = stringResource(Res.string.text_battery_unit_calibration),
+        onDismissRequest = onDismiss,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                pressFeedbackType = PressFeedbackType.None,
+                colors = CardDefaults.defaultColors(
+                    color = MiuixTheme.colorScheme.surfaceContainer,
+                ),
+            ) {
+                SwitchPreference(
+                    title = stringResource(Res.string.text_battery_dual_cell),
+                    summary = stringResource(Res.string.text_battery_dual_cell_description),
+                    checked = dualCell,
+                    onCheckedChange = viewModel::setBatteryDualCell,
+                )
+                SliderPreference(
+                    value = scaleIndex,
+                    onValueChange = viewModel::setBatteryCurrentScaleIndex,
+                    title = stringResource(Res.string.text_battery_current_scale),
+                    summary = stringResource(Res.string.text_battery_current_scale_description)
+                        .format(scale.toString()),
+                    valueRange = 0f..maxIndex,
+                    steps = (BatteryReadingNormalize.SCALE_STEPS.size - 2).coerceAtLeast(0),
+                    hapticEffect = SliderDefaults.SliderHapticEffect.Step,
+                )
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.daemon.TweakDaemon
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
+import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -168,6 +169,22 @@ class SettingsViewModel : BaseViewModel() {
             initialValue = BatteryRecordDefaults.DEFAULT_INTERVAL_LEVEL,
         )
 
+    val batteryDualCell = TweakDataStore.batteryDualCellFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val batteryCurrentScale = TweakDataStore.batteryCurrentScaleFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = BatteryReadingNormalize.DEFAULT_SCALE,
+        )
+
     fun updateIsIgnoringBatteryOptimizations(isIgnoring: Boolean) {
         _isIgnoringBatteryOptimizations.value = isIgnoring
     }
@@ -205,6 +222,19 @@ class SettingsViewModel : BaseViewModel() {
     fun setBatteryRecordSampleIntervalLevel(level: Float) {
         viewModelScope.launch {
             TweakDataStore.setBatteryRecordSampleIntervalLevel(level.roundToInt())
+        }
+    }
+
+    fun setBatteryDualCell(enabled: Boolean) {
+        viewModelScope.launch {
+            TweakDataStore.setBatteryDualCell(enabled)
+        }
+    }
+
+    fun setBatteryCurrentScaleIndex(index: Float) {
+        viewModelScope.launch {
+            val scale = BatteryReadingNormalize.scaleAtIndex(index.roundToInt())
+            TweakDataStore.setBatteryCurrentScale(scale)
         }
     }
 

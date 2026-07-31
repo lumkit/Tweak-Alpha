@@ -8,6 +8,8 @@ expect object BatteryRecordDaemonConfig {
         intervalMs: Int,
         maxPartBytes: Long = DaemonPaths.DEFAULT_BATTERY_LOG_MAX_PART_BYTES,
         enabled: Boolean = true,
+        dualCell: Boolean = false,
+        currentScale: Long = -1_000L,
     )
 
     suspend fun syncFromDataStore()
