@@ -1,50 +1,94 @@
 package io.github.lumkit.tweak.server.battery
 
 import android.os.BatteryManager
-import io.github.lumkit.tweak.common.utils.BatterySnapshotCore
+import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
+import io.github.lumkit.tweak.common.utils.BatterySysfsPaths
+import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.sharednative.BatteryBridge
 import java.io.File
-import kotlinx.coroutines.runBlocking
 
 /**
- * tweak_server 电池采样：与主进程 [io.github.lumkit.tweak.common.utils.BatteryUtils] 共用 [BatterySnapshotCore]。
- * 需在进程启动时 [io.github.lumkit.tweak.sharednative.BatteryBridge.init]。
+ * 对齐 BatteryRecorder 的采样器：
+ * - 优先 SysfsSampler 口径：直接读 `battery/current_now` 等节点（µA）
+ * - 失败则 DumpsysSampler 口径：`BatteryBridge.getCurrentNow()` → registrar/BatteryManager
  */
 class AppProcessAlignedBatterySampler : BatterySampler {
 
-    override fun sample(): BatterySample? = runBlocking {
-        val snapshot = BatterySnapshotCore.readSnapshot(::readSysfsText)
-        val level = snapshot.capacityPercent ?: return@runBlocking null
-        if (level !in 0..100) return@runBlocking null
+    override fun sample(): BatterySample? {
+        val level = readCapacity()
+        if (level !in 0..100) return null
 
-        val charging = BatterySamplingChargeState.isCharging()
-        BatterySample(
+        val currentUa = readCurrentUa()
+        val voltageMv = readVoltageMv()
+        val tempCenti = readTempCenti()
+        val charging = isCharging()
+
+        return BatterySample(
             timestampMs = System.currentTimeMillis(),
             level = level,
-            voltageMv = snapshot.voltageMv ?: Int.MIN_VALUE,
-            currentMa = snapshot.currentMa ?: Int.MIN_VALUE,
-            tempCenti = snapshot.temperatureCelsius?.let { (it * 100f).toInt().toShort() }
-                ?: Short.MIN_VALUE,
+            voltageMv = voltageMv,
+            currentMa = currentUa.let { BatteryReadingNormalize.microAmpToMilliAmp(it) },
+            tempCenti = tempCenti ?: Short.MIN_VALUE,
             screenOn = ScreenStateReader.isInteractive(),
             state = if (charging) 1 else 0,
-        )
+        ).also {
+            println("AppProcessAlignedBatterySampler: battery sample=$it")
+        }
     }
 
-    private suspend fun readSysfsText(path: String): String? =
-        runCatching { File(path).readText() }.getOrNull()?.takeIf { it.isNotBlank() }
+    /** BR SysfsSampler → DumpsysSampler */
+    private fun readCurrentUa(): Long {
+        return BatteryBridge.getCurrentNow().toLong()
+    }
 
-    private object BatterySamplingChargeState {
-        fun isCharging(): Boolean {
-            val status = BatteryBridge.getStatus()
-            if (status == Int.MIN_VALUE) {
-                return false
-            }
-            val plugged = BatteryBridge.isPlugged()
-            return when (status) {
-                BatteryManager.BATTERY_STATUS_CHARGING -> true
-                BatteryManager.BATTERY_STATUS_FULL -> plugged
+    private fun readVoltageMv(): Int {
+        return BatteryBridge.getVoltage()
+    }
+
+    private fun readCapacity(): Int {
+        return BatteryBridge.getCapacity()
+    }
+
+    private fun readTempCenti(): Short? {
+        val fromBridge = BatteryBridge.getTemperature()
+        if (fromBridge != Int.MIN_VALUE) {
+            return (fromBridge * 10).toShort()
+        }
+        return null
+    }
+
+    private fun isCharging(): Boolean {
+        for (path in BatterySysfsPaths.statusPaths) {
+            val status = readText(path)?.trim().orEmpty()
+            if (status.isEmpty()) continue
+            // BR：status 首字符 C/D/N/F
+            return when (status.first().uppercaseChar()) {
+                'C' -> true
+                'F' -> BatteryBridge.isPlugged()
                 else -> false
             }
+        }
+        val status = BatteryBridge.getStatus()
+        if (status == Int.MIN_VALUE) return false
+        return when (status) {
+            BatteryManager.BATTERY_STATUS_CHARGING -> true
+            BatteryManager.BATTERY_STATUS_FULL -> BatteryBridge.isPlugged()
+            else -> false
+        }
+    }
+
+    private fun readText(path: String): String? =
+        runCatching { File(path).readText() }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    private fun readLong(path: String): Long? =
+        readText(path)?.trim()?.toLongOrNull()
+
+    private fun readInt(path: String): Int? =
+        readText(path)?.trim()?.toIntOrNull()
+
+    companion object {
+        init {
+            logD("using BR-aligned battery sampler", "BrBatterySampler")
         }
     }
 }

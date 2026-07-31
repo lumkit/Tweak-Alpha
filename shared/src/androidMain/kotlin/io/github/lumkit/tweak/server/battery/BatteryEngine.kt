@@ -88,7 +88,7 @@ class BatteryEngine(
                 }
 
                 val session = active
-                if (session != null && session.state == 1 && !session.confirmed && !session.deleted) {
+                if (session.state == 1 && !session.confirmed && !session.deleted) {
                     if (now - session.startedAt >= session.confirmMs) {
                         session.confirmed = true
                         writer?.markConfirmed()

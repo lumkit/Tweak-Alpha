@@ -156,11 +156,6 @@ internal expect object PlatformBatterySource {
     fun getCurrentNow(): Long?
 
     /**
-     * 平均电流 µA；仅作 [getCurrentNow] 不可用时的后备。
-     */
-    fun getCurrentAverage(): Long?
-
-    /**
      * 获取电池电压，单位 mV。
      * 返回 null 表示不可用。
      */
