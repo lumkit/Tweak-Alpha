@@ -25,6 +25,7 @@ object ProcessUtilLite {
         "top",
         "tweak_server",
         "ub.lumkit.tweak",
+        "[ub.lumkit.tweak]",
     )
 
     suspend fun supported(): Boolean = mutex.withLock {
