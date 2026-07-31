@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.server.battery
 
 import android.os.BatteryManager
+import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
 import io.github.lumkit.tweak.common.utils.BatterySysfsPaths
 import io.github.lumkit.tweak.common.utils.logD
@@ -21,7 +22,7 @@ class AppProcessAlignedBatterySampler : BatterySampler {
         val currentUa = readCurrentUa()
         val voltageMv = readVoltageMv()
         val tempCenti = readTempCenti()
-        val charging = isCharging()
+        val chargeState = resolveChargeState()
 
         return BatterySample(
             timestampMs = System.currentTimeMillis(),
@@ -30,10 +31,8 @@ class AppProcessAlignedBatterySampler : BatterySampler {
             currentMa = currentUa.let { BatteryReadingNormalize.microAmpToMilliAmp(it) },
             tempCenti = tempCenti ?: Short.MIN_VALUE,
             screenOn = ScreenStateReader.isInteractive(),
-            state = if (charging) 1 else 0,
-        ).also {
-            println("AppProcessAlignedBatterySampler: battery sample=$it")
-        }
+            state = chargeState.code,
+        )
     }
 
     /** BR SysfsSampler → DumpsysSampler */
@@ -57,23 +56,35 @@ class AppProcessAlignedBatterySampler : BatterySampler {
         return null
     }
 
-    private fun isCharging(): Boolean {
+    /**
+     * 0 放电 / 1 充电 / 2 充满（插电）。
+     * Full 且仍插电 → [BatteryChargeState.FULL]；拔电后的 Full → 放电。
+     */
+    private fun resolveChargeState(): BatteryChargeState {
         for (path in BatterySysfsPaths.statusPaths) {
             val status = readText(path)?.trim().orEmpty()
             if (status.isEmpty()) continue
-            // BR：status 首字符 C/D/N/F
             return when (status.first().uppercaseChar()) {
-                'C' -> true
-                'F' -> BatteryBridge.isPlugged()
-                else -> false
+                'C' -> BatteryChargeState.CHARGING
+                'F' -> if (BatteryBridge.isPlugged()) {
+                    BatteryChargeState.FULL
+                } else {
+                    BatteryChargeState.DISCHARGING
+                }
+                else -> BatteryChargeState.DISCHARGING
             }
         }
         val status = BatteryBridge.getStatus()
-        if (status == Int.MIN_VALUE) return false
+        if (status == Int.MIN_VALUE) return BatteryChargeState.DISCHARGING
         return when (status) {
-            BatteryManager.BATTERY_STATUS_CHARGING -> true
-            BatteryManager.BATTERY_STATUS_FULL -> BatteryBridge.isPlugged()
-            else -> false
+            BatteryManager.BATTERY_STATUS_CHARGING -> BatteryChargeState.CHARGING
+            BatteryManager.BATTERY_STATUS_FULL ->
+                if (BatteryBridge.isPlugged()) {
+                    BatteryChargeState.FULL
+                } else {
+                    BatteryChargeState.DISCHARGING
+                }
+            else -> BatteryChargeState.DISCHARGING
         }
     }
 

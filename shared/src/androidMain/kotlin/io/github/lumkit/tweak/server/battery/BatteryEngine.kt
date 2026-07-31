@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.server.battery
 
 import io.github.lumkit.tweak.common.daemon.DaemonPaths
+import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import java.io.File
@@ -79,7 +80,7 @@ class BatteryEngine(
                 if (active == null) {
                     active = beginSession(now, newState, cfg)
                 } else if (active.state != newState) {
-                    if (active.state == 1 && !active.confirmed) {
+                    if (active.state == BatteryChargeState.CHARGING.code && !active.confirmed) {
                         writer?.markDeleted()
                         active.deleted = true
                     }
@@ -88,7 +89,10 @@ class BatteryEngine(
                 }
 
                 val session = active
-                if (session.state == 1 && !session.confirmed && !session.deleted) {
+                if (session.state == BatteryChargeState.CHARGING.code &&
+                    !session.confirmed &&
+                    !session.deleted
+                ) {
                     if (now - session.startedAt >= session.confirmMs) {
                         session.confirmed = true
                         writer?.markConfirmed()
@@ -110,7 +114,7 @@ class BatteryEngine(
             intervalMs = cfg.intervalMs,
             state = state,
             confirmMs = DefaultConfirmMs,
-            confirmed = state == 0,
+            confirmed = BatteryChargeState.fromCode(state).defaultConfirmed,
             deleted = false,
         )
         val w = BrlogWriter(logsDir, cfg.maxPartBytes)

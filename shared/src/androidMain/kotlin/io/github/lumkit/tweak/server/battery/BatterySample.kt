@@ -11,7 +11,7 @@ data class BatterySample(
     val currentMa: Int = Int.MIN_VALUE,
     val tempCenti: Short = Short.MIN_VALUE,
     val screenOn: Boolean = false,
-    /** 0 放电 / 1 充电 */
+    /** 0 放电 / 1 充电 / 2 充满（插电） */
     val state: Int = 0,
 ) {
     val hasValidLevel: Boolean get() = level in 0..100

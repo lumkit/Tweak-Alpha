@@ -10,8 +10,9 @@ import kotlinx.serialization.Serializable
 /**
  * 电池记录会话表。
  *
- * 充/放电状态切换时新建 session；充电需连续保持 [BatteryRecordDefaults.CONFIRM_MS]
- * 后将 [confirmed] 置为 true，未确认的充电会话可逻辑删除。
+ * 充/放电/满电状态切换时新建 session；充电需连续保持 [BatteryRecordDefaults.CONFIRM_MS]
+ * 后将 [confirmed] 置为 true，未确认的充电会话可逻辑删除。满电（FULL）为独立会话，
+ * 充电历史仅展示 [BatteryChargeState.CHARGING]。
  */
 @Serializable
 @Entity(

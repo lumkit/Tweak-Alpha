@@ -123,6 +123,7 @@ import tweak_alpha.shared.generated.resources.text_charge_label_battery_power
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_status
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_status_charging
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_status_discharging
+import tweak_alpha.shared.generated.resources.text_charge_label_battery_status_full
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_temperature
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_voltage
 import tweak_alpha.shared.generated.resources.text_charge_label_current
@@ -273,6 +274,7 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
 
     val batteryStatusText = when (chargeState) {
         BatteryChargeState.CHARGING -> stringResource(Res.string.text_charge_label_battery_status_charging)
+        BatteryChargeState.FULL -> stringResource(Res.string.text_charge_label_battery_status_full)
         BatteryChargeState.DISCHARGING,
         null,
         -> stringResource(Res.string.text_charge_label_battery_status_discharging)

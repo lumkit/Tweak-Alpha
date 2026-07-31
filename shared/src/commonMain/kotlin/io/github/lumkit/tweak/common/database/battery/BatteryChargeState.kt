@@ -8,7 +8,21 @@ enum class BatteryChargeState(val code: Int) {
     DISCHARGING(0),
 
     /** 充电（需连续保持 [BatteryRecordDefaults.CONFIRM_MS] 后 confirmed=true 才视为有效） */
-    CHARGING(1);
+    CHARGING(1),
+
+    /**
+     * 充满且仍插电（涓流/满电维持）。
+     * 独立会话录入；充电历史列表/图表仍只认 [CHARGING]。
+     */
+    FULL(2);
+
+    /** 是否为「充电类」历史（仅 CHARGING；FULL 不算） */
+    val isChargingHistory: Boolean
+        get() = this == CHARGING
+
+    /** 创建会话时是否默认已确认（充电需确认窗口，其余立即确认） */
+    val defaultConfirmed: Boolean
+        get() = this != CHARGING
 
     companion object {
         fun fromCode(code: Int): BatteryChargeState =

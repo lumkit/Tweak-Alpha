@@ -29,7 +29,7 @@ class BatteryRecordRepository {
         dao.insertSession(session)
 
     /**
-     * 开启新会话。放电默认 [confirmed]=true；充电默认未确认。
+     * 开启新会话。放电/满电默认 [confirmed]=true；充电默认未确认。
      */
     suspend fun startSession(
         state: BatteryChargeState,
@@ -42,7 +42,7 @@ class BatteryRecordRepository {
                 startedAt = startedAt,
                 intervalMs = intervalMs,
                 state = state.code,
-                confirmed = state == BatteryChargeState.DISCHARGING,
+                confirmed = state.defaultConfirmed,
                 confirmMs = confirmMs,
                 createdAt = startedAt,
             ),

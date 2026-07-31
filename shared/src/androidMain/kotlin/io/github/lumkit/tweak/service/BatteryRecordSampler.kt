@@ -177,7 +177,7 @@ class BatteryRecordSampler(
         return when (status) {
             BatteryManager.BATTERY_STATUS_CHARGING -> BatteryChargeState.CHARGING
             BatteryManager.BATTERY_STATUS_FULL ->
-                if (plugged) BatteryChargeState.CHARGING else BatteryChargeState.DISCHARGING
+                if (plugged) BatteryChargeState.FULL else BatteryChargeState.DISCHARGING
             else -> BatteryChargeState.DISCHARGING
         }
     }
