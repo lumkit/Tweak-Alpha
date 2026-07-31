@@ -32,6 +32,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.base.BaseViewModel
@@ -121,6 +124,7 @@ import tweak_alpha.shared.generated.resources.text_jump_to_app_info
 import tweak_alpha.shared.generated.resources.text_native_daemon
 import tweak_alpha.shared.generated.resources.text_native_daemon_description
 import tweak_alpha.shared.generated.resources.text_native_daemon_loading
+import tweak_alpha.shared.generated.resources.text_runtime_mode_loading
 import tweak_alpha.shared.generated.resources.text_navigation_bar_enable_blur
 import tweak_alpha.shared.generated.resources.text_navigation_bar_enable_blur_description
 import tweak_alpha.shared.generated.resources.text_notification_permission
@@ -156,25 +160,44 @@ fun SettingsPage(
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
     var nativeDaemonLoading by remember { mutableStateOf(false) }
+    var runtimeModeLoading by remember { mutableStateOf(false) }
 
     viewModel.LoadStateLaunchEffect {
         Watch(SettingsViewModel.NATIVE_DAEMON_TOGGLE_LOAD_ID) {
             nativeDaemonLoading = it is BaseViewModel.LoadState.Loading
         }
+        Watch(SettingsViewModel.RUNTIME_MODE_TOGGLE_LOAD_ID) {
+            runtimeModeLoading = it is BaseViewModel.LoadState.Loading
+        }
     }
 
+    val settingsBusy = nativeDaemonLoading || runtimeModeLoading
+
     WindowDialog(
-        show = nativeDaemonLoading,
+        show = settingsBusy,
         enableWindowDim = true,
-        onDismissRequest = {},
+        // null：禁止点击遮罩/返回键交互关闭
+        onDismissRequest = null,
     ) {
+        val blockBackState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
+        NavigationBackHandler(
+            state = blockBackState,
+            isBackEnabled = settingsBusy,
+            onBackCompleted = { },
+        )
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             InfiniteProgressIndicator()
             Text(
-                text = stringResource(Res.string.text_native_daemon_loading),
+                text = stringResource(
+                    if (runtimeModeLoading) {
+                        Res.string.text_runtime_mode_loading
+                    } else {
+                        Res.string.text_native_daemon_loading
+                    },
+                ),
                 style = MiuixTheme.textStyles.main,
             )
         }

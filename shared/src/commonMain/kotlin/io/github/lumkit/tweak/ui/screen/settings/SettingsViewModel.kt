@@ -29,6 +29,7 @@ class SettingsViewModel : BaseViewModel() {
 
     companion object {
         const val NATIVE_DAEMON_TOGGLE_LOAD_ID = "nativeDaemonToggle"
+        const val RUNTIME_MODE_TOGGLE_LOAD_ID = "runtimeModeToggle"
     }
 
     private val _isIgnoringBatteryOptimizations = MutableStateFlow(false)
@@ -203,14 +204,17 @@ class SettingsViewModel : BaseViewModel() {
         }
     }
 
-    fun setRuntimeMode(mode: RuntimeMode, after: (() -> Unit)? = null) {
-        viewModelScope.launch {
-            // 切模式（尤其 Root→Shizuku）前先经 Binder 让旧守护进程自行退出；
-            // Shizuku shell 通常杀不掉 Root 拉起的 tweak_server。
-            runCatching { NativeDaemonController.stop() }
-            TweakDataStore.setRuntimeMode(mode)
-            after?.invoke()
-        }
+    fun setRuntimeMode(mode: RuntimeMode, after: (() -> Unit)? = null) = suspendLaunch(
+        id = RUNTIME_MODE_TOGGLE_LOAD_ID,
+    ) {
+        loading()
+        // 切模式（尤其 Root→Shizuku）前先经 Binder 让旧守护进程自行退出；
+        // Shizuku shell 通常杀不掉 Root 拉起的 tweak_server。
+        runCatching { NativeDaemonController.stop() }
+        TweakDataStore.setRuntimeMode(mode)
+        // 保持 loading 到 after（可能 restartApp），避免切换瞬间弹窗闪灭
+        after?.invoke()
+        success()
     }
 
     fun setInfoUpdateTimeSpan(level: Float) {
