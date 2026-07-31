@@ -308,11 +308,13 @@ actual object TweakDaemon {
     private suspend fun clearDaemonArtifactsPreservingLogs(paths: DaemonPaths.Resolved) {
         val preserve = DaemonPaths.BATTERY_LOGS_DIR_NAME
         logD("clear daemon artifacts, preserve=$preserve dir=${paths.dir}", TAG)
+        forceChmod777(paths.workRoot, paths.dir)
 
         val localDir = File(paths.dir)
         if (localDir.isDirectory) {
             localDir.listFiles()?.forEach { child ->
                 if (child.name == preserve) return@forEach
+                forceChmod777(child.absolutePath)
                 runCatching {
                     if (child.isDirectory) child.deleteRecursively() else child.delete()
                 }
@@ -323,11 +325,13 @@ actual object TweakDaemon {
         ReusableShells.execSync(
             "d=${paths.dir.shellQuote()}; " +
                 "preserve=${preserve.shellQuote()}; " +
+                "chmod 777 \"\$d\" 2>/dev/null || true; " +
                 "if [ -d \"\$d\" ]; then " +
                 "for f in \"\$d\"/* \"\$d\"/.[!.]* \"\$d\"/..?*; do " +
                 "[ -e \"\$f\" ] || continue; " +
                 "b=\$(basename \"\$f\"); " +
                 "[ \"\$b\" = \"\$preserve\" ] && continue; " +
+                "chmod -R 777 \"\$f\" 2>/dev/null || true; " +
                 "rm -rf \"\$f\"; " +
                 "done; " +
                 "fi",
@@ -338,6 +342,7 @@ actual object TweakDaemon {
             val base = name.substringAfterLast('/').substringAfterLast('\\')
             if (base.isEmpty() || base == preserve || base == "." || base == "..") continue
             val path = if (name.startsWith(paths.dir)) name else "${paths.dir}/$base"
+            forceChmod777(path)
             runCatching { Files.delete(path, recursive = true) }
         }
     }
@@ -357,8 +362,9 @@ actual object TweakDaemon {
         val stampText = currentApkStamp().serialize()
         val cachedStamp = readTextQuick(paths.serverApkStamp)?.trim().orEmpty()
         if (cachedStamp != stampText) return false
-        val len = File(paths.serverApk).takeIf { it.isFile }?.length()
-            ?: Files.length(paths.serverApk).getOrNull()
+        val serverApk = resolveActiveServerApkPath(paths)
+        val len = File(serverApk).takeIf { it.isFile }?.length()
+            ?: Files.length(serverApk).getOrNull()
             ?: -1L
         return len == currentApkStamp().length && len > 0L
     }
@@ -528,58 +534,279 @@ actual object TweakDaemon {
         logD("installed starter -> ${paths.starterBin} sha=$after", TAG)
     }
 
+    private fun serverApkActivePathSidecar(paths: DaemonPaths.Resolved): String =
+        "${paths.dir}/server.apk.path"
+
+    private suspend fun resolveActiveServerApkPath(paths: DaemonPaths.Resolved): String {
+        val recorded = readTextQuick(serverApkActivePathSidecar(paths))?.trim().orEmpty()
+        if (recorded.isNotEmpty() &&
+            (File(recorded).isFile || Files.exists(recorded).getOrNull() == true)
+        ) {
+            return recorded
+        }
+        return paths.serverApk
+    }
+
+    private suspend fun writeActiveServerApkPath(paths: DaemonPaths.Resolved, apkPath: String) {
+        val sidecar = serverApkActivePathSidecar(paths)
+        runCatching { File(sidecar).writeText("$apkPath\n") }
+        runCatching { Files.writeText(sidecar, "$apkPath\n") }
+        forceChmod777(paths.dir, sidecar)
+    }
+
+    /** 写入前/后强制 0777，规避 Root 残留只读文件与 sticky tmp 权限问题。 */
+    private suspend fun forceChmod777(vararg pathsToChmod: String) {
+        for (path in pathsToChmod) {
+            if (path.isBlank()) continue
+            runCatching { File(path).setReadable(true, false) }
+            runCatching { File(path).setWritable(true, false) }
+            runCatching { File(path).setExecutable(true, false) }
+            runCatching { Files.chmod(path, "0777") }
+        }
+        val quoted = pathsToChmod.filter { it.isNotBlank() }.joinToString(" ") { it.shellQuote() }
+        if (quoted.isNotEmpty()) {
+            ReusableShells.execSync("chmod 777 $quoted 2>/dev/null || true")
+        }
+    }
+
     /**
      * 仅在 App 升级/换路径时同步 server.apk。
      * 戳：sourceDir|versionCode|lastUpdateTime|length —— O(1) 判断，禁止每次冷启整包 cp。
+     *
+     * Shell 通常读不了 /data/app 下的 base.apk，必须先由 App 进程读出再落到工作区。
+     * 写入全程 chmod 0777；若主路径被 Root 残留占用，则落到 uid 后缀旁路文件。
      */
     private suspend fun ensureServerApkCached(paths: DaemonPaths.Resolved) {
         val stamp = currentApkStamp()
-        val stampText = stamp.serialize()
-        val apkFile = File(paths.serverApk)
-        val stampFile = File(paths.serverApkStamp)
+        val sourceFile = File(stamp.sourceDir)
+        require(sourceFile.isFile && stamp.length > 0L) {
+            "source apk missing: ${stamp.sourceDir}"
+        }
 
+        forceChmod777(paths.workRoot, paths.dir)
+        PrivilegedWorkDir.ensureWritable(
+            path = paths.dir,
+            workRoot = paths.workRoot,
+            mode = "0777",
+        )
+
+        val activePath = resolveActiveServerApkPath(paths)
+        val stampFile = File(paths.serverApkStamp)
         val cachedStamp = runCatching {
             when {
                 stampFile.canRead() -> stampFile.readText().trim()
                 else -> Files.readText(paths.serverApkStamp).getOrNull()?.trim().orEmpty()
             }
         }.getOrDefault("")
-
-        val cachedLen = when {
-            apkFile.isFile -> apkFile.length()
-            else -> Files.length(paths.serverApk).getOrNull() ?: -1L
-        }
-        if (cachedStamp == stampText && cachedLen == stamp.length && cachedLen > 0L) {
-            logD("server.apk cache hit stamp=$stampText", TAG)
+        val cachedLen = measureFileLength(activePath)
+        if (cachedStamp == stamp.serialize() && cachedLen == stamp.length && cachedLen > 0L) {
+            logD("server.apk cache hit path=$activePath stamp=${stamp.serialize()}", TAG)
             return
         }
 
         logD(
-            "server.apk cache miss oldStamp=${cachedStamp.take(80)} newStamp=$stampText, syncing",
+            "server.apk cache miss oldStamp=${cachedStamp.take(80)} newStamp=${stamp.serialize()}, syncing",
             TAG,
         )
-        // 旧 app_process 仍映射旧 dex：换 server.apk 前必须停 Daemon
         stopRunningServerForReinstall(paths)
-        // 先删目标再链/拷，避免 Shizuku 对残缺旧文件 truncate/覆写失败
-        runCatching { File(paths.serverApk).delete() }
-        runCatching { File(paths.serverApkStamp).delete() }
-        runCatching { Files.delete(paths.serverApk) }
-        runCatching { Files.delete(paths.serverApkStamp) }
-        val sync = ReusableShells.execSync(
-            "rm -f ${paths.serverApk.shellQuote()} ${paths.serverApkStamp.shellQuote()}; " +
-                "ln ${stamp.sourceDir.shellQuote()} ${paths.serverApk.shellQuote()} 2>/dev/null || " +
-                "cp -f ${stamp.sourceDir.shellQuote()} ${paths.serverApk.shellQuote()}; " +
-                "chmod 644 ${paths.serverApk.shellQuote()}; " +
-                "printf '%s\\n' ${stampText.shellQuote()} > ${paths.serverApkStamp.shellQuote()}; " +
-                "chmod 644 ${paths.serverApkStamp.shellQuote()}; " +
-                "stat -c '%s' ${paths.serverApk.shellQuote()} 2>/dev/null || " +
-                "wc -c < ${paths.serverApk.shellQuote()}",
-        ).trim().lines().lastOrNull()?.trim().orEmpty()
-        val afterLen = sync.toLongOrNull() ?: -1L
-        if (afterLen != stamp.length) {
-            error("server.apk sync failed expectedLen=${stamp.length} actualLen=$afterLen out=$sync")
+
+        val destPath = prepareWritableServerApkDest(paths)
+        val copied = copyServerApkToWorkDir(sourcePath = stamp.sourceDir, destPath = destPath)
+        val sourceLen = measureFileLength(stamp.sourceDir).takeIf { it > 0L } ?: stamp.length
+        val afterLen = measureFileLength(destPath)
+        if (!copied || afterLen != sourceLen) {
+            error(
+                "server.apk sync failed expectedLen=$sourceLen actualLen=$afterLen " +
+                    "copied=$copied dest=$destPath source=${stamp.sourceDir}",
+            )
         }
-        logD("server.apk synced len=$afterLen via install", TAG)
+
+        forceChmod777(destPath)
+        writeActiveServerApkPath(paths, destPath)
+
+        val finalStamp = stamp.copy(length = afterLen)
+        val stampText = finalStamp.serialize()
+        runCatching {
+            stampFile.parentFile?.mkdirs()
+            stampFile.writeText("$stampText\n")
+        }
+        runCatching { Files.writeText(paths.serverApkStamp, "$stampText\n") }
+        forceChmod777(paths.serverApkStamp, serverApkActivePathSidecar(paths))
+        ReusableShells.execSync(
+            "printf '%s\\n' ${stampText.shellQuote()} > ${paths.serverApkStamp.shellQuote()}; " +
+                "chmod 777 ${destPath.shellQuote()} ${paths.serverApkStamp.shellQuote()} " +
+                "${serverApkActivePathSidecar(paths).shellQuote()} 2>/dev/null || true",
+        )
+        logD("server.apk synced len=$afterLen path=$destPath", TAG)
+    }
+
+    /**
+     * 准备可写的 server.apk 目标：先 0777 + 删主路径；删不掉（Root 残留）则用 uid 旁路文件。
+     */
+    private suspend fun prepareWritableServerApkDest(paths: DaemonPaths.Resolved): String {
+        forceChmod777(paths.dir, paths.serverApk, paths.serverApkStamp)
+        forceRemovePath(paths.serverApk)
+        forceRemovePath(paths.serverApkStamp)
+
+        val primaryGone = File(paths.serverApk).exists().not() &&
+            Files.exists(paths.serverApk).getOrNull() != true
+        if (primaryGone) {
+            return paths.serverApk
+        }
+
+        val alt = "${paths.serverApk}.${android.os.Process.myUid()}"
+        logD("primary server.apk still present after chmod/rm, use alt=$alt", TAG)
+        forceChmod777(alt)
+        forceRemovePath(alt)
+        return alt
+    }
+
+    private suspend fun forceRemovePath(path: String) {
+        forceChmod777(path)
+        runCatching { File(path).delete() }
+        runCatching { Files.delete(path, recursive = false) }
+        ReusableShells.execSync(
+            "p=${path.shellQuote()}; " +
+                "chmod 777 \"\$p\" 2>/dev/null || true; " +
+                "if [ -e \"\$p\" ]; then " +
+                "mv -f \"\$p\" \"\$p.stale.\$\$\" 2>/dev/null || true; " +
+                "rm -f \"\$p\" \"\$p.stale.\"* 2>/dev/null || true; " +
+                "fi",
+        )
+    }
+
+    /**
+     * App 可读自身 base.apk，Shell/Shizuku 往往读不了 /data/app。
+     * 流程：App 落到 cache 暂存（0777）→ 再拷到 daemon 工作区（0777）。
+     */
+    private suspend fun copyServerApkToWorkDir(sourcePath: String, destPath: String): Boolean {
+        val source = File(sourcePath)
+        val dest = File(destPath)
+        runCatching { dest.parentFile?.mkdirs() }
+        forceChmod777(dest.parent ?: pathsDirOf(destPath), destPath)
+
+        val staging = File(application.cacheDir, "tweak_server_apk_staging.apk")
+        val staged = runCatching {
+            staging.parentFile?.mkdirs()
+            source.inputStream().use { input ->
+                FileOutputStream(staging).use { output ->
+                    input.copyTo(output)
+                    output.fd.sync()
+                }
+            }
+            staging.setReadable(true, false)
+            staging.setWritable(true, false)
+            forceChmod777(staging.absolutePath)
+            staging.isFile && staging.length() == source.length() && staging.length() > 0L
+        }.onFailure {
+            logE("stage server.apk to cache failed: ${it.message}", it, TAG)
+        }.getOrDefault(false)
+        if (!staged) {
+            logE("cannot stage base.apk into app cache", null, TAG)
+            return false
+        }
+        logD("server.apk staged cache len=${staging.length()}", TAG)
+
+        // 1) 本地直接写入工作区
+        val localOk = runCatching {
+            forceChmod777(destPath)
+            staging.inputStream().use { input ->
+                FileOutputStream(dest).use { output ->
+                    input.copyTo(output)
+                    output.fd.sync()
+                }
+            }
+            forceChmod777(destPath)
+            dest.isFile && dest.length() == staging.length()
+        }.getOrDefault(false)
+        if (localOk) {
+            logD("server.apk copied via local stream len=${dest.length()}", TAG)
+            return true
+        }
+
+        // 2) 特权 Files.copy（从可读的 cache）
+        val filesCopyOk = runCatching {
+            when (val r = Files.copy(staging.absolutePath, destPath, overwrite = true)) {
+                is NativeFileResult.Success -> true
+                is NativeFileResult.Failure -> {
+                    logD("Files.copy server.apk failed: ${r.error.message}", TAG)
+                    false
+                }
+            }
+        }.getOrDefault(false)
+        if (filesCopyOk) {
+            forceChmod777(destPath)
+            val len = measureFileLength(destPath)
+            if (len > 0L && len == staging.length()) {
+                logD("server.apk copied via Files.copy len=$len", TAG)
+                return true
+            }
+        }
+
+        // 3) 特权 FD
+        val fdOk = runCatching {
+            val backend = resolvePrivilegedBackendCached()
+            forceChmod777(destPath)
+            staging.inputStream().use { input ->
+                openPrivilegedWriteOnlyFd(
+                    backend = backend,
+                    path = destPath,
+                    create = true,
+                    truncate = true,
+                ).use { writePfd ->
+                    ParcelFileDescriptor.AutoCloseOutputStream(writePfd).use { output ->
+                        input.copyTo(output)
+                        output.flush()
+                    }
+                }
+            }
+            forceChmod777(destPath)
+            measureFileLength(destPath) == staging.length()
+        }.onFailure {
+            logE("privileged fd copy server.apk failed: ${it.message}", it, TAG)
+        }.getOrDefault(false)
+        if (fdOk) {
+            logD("server.apk copied via privileged fd len=${measureFileLength(destPath)}", TAG)
+            return true
+        }
+
+        // 4) shell：从 world-readable cache cp（不要直接 cp /data/app）
+        val shellOut = ReusableShells.execSync(
+            "dest=${destPath.shellQuote()}; " +
+                "src=${staging.absolutePath.shellQuote()}; " +
+                "chmod 777 \"\$(dirname \"\$dest\")\" 2>/dev/null || true; " +
+                "chmod 777 \"\$dest\" 2>/dev/null || true; " +
+                "rm -f \"\$dest\" 2>/dev/null || true; " +
+                "cp \"\$src\" \"\$dest\" && chmod 777 \"\$dest\" && " +
+                "(stat -c '%s' \"\$dest\" 2>/dev/null || wc -c < \"\$dest\")",
+        ).trim().lines().lastOrNull()?.trim().orEmpty()
+        val shellLen = shellOut.toLongOrNull() ?: -1L
+        if (shellLen == staging.length() && shellLen > 0L) {
+            logD("server.apk copied via shell cp len=$shellLen", TAG)
+            return true
+        }
+        logE(
+            "all server.apk copy paths failed shellLen=$shellLen sourceLen=${staging.length()} out=$shellOut",
+            null,
+            TAG,
+        )
+        return false
+    }
+
+    private fun pathsDirOf(filePath: String): String =
+        filePath.substringBeforeLast('/', missingDelimiterValue = filePath)
+
+    private suspend fun measureFileLength(path: String): Long {
+        val local = File(path)
+        if (local.isFile) {
+            val len = local.length()
+            if (len > 0L) return len
+        }
+        Files.length(path).getOrNull()?.takeIf { it > 0L }?.let { return it }
+        val shell = ReusableShells.execSync(
+            "stat -c '%s' ${path.shellQuote()} 2>/dev/null || wc -c < ${path.shellQuote()}",
+        ).trim().lines().lastOrNull()?.trim().orEmpty()
+        return shell.toLongOrNull() ?: -1L
     }
 
     private fun currentApkStamp(): ApkStamp {
@@ -616,12 +843,13 @@ actual object TweakDaemon {
 
         val pkgName = application.packageName
         val starter = paths.starterBin
-        val serverApk = paths.serverApk
+        val serverApk = resolveActiveServerApkPath(paths)
         val bootLog = "${paths.dir}/starter.boot.log"
 
         require(File(serverApk).isFile || Files.exists(serverApk).getOrNull() == true) {
-            "server.apk missing, install() should have prepared it"
+            "server.apk missing at $serverApk, install() should have prepared it"
         }
+        forceChmod777(serverApk)
 
         ReusableShells.execSync(
             "chmod 755 ${starter.shellQuote()} 2>/dev/null; " +

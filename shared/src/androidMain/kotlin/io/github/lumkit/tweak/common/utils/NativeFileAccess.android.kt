@@ -139,7 +139,7 @@ internal suspend fun openPrivilegedWriteOnlyFd(
     create: Boolean = true,
     truncate: Boolean = true,
 ): ParcelFileDescriptor {
-    return when (backend) {
+    val pfd = when (backend) {
         NativeFileBackend.ROOT -> RootFileServiceConnectionManager.getService()
             .openWriteOnlyFd(path, create, truncate)
 
@@ -147,6 +147,9 @@ internal suspend fun openPrivilegedWriteOnlyFd(
             .openWriteOnlyFd(path, create, truncate)
 
         NativeFileBackend.User -> throw IllegalArgumentException("User backend does not support privileged fd: $path")
+    }
+    return requireNotNull(pfd) {
+        "openWriteOnlyFd returned null backend=$backend path=$path create=$create truncate=$truncate"
     }
 }
 
