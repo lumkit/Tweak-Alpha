@@ -127,8 +127,8 @@ object PrivilegedAppInitializer {
 
     private suspend fun bootstrapAccessibility(): Boolean {
         return try {
-            val ok = ensureAccessibilityServiceEnabled()
-            logD("ensureAccessibilityServiceEnabled => $ok", TAG)
+            val ok = AccessibilityBootstrap.ensureRunningIfUserEnabled()
+            logD("AccessibilityBootstrap.ensureRunningIfUserEnabled => $ok", TAG)
             ok
         } catch (e: CancellationException) {
             throw e

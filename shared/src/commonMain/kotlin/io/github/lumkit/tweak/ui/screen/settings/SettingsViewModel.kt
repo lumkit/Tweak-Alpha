@@ -5,6 +5,7 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.daemon.TweakDaemon
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
+import io.github.lumkit.tweak.common.utils.AccessibilityBootstrap
 import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.RuntimeMode
@@ -254,8 +255,10 @@ class SettingsViewModel : BaseViewModel() {
     fun setA11yDaemonEnabled(enable: Boolean) {
         viewModelScope.launch {
             TweakDataStore.setA11yDaemonEnabled(enable)
-            if (TweakDataStore.nativeDaemonEnabledFlow().first()) {
-                NativeDaemonController.ensureRunning()
+            if (enable) {
+                AccessibilityBootstrap.enableIfPrivileged(requireUserPreference = false)
+            } else {
+                AccessibilityBootstrap.stopAccessibilityService()
             }
         }
     }

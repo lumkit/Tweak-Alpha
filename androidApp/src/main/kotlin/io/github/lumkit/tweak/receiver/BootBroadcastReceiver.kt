@@ -6,6 +6,7 @@ import android.content.Intent
 import io.github.lumkit.tweak.common.utils.AccessibilityBootstrap
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,8 +14,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * 开机广播：仅在开启自启动且特权通过时启用无障碍服务。
- * KeepAlive / UpdateEngine 由无障碍服务连接后拉起。
+ * 开机广播：自启开启且运行模式特权可用、用户开启了无障碍选项时，
+ * 若服务未存活则通过 [AccessibilityBootstrap] 拉起。
  */
 class BootBroadcastReceiver : BroadcastReceiver() {
 
@@ -33,15 +34,16 @@ class BootBroadcastReceiver : BroadcastReceiver() {
                     try {
                         val autoStart = TweakDataStore.autoStartAppSwitchFlow().first()
                         logD("autoStart=$autoStart", TAG)
-                        if (autoStart) {
-                            val a11yDaemon = TweakDataStore.a11yDaemonEnabledFlow().first()
-                            if (a11yDaemon) {
-                                val enabled = AccessibilityBootstrap.enableIfPrivileged()
-                                logD("ensure accessibility: $enabled", TAG)
-                            } else {
-                                logD("a11y daemon disabled, skip boot accessibility", TAG)
-                            }
+                        if (!autoStart) return@launch
+
+                        val mode = TweakDataStore.runtimeModeFlow().first()
+                        if (mode == RuntimeMode.Unknow) {
+                            logD("runtime mode unknown, skip boot accessibility", TAG)
+                            return@launch
                         }
+
+                        val ensured = AccessibilityBootstrap.ensureRunningIfUserEnabled()
+                        logD("ensure accessibility if user enabled => $ensured", TAG)
                     } finally {
                         pendingResult.finish()
                     }

@@ -71,12 +71,12 @@
     <string name="text_go_back">返回</string>
     <string name="text_auto_start">自启动</string>
     <string name="text_auto_start_description">部分机型需手动开启权限</string>
-    <string name="text_native_daemon">Native Daemon</string>
-    <string name="text_native_daemon_description">启用守护进程以提高数据精准度（可能会增加耗电）</string>
+    <string name="text_native_daemon">后台采集进程</string>
+    <string name="text_native_daemon_description">用于采集设备数据以实现可视化图表</string>
     <string name="text_native_daemon_loading">正在切换 Native Daemon...</string>
     <string name="text_runtime_mode_loading">正在切换运行模式...</string>
-    <string name="text_a11y_daemon">无障碍 Daemon</string>
-    <string name="text_a11y_daemon_description">开启后由守护进程与开机广播尝试拉起无障碍服务（默认关闭，可避免部分系统反复弹权限窗）</string>
+    <string name="text_a11y_daemon">无障碍服务</string>
+    <string name="text_a11y_daemon_description">用于ADB权限下帧率检测</string>
     <string name="text_auto_listen_system_update">自动监听系统更新服务</string>
     <string name="text_auto_listen_system_update_description">开启后自动推送系统更新状态通知</string>
     <string name="text_panel_refresh_tick">面板刷新间隔</string>

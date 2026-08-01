@@ -17,7 +17,7 @@ class TweakServerBinder(
     private val version: String,
     private val packageName: String,
     private val mainHandler: Handler,
-    private val statusExtra: () -> String = { "battery_enabled=0 a11y_enabled=0" },
+    private val statusExtra: () -> String = { "battery_enabled=0" },
     private val onStop: () -> Unit,
     private val onReload: () -> Unit = {},
 ) : ITweakServer.Stub() {
@@ -42,9 +42,6 @@ class TweakServerBinder(
             append(" package=").append(packageName)
             if (extra.isNotEmpty()) {
                 append(' ').append(extra)
-            }
-            if (!extra.contains("a11y_enabled=")) {
-                append(" a11y_enabled=0")
             }
             append(" binder=1")
             append('\n')

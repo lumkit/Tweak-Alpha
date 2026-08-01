@@ -86,7 +86,6 @@ object NativeDaemonController {
     }
 
     private suspend fun syncDaemonConfFromDataStore() {
-        A11yWatchDaemonConfig.syncFromDataStore()
         BatteryRecordDaemonConfig.syncFromDataStore()
     }
 

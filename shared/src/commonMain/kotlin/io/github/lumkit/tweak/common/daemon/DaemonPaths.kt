@@ -16,7 +16,6 @@ object DaemonPaths {
 
     const val WORK_ROOT = ConstCommon.Path.TWEAK_ALPHA_ROOT
 
-    const val A11Y_WATCH_CONF_NAME = "a11y_watch.conf"
     const val BATTERY_RECORD_CONF_NAME = "battery_record.conf"
     const val BATTERY_LOGS_DIR_NAME = "battery_logs"
     const val SERVER_PID_NAME = "tweak_server.pid"
@@ -26,13 +25,10 @@ object DaemonPaths {
     /** 与 [SERVER_APK_NAME] 对应的版本戳，避免每次冷启整包复制 */
     const val SERVER_APK_STAMP_NAME = "server.apk.stamp"
     const val DEFAULT_BATTERY_LOG_MAX_PART_BYTES = 8L * 1024 * 1024
-    const val DEFAULT_A11Y_INTERVAL_MS = 60_000
-    const val MIN_A11Y_INTERVAL_MS = 10_000
 
     data class Resolved(
         val workRoot: String,
         val dir: String,
-        val a11yConf: String,
         val batteryRecordConf: String,
         val batteryLogsDir: String,
         val serverPid: String,
@@ -62,7 +58,6 @@ object DaemonPaths {
         return Resolved(
             workRoot = workRoot,
             dir = dir,
-            a11yConf = "$dir/$A11Y_WATCH_CONF_NAME",
             batteryRecordConf = "$dir/$BATTERY_RECORD_CONF_NAME",
             batteryLogsDir = "$dir/$BATTERY_LOGS_DIR_NAME",
             serverPid = "$dir/$SERVER_PID_NAME",

@@ -916,8 +916,21 @@ actual object TweakDaemon {
 
     private suspend fun isFileServicePid(pid: Int): Boolean {
         if (pid <= 0) return false
+        // App 进程可直接读时优先本地解析，避免 shell
+        val local = runCatching {
+            File("/proc/$pid/cmdline").takeIf { it.canRead() }?.readBytes()
+                ?.toString(Charsets.ISO_8859_1)
+                ?.replace('\u0000', ' ')
+        }.getOrNull()
+        if (!local.isNullOrBlank()) {
+            return local.contains("file_service")
+        }
+        // 禁止：`tr … < /proc/x/cmdline` 在文件不存在时回落到 ReusableShell 的 stdin，
+        // 会导致 tr 永久挂起并占满 CPU（Shizuku 启停 Daemon 时常见）。
         val cmd = runCatching {
-            ReusableShells.execSync("tr '\\0' ' ' < /proc/$pid/cmdline 2>/dev/null || true")
+            ReusableShells.execSync(
+                "cat /proc/$pid/cmdline 2>/dev/null | tr '\\0' ' ' 2>/dev/null || true",
+            )
         }.getOrDefault("")
         return cmd.contains("file_service")
     }

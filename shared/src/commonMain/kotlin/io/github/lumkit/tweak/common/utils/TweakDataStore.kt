@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import io.github.lumkit.tweak.common.daemon.A11yWatchDaemonConfig
 import io.github.lumkit.tweak.common.daemon.BatteryRecordDaemonConfig
 import io.github.lumkit.tweak.common.daemon.DaemonPaths
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
@@ -63,11 +62,9 @@ object TweakDataStore {
     private val batteryDualCell = booleanPreferencesKey("battery_dual_cell")
     // 电流数量级缩放（默认 -1000：µA→mA）
     private val batteryCurrentScale = longPreferencesKey("battery_current_scale")
-    // 无障碍保活巡检间隔档位（×10s，默认 6 → 60s；无 UI，供 conf 写入）
-    private val a11yWatchIntervalLevel = intPreferencesKey("a11y_watch_interval_level")
     // Native Daemon（TweakServer）开关
     private val nativeDaemonEnabled = booleanPreferencesKey("native_daemon_enabled")
-    // 无障碍 Daemon：守护进程/广播是否拉起无障碍
+    // 无障碍服务开关（设置页）
     private val a11yDaemonEnabled = booleanPreferencesKey("a11y_daemon_enabled")
     // 自动启动应用开关
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
@@ -288,28 +285,8 @@ object TweakDataStore {
     }
 
     /**
-     * 无障碍保活巡检间隔档位，默认 6 → 60000ms（档位 × [DaemonPaths] 10s）。
+     * 无障碍服务用户开关（设置页）；不再写入 daemon a11y_watch.conf。
      */
-    fun a11yWatchIntervalLevelFlow(): Flow<Int> = preferences.data.map {
-        it[a11yWatchIntervalLevel] ?: (DaemonPaths.DEFAULT_A11Y_INTERVAL_MS / DaemonPaths.MIN_A11Y_INTERVAL_MS)
-    }
-
-    fun a11yWatchIntervalMsFlow(): Flow<Int> = a11yWatchIntervalLevelFlow().map { level ->
-        (level.coerceAtLeast(1) * DaemonPaths.MIN_A11Y_INTERVAL_MS)
-            .coerceAtLeast(DaemonPaths.MIN_A11Y_INTERVAL_MS)
-    }
-
-    suspend fun setA11yWatchIntervalLevel(level: Int) {
-        val safe = level.coerceIn(1, 30)
-        preferences.updateData {
-            it.toMutablePreferences().also { preferences ->
-                preferences[a11yWatchIntervalLevel] = safe
-            }
-        }
-        val intervalMs = safe * DaemonPaths.MIN_A11Y_INTERVAL_MS
-        A11yWatchDaemonConfig.syncFromDataStore()
-    }
-
     fun a11yDaemonEnabledFlow(): Flow<Boolean> = preferences.data.map {
         it[a11yDaemonEnabled] ?: false
     }
@@ -320,7 +297,6 @@ object TweakDataStore {
                 preferences[a11yDaemonEnabled] = enable
             }
         }
-        A11yWatchDaemonConfig.syncFromDataStore()
     }
 
     fun nativeDaemonEnabledFlow(): Flow<Boolean> = preferences.data.map {

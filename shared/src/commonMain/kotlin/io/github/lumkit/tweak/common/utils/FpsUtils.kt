@@ -797,7 +797,8 @@ object FpsUtils {
             for p in $pathsArg; do
               if [ -r "${'$'}p" ]; then
                 echo "__FPS_PATH__${'$'}p"
-                tr '\n' ' ' < "${'$'}p" 2>/dev/null
+                # cat|tr：避免 tr 重定向失败时吃掉 ReusableShell stdin 挂死
+                cat "${'$'}p" 2>/dev/null | tr '\n' ' ' 2>/dev/null
                 echo
                 echo "__FPS_END__"
               fi

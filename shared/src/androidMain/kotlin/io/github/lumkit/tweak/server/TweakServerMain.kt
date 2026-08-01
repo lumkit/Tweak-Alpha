@@ -8,7 +8,6 @@ import androidx.annotation.Keep
 import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.common.daemon.DaemonPaths
 import io.github.lumkit.tweak.common.utils.logE
-import io.github.lumkit.tweak.server.a11y.A11yWatchEngine
 import io.github.lumkit.tweak.server.battery.BatteryEngine
 import io.github.lumkit.tweak.server.fakecontext.FakeContext
 import io.github.lumkit.tweak.sharednative.BatteryBridge
@@ -22,19 +21,21 @@ import kotlin.system.exitProcess
  *
  * - [main]：独立 `app_process`（Root / adb shell 启动）
  * - [startEmbedded]：嵌入已常驻的 Shizuku `file_service` 进程（避免嵌套 app_process 秒退）
+ *
+ * 无障碍启停由 App 端 [io.github.lumkit.tweak.common.utils.AccessibilityBootstrap] 负责，
+ * Server 不再巡检 / settings put 拉起无障碍。
  */
 @Keep
 object TweakServerMain {
 
     private const val TAG = "TweakServerMain"
-    const val VERSION = "2.0.0-c2"
+    const val VERSION = "2.0.1-c2"
     private const val BINDER_REDELIVER_MS = 60_000L
 
     private data class Session(
         val packageName: String,
         val pidFile: File,
         val batteryEngine: BatteryEngine,
-        val a11yEngine: A11yWatchEngine,
         val binder: TweakServerBinder,
         val serverBinder: android.os.IBinder,
         val embedded: Boolean,
@@ -110,7 +111,6 @@ object TweakServerMain {
         if (!current.embedded) return false
         return runCatching {
             current.batteryEngine.stop()
-            current.a11yEngine.stop()
             runCatching { current.pidFile.delete() }
             session = null
             true
@@ -156,30 +156,23 @@ object TweakServerMain {
 
         val batteryEngine = BatteryEngine.createDefault(daemonDir)
         batteryEngine.start()
-        val a11yEngine = A11yWatchEngine.createDefault(daemonDir)
-        a11yEngine.start()
 
         val binder = TweakServerBinder(
             version = VERSION,
             packageName = packageName,
             mainHandler = mainHandler,
-            statusExtra = {
-                "${batteryEngine.lastStatusLine} ${a11yEngine.lastStatusLine}"
-            },
+            statusExtra = { batteryEngine.lastStatusLine },
             onStop = {
                 logE("self-stop begin embedded=$embedded pid=${Process.myPid()}", null, TAG)
                 batteryEngine.stop()
-                a11yEngine.stop()
                 runCatching { pidFile.delete() }
                 session = null
                 if (!embedded) {
                     exitProcess(0)
                 }
-                // embedded：不杀 file_service 进程；Binder 侧 stopRequested 后 ping/status 会失败
             },
             onReload = {
                 batteryEngine.reloadConfig()
-                a11yEngine.reloadConfig()
             },
         )
         val serverBinder = binder.asBinder()
@@ -195,7 +188,6 @@ object TweakServerMain {
             packageName = packageName,
             pidFile = pidFile,
             batteryEngine = batteryEngine,
-            a11yEngine = a11yEngine,
             binder = binder,
             serverBinder = serverBinder,
             embedded = embedded,
