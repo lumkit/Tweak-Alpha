@@ -21,4 +21,10 @@ expect object BatteryRecordLogSync {
 
     /** 删除：清 offset，不删 Room */
     suspend fun syncOnLogRemoved(path: String)
+
+    /**
+     * 删除会话对应的磁盘日志（`{startedAt}_{state}.brlog` 及分片），并清理 import offset。
+     * 应在硬删 Room session 之前调用，避免下次同步把记录重新导入。
+     */
+    suspend fun deleteLogsForSession(startedAt: Long, state: Int, sessionId: Long? = null)
 }

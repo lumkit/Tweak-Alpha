@@ -83,6 +83,61 @@ object BatteryRecordLogImporter {
         }
     }
 
+    /**
+     * 删除 `{startedAt}_{state}.brlog` / `.brlog.NNN` / 旧 `.log`，并清 import offset。
+     */
+    suspend fun deleteLogsForSession(
+        startedAt: Long,
+        state: Int,
+        sessionId: Long? = null,
+    ) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val paths = DaemonPaths.resolve()
+            ensureLogsDir(paths)
+            val prefix = "${startedAt}_${state}."
+            val targets = LinkedHashSet<String>()
+            listLogFiles(paths)
+                .filter { path -> path.substringAfterLast('/').startsWith(prefix) }
+                .forEach { targets.add(it) }
+            loadState().offsets.keys
+                .filter { path -> path.substringAfterLast('/').startsWith(prefix) }
+                .forEach { targets.add(it) }
+
+            if (targets.isEmpty()) {
+                sessionId?.let { lastTsCache.remove(it) }
+                logD("no log files for session startedAt=$startedAt state=$state", TAG)
+                return@withLock
+            }
+
+            val mutableOffsets = loadState().offsets.toMutableMap()
+            for (path in targets) {
+                deleteLogFile(path)
+                mutableOffsets.remove(path)
+            }
+            saveState(ImportState(mutableOffsets))
+            sessionId?.let { lastTsCache.remove(it) }
+            logD(
+                "deleted ${targets.size} log file(s) for startedAt=$startedAt state=$state",
+                TAG,
+            )
+        }
+    }
+
+    private suspend fun deleteLogFile(path: String) {
+        val local = File(path)
+        if (local.isFile) {
+            if (local.delete()) {
+                return
+            }
+        }
+        when (val result = Files.delete(path)) {
+            is NativeFileResult.Success -> Unit
+            is NativeFileResult.Failure -> {
+                logE("failed to delete log $path: ${result.error}", tag = TAG)
+            }
+        }
+    }
+
     /** @deprecated 使用 [syncOnStartup] */
     suspend fun syncAll() = syncOnStartup()
 

@@ -4,6 +4,7 @@ import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.database.battery.BatteryPowerAggregate
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDatabase
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogSync
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import io.github.lumkit.tweak.common.utils.getDatabaseBuilder
@@ -130,6 +131,14 @@ class BatteryRecordRepository {
     ) = dao.softDeleteUnconfirmedSession(sessionId, endedAt)
 
     suspend fun deleteSession(sessionId: Long) {
+        val session = dao.querySessionById(sessionId)
+        if (session != null) {
+            BatteryRecordLogSync.deleteLogsForSession(
+                startedAt = session.startedAt,
+                state = session.state,
+                sessionId = sessionId,
+            )
+        }
         dao.deleteSamplesBySessionId(sessionId)
         dao.deleteSession(sessionId)
     }
