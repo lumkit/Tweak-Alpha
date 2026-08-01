@@ -32,7 +32,7 @@ private val zygoteOrRuntimeNames = setOf(
  * 进程快照。字段是否填充取决于读取方式：
  * - [io.github.lumkit.tweak.common.utils.ProcessUtils] 列表：cpu / res / swap / name / pid / user / command / cmdline
  * - [io.github.lumkit.tweak.common.utils.ProcessUtils.getProcessDetail]：额外填充 cpuset / cgroup / oom*
- * - [io.github.lumkit.tweak.common.utils.ProcessUtilLite] 列表：cpu / name / command / pid / user
+ * - [io.github.lumkit.tweak.common.utils.ProcessUtilLite] 列表：cpu / name / command / pid
  *
  * Android 应用进程经 [withAppMeta] 后会填充 [friendlyName] / [iconPath]，可直接给 Coil `AsyncImage`。
  *
