@@ -30,8 +30,9 @@ class ForegroundPackageReader(
     }
 
     companion object {
+        // Android ICU 对未转义 `}` / 部分 `]` 语法敏感，结尾只用 `/` 或空白截断包名
         private val focusPackageRegex = Regex(
-            """(?:mCurrentFocus|mFocusedApp|mFocusedWindow).*?\s+([A-Za-z][\w]*(?:\.[A-Za-z][\w]*)+)(?:/|\s|}|\])""",
+            """(?:mCurrentFocus|mFocusedApp|mFocusedWindow).*?([A-Za-z][\w]*(?:\.[A-Za-z][\w]*)+)(?:/|\s)""",
         )
         private val packageOnlyRegex = Regex(
             """([A-Za-z][\w]*(?:\.[A-Za-z][\w]*)+)""",
