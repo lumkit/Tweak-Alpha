@@ -1,0 +1,445 @@
+package io.github.lumkit.tweak.ui.screen.dischargeStatistics
+
+import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewModelScope
+import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.component.AppStripSegment
+import io.github.lumkit.tweak.common.component.LineChartData
+import io.github.lumkit.tweak.common.component.LineChartXAxisData
+import io.github.lumkit.tweak.common.daemon.NativeDaemonController
+import io.github.lumkit.tweak.common.daemon.TweakDaemon
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogSync
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogWatcher
+import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
+import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
+import io.github.lumkit.tweak.common.utils.AppsHelper
+import io.github.lumkit.tweak.common.utils.BatteryUtils
+import io.github.lumkit.tweak.common.utils.TweakDataStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.Closeable
+import kotlin.time.Clock
+
+class DischargeStatisticsViewModel : BaseViewModel() {
+
+    companion object {
+        const val NATIVE_DAEMON_ENABLE_LOAD_ID = "dischargeStatisticsNativeDaemon"
+    }
+
+    private val repository = BatteryRecordRepository()
+
+    enum class AppSortMode {
+        Duration,
+        AvgPower,
+    }
+
+    data class DischargeSessionSummary(
+        val startedAt: Long,
+        val endedAt: Long,
+        val isCurrentDischargingSession: Boolean,
+        val startLevel: Int,
+        val endLevel: Int,
+        val energyUw: Long,
+        val averagePowerUw: Long,
+    )
+
+    data class BatteryInfoRow(
+        val energyUw: Long,
+        val temperatureC: Float?,
+        val voltageMv: Int?,
+    )
+
+    data class AppUsageRow(
+        val packageName: String,
+        val appName: String,
+        val iconPath: String?,
+        val avgW: Float,
+        val avgTemp: Float,
+        val maxTemp: Float,
+        val durationMs: Long,
+    )
+
+    data class DischargeHistoryItem(
+        val sessionId: Long,
+        val startedAt: Long,
+        val summary: DischargeSessionSummary,
+    )
+
+    data class DischargeHistoryUiState(
+        val items: List<DischargeHistoryItem> = emptyList(),
+        val selectedSessionIds: Set<Long> = emptySet(),
+        val isSelectionMode: Boolean = false,
+        val isLoading: Boolean = false,
+        val isDeleting: Boolean = false,
+    )
+
+    private val _summary = MutableStateFlow<DischargeSessionSummary?>(null)
+    val summary = _summary.asStateFlow()
+
+    private val _levelSeries = MutableStateFlow<LineChartData?>(null)
+    val levelSeries = _levelSeries.asStateFlow()
+
+    private val _levelXAxis = MutableStateFlow(LineChartXAxisData(emptyList()))
+    val levelXAxis = _levelXAxis.asStateFlow()
+
+    private val _appSegments = MutableStateFlow<List<AppStripSegment>>(emptyList())
+    val appSegments = _appSegments.asStateFlow()
+
+    private val _batteryInfoRow = MutableStateFlow<BatteryInfoRow?>(null)
+    val batteryInfoRow = _batteryInfoRow.asStateFlow()
+
+    private val _appRows = MutableStateFlow<List<AppUsageRow>>(emptyList())
+    val appRows = _appRows.asStateFlow()
+
+    private val _etaText = MutableStateFlow("--")
+    val etaText = _etaText.asStateFlow()
+
+    private val _currentLevel = MutableStateFlow<Int?>(null)
+    val currentLevel = _currentLevel.asStateFlow()
+
+    private val _currentTime = MutableStateFlow(Clock.System.now().toEpochMilliseconds())
+    val currentTime = _currentTime.asStateFlow()
+
+    private val _hasChartSamples = MutableStateFlow(false)
+    val hasChartSamples = _hasChartSamples.asStateFlow()
+
+    private val _appSortMode = MutableStateFlow(AppSortMode.Duration)
+    val appSortMode = _appSortMode.asStateFlow()
+
+    private val _chartsSessionOverrideId = MutableStateFlow<Long?>(null)
+
+    private val _displayedChartsSessionId = MutableStateFlow<Long?>(null)
+    val displayedChartsSessionId = _displayedChartsSessionId.asStateFlow()
+
+    private val _dischargeHistoryUiState = MutableStateFlow(DischargeHistoryUiState())
+    val dischargeHistoryUiState = _dischargeHistoryUiState.asStateFlow()
+
+    private val _nativeDaemonPrompt = MutableStateFlow<Boolean?>(null)
+    val nativeDaemonPrompt = _nativeDaemonPrompt.asStateFlow()
+
+    private var chartsJob: Job? = null
+    private var historyObserveJob: Job? = null
+    private var batteryLogWatcher: Closeable? = null
+
+    private var rawAppRows: List<AppUsageRow> = emptyList()
+
+    init {
+        observeDischargingSessionCharts()
+        startBatteryLogWatcher()
+    }
+
+    private fun startBatteryLogWatcher() {
+        batteryLogWatcher?.close()
+        batteryLogWatcher = BatteryRecordLogWatcher.start(
+            onCreated = { path -> BatteryRecordLogSync.syncOnLogCreated(path) },
+            onAppended = { path -> BatteryRecordLogSync.syncOnLogAppended(path) },
+            onRemoved = { path -> BatteryRecordLogSync.syncOnLogRemoved(path) },
+        )
+    }
+
+    override fun onCleared() {
+        batteryLogWatcher?.close()
+        batteryLogWatcher = null
+        chartsJob?.cancel()
+        historyObserveJob?.cancel()
+        super.onCleared()
+    }
+
+    fun setAppSortMode(mode: AppSortMode) {
+        _appSortMode.value = mode
+        _appRows.value = sortAppRows(rawAppRows, mode)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeDischargingSessionCharts() {
+        chartsJob?.cancel()
+        chartsJob = viewModelScope.launch(Dispatchers.IO) {
+            combine(
+                _chartsSessionOverrideId,
+                repository.observeDischargingSessionForCharts(),
+            ) { overrideId, defaultSession ->
+                overrideId to defaultSession
+            }
+                .distinctUntilChanged()
+                .flatMapLatest { (overrideId, defaultSession) ->
+                    when {
+                        overrideId != null -> {
+                            combine(
+                                repository.observeSessionById(overrideId)
+                                    .distinctUntilChangedBy { it?.id to it?.endedAt },
+                                repository.observeSamplesBySessionId(overrideId),
+                                repository.observeAppUsagesBySessionId(overrideId),
+                            ) { session, samples, usages ->
+                                DischargeChartsUpdate(session, samples, usages)
+                            }
+                        }
+                        defaultSession != null -> {
+                            combine(
+                                repository.observeSessionById(defaultSession.id)
+                                    .distinctUntilChangedBy { it?.id to it?.endedAt },
+                                repository.observeSamplesBySessionId(defaultSession.id),
+                                repository.observeAppUsagesBySessionId(defaultSession.id),
+                            ) { session, samples, usages ->
+                                DischargeChartsUpdate(session, samples, usages)
+                            }
+                        }
+                        else -> flowOf(DischargeChartsUpdate(null, emptyList(), emptyList()))
+                    }
+                }
+                .combine(AppsHelper.apps) { update, _ -> update }
+                .collect { update ->
+                    applyChartsUpdate(update)
+                }
+        }
+    }
+
+    private suspend fun applyChartsUpdate(update: DischargeChartsUpdate) {
+        val nowMs = Clock.System.now().toEpochMilliseconds()
+        val session = update.session
+        val samples = update.samples
+        val usages = update.usages
+
+        val summary = session?.let { DischargeSessionMapper.buildSummary(it, samples, nowMs) }
+        val samplesByUsageId = usages.associate { usage ->
+            usage.id to repository.querySamplesByUsageId(usage.id)
+        }
+        val segments = if (session != null) {
+            DischargeSessionMapper.buildAppStripSegments(session, samples, usages, nowMs)
+        } else {
+            emptyList()
+        }
+        val appRows = DischargeSessionMapper.buildAppUsageRows(usages, samplesByUsageId, nowMs)
+        val infoRow = summary?.let {
+            DischargeSessionMapper.buildBatteryInfoRow(samples, it.energyUw)
+        }
+        val designCapacity = BatteryUtils.getDesignCapacity()
+        val etaMs = if (summary != null) {
+            estimateDischargeEtaMs(
+                DischargeEtaInput(
+                    designCapacityMah = designCapacity,
+                    avgPowerUw = summary.averagePowerUw,
+                    durationMs = (summary.endedAt - summary.startedAt).coerceAtLeast(0L),
+                    startLevel = summary.startLevel,
+                    endLevel = summary.endLevel,
+                    remainingLevel = summary.endLevel,
+                ),
+            )
+        } else {
+            null
+        }
+        val levelChart = DischargeSessionMapper.buildLevelChart(
+            samples = samples,
+            seriesName = "电量",
+            color = Color(0xFF4CAF50).copy(alpha = 0.75f),
+        )
+
+        withContext(Dispatchers.Main.immediate) {
+            if (_chartsSessionOverrideId.value != null && session == null) {
+                _chartsSessionOverrideId.value = null
+            }
+            _displayedChartsSessionId.value = session?.id
+            _summary.value = summary
+            _batteryInfoRow.value = infoRow
+            _appSegments.value = segments
+            rawAppRows = appRows
+            _appRows.value = sortAppRows(appRows, _appSortMode.value)
+            _etaText.value = formatDischargeEtaText(etaMs)
+            _currentLevel.value = samples.lastOrNull()?.level
+            _currentTime.value = nowMs
+            _hasChartSamples.value = samples.isNotEmpty()
+            if (levelChart != null) {
+                _levelXAxis.value = levelChart.first
+                _levelSeries.value = levelChart.second
+            } else {
+                _levelXAxis.value = LineChartXAxisData(emptyList())
+                _levelSeries.value = null
+            }
+        }
+    }
+
+    private fun sortAppRows(rows: List<AppUsageRow>, mode: AppSortMode): List<AppUsageRow> {
+        return when (mode) {
+            AppSortMode.Duration -> rows.sortedByDescending { it.durationMs }
+            AppSortMode.AvgPower -> rows.sortedByDescending { it.avgW }
+        }
+    }
+
+    private data class DischargeChartsUpdate(
+        val session: BatteryRecordSessionEntity?,
+        val samples: List<BatteryRecordSampleEntity>,
+        val usages: List<BatteryAppUsageEntity>,
+    )
+
+    // region 历史
+
+    fun ensureNativeDaemonOnEnter() {
+        viewModelScope.launch {
+            _nativeDaemonPrompt.value = needsNativeDaemonPrompt()
+        }
+    }
+
+    fun dismissNativeDaemonPrompt() {
+        _nativeDaemonPrompt.value = false
+    }
+
+    fun enableNativeDaemon() = suspendLaunch(id = NATIVE_DAEMON_ENABLE_LOAD_ID) {
+        loading()
+        NativeDaemonController.setEnabled(true)
+        if (!needsNativeDaemonPrompt()) {
+            _nativeDaemonPrompt.value = false
+            success()
+        } else {
+            failure(IllegalStateException("native daemon not running"))
+        }
+    }
+
+    private suspend fun needsNativeDaemonPrompt(): Boolean {
+        val enabled = TweakDataStore.nativeDaemonEnabledFlow().first()
+        if (!enabled) return true
+        return !isBatterySamplerRunning()
+    }
+
+    private suspend fun isBatterySamplerRunning(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            TweakDaemon.ping() || TweakDaemon.isRunning()
+        }.getOrDefault(false)
+    }
+
+    fun onHistorySheetOpened() {
+        if (historyObserveJob?.isActive == true) return
+        _dischargeHistoryUiState.update { it.copy(isLoading = it.items.isEmpty()) }
+        observeDischargeHistory()
+    }
+
+    fun onHistorySheetClosed() {
+        historyObserveJob?.cancel()
+        historyObserveJob = null
+        _dischargeHistoryUiState.value = DischargeHistoryUiState()
+    }
+
+    fun selectHistorySessionForCharts(sessionId: Long) {
+        _chartsSessionOverrideId.value = sessionId
+    }
+
+    fun onHistoryLongPress(sessionId: Long) {
+        _dischargeHistoryUiState.update { state ->
+            state.copy(
+                isSelectionMode = true,
+                selectedSessionIds = state.selectedSessionIds + sessionId,
+            )
+        }
+    }
+
+    fun toggleHistorySelection(sessionId: Long) {
+        _dischargeHistoryUiState.update { state ->
+            val next = state.selectedSessionIds.toMutableSet()
+            if (sessionId in next) next.remove(sessionId) else next.add(sessionId)
+            state.copy(selectedSessionIds = next)
+        }
+    }
+
+    fun exitHistorySelectionMode() {
+        _dischargeHistoryUiState.update {
+            it.copy(isSelectionMode = false, selectedSessionIds = emptySet())
+        }
+    }
+
+    fun toggleHistorySelectAll() {
+        _dischargeHistoryUiState.update { state ->
+            val allIds = state.items.map { it.sessionId }.toSet()
+            val selectAll = state.selectedSessionIds.size < allIds.size
+            state.copy(
+                selectedSessionIds = if (selectAll) allIds else emptySet(),
+            )
+        }
+    }
+
+    fun deleteSelectedDischargeHistory() {
+        val ids = _dischargeHistoryUiState.value.selectedSessionIds
+        if (ids.isEmpty() || _dischargeHistoryUiState.value.isDeleting) return
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main.immediate) {
+                _dischargeHistoryUiState.update { it.copy(isDeleting = true) }
+            }
+            try {
+                ids.forEach { sessionId ->
+                    repository.deleteSession(sessionId)
+                }
+            } finally {
+                withContext(Dispatchers.Main.immediate) {
+                    if (_chartsSessionOverrideId.value in ids) {
+                        _chartsSessionOverrideId.value = null
+                    }
+                    _dischargeHistoryUiState.update {
+                        it.copy(
+                            isDeleting = false,
+                            isSelectionMode = false,
+                            selectedSessionIds = emptySet(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeDischargeHistory() {
+        historyObserveJob?.cancel()
+        historyObserveJob = viewModelScope.launch(Dispatchers.IO) {
+            repository.observeDischargingSessions()
+                .distinctUntilChangedBy { sessions -> sessions.map { it.id } }
+                .flatMapLatest { sessions ->
+                    if (sessions.isEmpty()) {
+                        flowOf(emptyList())
+                    } else {
+                        combine(
+                            sessions.map { session ->
+                                repository.observeSamplesBySessionId(session.id)
+                                    .map { samples -> session to samples }
+                            },
+                        ) { sessionSamples ->
+                            val nowMs = Clock.System.now().toEpochMilliseconds()
+                            sessionSamples.mapNotNull { (session, samples) ->
+                                val summary = DischargeSessionMapper.buildSummary(session, samples, nowMs)
+                                    ?: return@mapNotNull null
+                                DischargeHistoryItem(
+                                    sessionId = session.id,
+                                    startedAt = session.startedAt,
+                                    summary = summary,
+                                )
+                            }
+                        }
+                    }
+                }
+                .collect { items ->
+                    val itemIds = items.map { it.sessionId }.toSet()
+                    withContext(Dispatchers.Main.immediate) {
+                        _dischargeHistoryUiState.update { state ->
+                            state.copy(
+                                items = items,
+                                isLoading = false,
+                                selectedSessionIds = state.selectedSessionIds intersect itemIds,
+                            )
+                        }
+                    }
+                }
+        }
+    }
+
+    // endregion
+}

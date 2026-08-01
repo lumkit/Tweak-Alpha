@@ -408,4 +408,24 @@
     <string name="text_charge_history_open_native_daemon">打开</string>
     <string name="text_dialog_delete_charge_history_notes">确定要删除选中的充电记录吗？将同时删除相关采样数据，删除后无法恢复。</string>
     <string name="text_charge_history_empty">暂无充电记录</string>
+    <string name="text_discharge_statistics">耗电统计</string>
+    <string name="text_discharge_statistics_description">查看放电与应用耗电情况</string>
+    <string name="text_discharge_process">使用过程</string>
+    <string name="text_discharge_process_help">展示本次放电会话的电量变化曲线，以及前台应用时段图标条。无应用采样时仅显示电量曲线。</string>
+    <string name="text_discharge_summary">耗电摘要</string>
+    <string name="text_discharge_summary_avg_power">平均功耗</string>
+    <string name="text_discharge_summary_duration">已使用时长</string>
+    <string name="text_discharge_summary_eta">理论续航</string>
+    <string name="text_discharge_scenes">使用场景</string>
+    <string name="text_discharge_scenes_help">按前台应用聚合本次放电的平均功耗、温度与使用时长，可按时长或平均功耗排序。</string>
+    <string name="text_discharge_sort_duration">时长</string>
+    <string name="text_discharge_sort_avg_power">平均功耗</string>
+    <string name="text_discharge_app_usage_empty">暂无应用耗电数据</string>
+    <string name="text_discharge_history_title">耗电记录</string>
+    <string name="text_discharge_history_empty">暂无耗电记录</string>
+    <string name="text_dialog_delete_discharge_history_notes">确定要删除选中的耗电记录吗？将同时删除相关采样与应用耗电数据，删除后无法恢复。</string>
+    <string name="text_discharge_status_not_charging">未充电</string>
+    <string name="text_discharge_link_calibration">电流单位校准</string>
+    <string name="text_discharge_link_charge_statistics">充电统计</string>
+    <string name="text_discharge_link_charge_control">充电控制</string>
 </resources>

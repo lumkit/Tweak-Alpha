@@ -64,4 +64,7 @@ sealed class Screen: NavKey {
 
     @Serializable
     data object ChargeStatistics: Screen()
+
+    @Serializable
+    data object DischargeStatistics: Screen()
 }

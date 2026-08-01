@@ -4,6 +4,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import io.github.lumkit.tweak.ui.screen.appManager.AppManagerProvider
 import io.github.lumkit.tweak.ui.screen.chargeStatistics.ChargeStatisticsProvider
+import io.github.lumkit.tweak.ui.screen.dischargeStatistics.DischargeStatisticsProvider
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureCategory
 import io.github.lumkit.tweak.ui.screen.flashRom.FlashRomProvider
 import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordingProvider
@@ -47,6 +48,7 @@ object FeatureRegistry {
                 features = setOf(
                     FpsRecordingProvider,
                     ChargeStatisticsProvider,
+                    DischargeStatisticsProvider,
                 )
             )
         )
