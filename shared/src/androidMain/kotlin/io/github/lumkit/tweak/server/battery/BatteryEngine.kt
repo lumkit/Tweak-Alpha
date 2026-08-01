@@ -16,12 +16,14 @@ class BatteryEngine(
     private val confPath: String,
     private val logsDir: File,
     private val sampler: BatterySampler,
+    private val packageReader: ForegroundPackageReader = ForegroundPackageReader(),
 ) {
     private val running = AtomicBoolean(false)
     private val reloadRequested = AtomicBoolean(false)
     private val confRef = AtomicReference(BatteryRecordConf())
     private var thread: Thread? = null
     private var writer: BrlogWriter? = null
+    private var applogWriter: ApplogWriter? = null
 
     @Volatile
     var lastStatusLine: String = "battery_enabled=0 battery_interval_ms=0"
@@ -117,6 +119,8 @@ class BatteryEngine(
                 }
 
                 writer?.appendSample(sample.copy(timestampMs = now, state = newState))
+                val pkg = runCatching { packageReader.resolve() }.getOrDefault("")
+                applogWriter?.append(now, pkg)
                 sleepInterruptible(cfg.intervalMs.toLong())
             }
         } finally {
@@ -147,6 +151,16 @@ class BatteryEngine(
             ),
         )
         writer = w
+        val aw = ApplogWriter(logsDir, cfg.maxPartBytes)
+        aw.openSession(
+            ApplogWriter.SessionMeta(
+                startedAt = session.startedAt,
+                state = session.state,
+                intervalMs = session.intervalMs,
+                createdAt = session.createdAt,
+            ),
+        )
+        applogWriter = aw
         return session
     }
 
@@ -154,6 +168,8 @@ class BatteryEngine(
         if (active == null) return null
         writer?.closeSession(endedAt)
         writer = null
+        applogWriter?.closeSession(endedAt)
+        applogWriter = null
         return null
     }
 
