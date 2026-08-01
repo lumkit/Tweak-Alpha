@@ -99,9 +99,11 @@ class LoadWatcherOverlayController(
     }
 
     override fun createOverlayHelper(context: Context): ComposeOverlayHelper {
+        val helper = ComposeOverlayHelper(context)
         val touchProvider = DragTouchProvider(context = context).apply {
             onClick = {
                 expanded.value = !expanded.value
+                helper.clampToSafeBounds(postIfNeeded = true)
             }
             onDoubleClick = {
                 OverlayMonitor.hideLoadWatcherOverlay()
@@ -112,9 +114,8 @@ class LoadWatcherOverlayController(
                 }
             }
         }
-        return ComposeOverlayHelper(context).apply {
-            setTouchProvider(touchProvider)
-        }
+        helper.setTouchProvider(touchProvider)
+        return helper
     }
 
     @Composable

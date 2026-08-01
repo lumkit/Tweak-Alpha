@@ -1,11 +1,8 @@
 package io.github.lumkit.tweak.common.utils
 
 import android.content.Context
-import android.graphics.Point
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.DisplayMetrics
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -17,6 +14,7 @@ import kotlin.math.abs
  * 自由拖动触摸提供者
  *
  * 支持拖拽移动、单击、双击，不做吸边处理。
+ * 拖动范围避开状态栏 / 导航栏 / 挖孔（含沉浸式预留）。
  */
 class DragTouchProvider(
     private val context: Context = application,
@@ -63,7 +61,6 @@ class DragTouchProvider(
         windowManager: WindowManager,
         view: View,
     ): Boolean {
-        val screen = getRealScreenSize()
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 consumeTapUpEvent = false
@@ -89,8 +86,16 @@ class DragTouchProvider(
                 val newY = initialY + (event.rawY - initialTouchY).toInt()
                 val viewWidth = view.measuredWidth.takeIf { it > 0 } ?: view.width
                 val viewHeight = view.measuredHeight.takeIf { it > 0 } ?: view.height
-                params.x = newX.coerceIn(0, (screen.x - viewWidth).coerceAtLeast(0))
-                params.y = newY.coerceIn(0, (screen.y - viewHeight).coerceAtLeast(0))
+                val (clampedX, clampedY) = OverlayScreenBounds.clamp(
+                    windowManager = windowManager,
+                    context = context,
+                    x = newX,
+                    y = newY,
+                    viewWidth = viewWidth,
+                    viewHeight = viewHeight,
+                )
+                params.x = clampedX
+                params.y = clampedY
                 runCatching { windowManager.updateViewLayout(view, params) }
                 return true
             }
@@ -136,18 +141,5 @@ class DragTouchProvider(
         }
         isTouching = false
         onInteractionEnd?.invoke()
-    }
-
-    private fun getRealScreenSize(): Point {
-        val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = wm.currentWindowMetrics.bounds
-            Point(bounds.width(), bounds.height())
-        } else {
-            val metrics = DisplayMetrics()
-            @Suppress("DEPRECATION")
-            wm.defaultDisplay.getRealMetrics(metrics)
-            Point(metrics.widthPixels, metrics.heightPixels)
-        }
     }
 }

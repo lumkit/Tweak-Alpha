@@ -1,7 +1,6 @@
 package io.github.lumkit.tweak.service
 
 import android.content.Intent
-import android.graphics.Point
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Handler
@@ -48,6 +47,7 @@ import io.github.lumkit.tweak.common.base.BaseService
 import io.github.lumkit.tweak.common.component.rememberTextWidth
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
 import io.github.lumkit.tweak.common.utils.FpsUtils
+import io.github.lumkit.tweak.common.utils.OverlayScreenBounds
 import io.github.lumkit.tweak.common.utils.SnapToEdgeTouchProvider
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
@@ -196,44 +196,39 @@ class FpsRecordService : BaseService() {
     }
 
     private fun handleOverlayScreenChanged() {
-        val (currentX, currentY) = overlayHelper.getPosition() ?: getDefaultOverlayPosition()
-        val screen = getRealScreenSize()
-        val boundedX = currentX.coerceIn(0, screen.x.coerceAtLeast(0))
-        val boundedY = currentY.coerceIn(0, screen.y.coerceAtLeast(0))
-        overlayHelper.updatePosition(boundedX, boundedY)
+        overlayHelper.clampToSafeBounds(postIfNeeded = true)
         overlayHelper.requestReSnap()
     }
 
     private fun currentScreenState(): OverlayScreenState {
-        val screen = getRealScreenSize()
+        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val screen = OverlayScreenBounds.screenSize(windowManager)
+        val insets = OverlayScreenBounds.systemBarInsets(windowManager, this)
         val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             displayManager?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: 0
         } else {
             @Suppress("DEPRECATION")
-            (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation
+            windowManager.defaultDisplay.rotation
         }
         return OverlayScreenState(
             width = screen.x,
             height = screen.y,
-            rotation = rotation
+            rotation = rotation,
+            insetLeft = insets.left,
+            insetTop = insets.top,
+            insetRight = insets.right,
+            insetBottom = insets.bottom,
         )
-    }
-
-    private fun getRealScreenSize(): Point {
-        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.currentWindowMetrics.bounds
-            Point(bounds.width(), bounds.height())
-        } else {
-            @Suppress("DEPRECATION")
-            Point().also { windowManager.defaultDisplay.getRealSize(it) }
-        }
     }
 
     private data class OverlayScreenState(
         val width: Int,
         val height: Int,
         val rotation: Int,
+        val insetLeft: Int,
+        val insetTop: Int,
+        val insetRight: Int,
+        val insetBottom: Int,
     )
 }
 

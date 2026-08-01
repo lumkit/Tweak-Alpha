@@ -4,8 +4,12 @@ import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
+import android.view.Display
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -76,9 +80,29 @@ class ComposeOverlayHelper(
 ) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var rootView: View? = null
     private var composeView: ComposeView? = null
     private var lifecycleOwner: OverlayLifecycleOwner? = null
+    private var lastScreenFingerprint: String? = null
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+        override fun onDisplayRemoved(displayId: Int) = Unit
+        override fun onDisplayChanged(displayId: Int) {
+            if (!isShowing) {
+                lastScreenFingerprint = currentScreenFingerprint()
+                return
+            }
+            val fingerprint = currentScreenFingerprint()
+            if (fingerprint == lastScreenFingerprint) {
+                return
+            }
+            lastScreenFingerprint = fingerprint
+            clampToSafeBounds(postIfNeeded = true)
+            requestReSnap()
+        }
+    }
     var touchProvider: OverlayTouchProvider? = null
         private set
 
@@ -163,6 +187,17 @@ class ComposeOverlayHelper(
         rootView = root
         composeView = compose
         lifecycleOwner = owner
+        lastScreenFingerprint = currentScreenFingerprint()
+        registerDisplayListener()
+        root.setOnApplyWindowInsetsListener { _, insets ->
+            // 系统栏显隐变化时按可见 inset 重新限制；不强制吸边，避免沉浸切换时跳动
+            clampToSafeBounds(postIfNeeded = false)
+            insets
+        }
+        root.requestApplyInsets()
+        root.post {
+            clampToSafeBounds(postIfNeeded = false)
+        }
     }
 
     /**
@@ -176,6 +211,7 @@ class ComposeOverlayHelper(
      * 移除悬浮窗
      */
     fun dismiss() {
+        unregisterDisplayListener()
         rootView?.let { view ->
             lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
             lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
@@ -185,6 +221,7 @@ class ComposeOverlayHelper(
         rootView = null
         composeView = null
         lifecycleOwner = null
+        lastScreenFingerprint = null
     }
 
     /**
@@ -199,14 +236,59 @@ class ComposeOverlayHelper(
     }
 
     /**
-     * 更新悬浮窗位置
+     * 更新悬浮窗位置（自动 clamp 到系统栏安全区）
      */
     fun updatePosition(x: Int, y: Int) {
         val view = rootView ?: return
         val params = view.layoutParams as WindowManager.LayoutParams
-        params.x = x
-        params.y = y
+        val viewWidth = view.measuredWidth.takeIf { it > 0 } ?: view.width
+        val viewHeight = view.measuredHeight.takeIf { it > 0 } ?: view.height
+        val (clampedX, clampedY) = if (viewWidth > 0 && viewHeight > 0) {
+            OverlayScreenBounds.clamp(
+                windowManager = windowManager,
+                context = context,
+                x = x,
+                y = y,
+                viewWidth = viewWidth,
+                viewHeight = viewHeight,
+            )
+        } else {
+            x to y
+        }
+        params.x = clampedX
+        params.y = clampedY
         windowManager.updateViewLayout(view, params)
+    }
+
+    /**
+     * 将当前位置限制在状态栏 / 导航栏 / 挖孔之外的安全区。
+     * 尺寸尚未 layout 完成时会 [post] 重试。
+     */
+    fun clampToSafeBounds(postIfNeeded: Boolean = true) {
+        val view = rootView ?: return
+        val params = view.layoutParams as? WindowManager.LayoutParams ?: return
+        val viewWidth = view.measuredWidth.takeIf { it > 0 } ?: view.width
+        val viewHeight = view.measuredHeight.takeIf { it > 0 } ?: view.height
+        if (viewWidth <= 0 || viewHeight <= 0) {
+            if (postIfNeeded) {
+                view.post { clampToSafeBounds(postIfNeeded = false) }
+            }
+            return
+        }
+        val (clampedX, clampedY) = OverlayScreenBounds.clamp(
+            windowManager = windowManager,
+            context = context,
+            x = params.x,
+            y = params.y,
+            viewWidth = viewWidth,
+            viewHeight = viewHeight,
+        )
+        if (clampedX == params.x && clampedY == params.y) {
+            return
+        }
+        params.x = clampedX
+        params.y = clampedY
+        runCatching { windowManager.updateViewLayout(view, params) }
     }
 
     /**
@@ -232,7 +314,30 @@ class ComposeOverlayHelper(
         val provider = touchProvider
         if (provider is SnapToEdgeTouchProvider) {
             provider.requestReSnap(view, params, windowManager)
+        } else {
+            clampToSafeBounds(postIfNeeded = true)
         }
+    }
+
+    private fun registerDisplayListener() {
+        unregisterDisplayListener()
+        displayManager?.registerDisplayListener(displayListener, mainHandler)
+    }
+
+    private fun unregisterDisplayListener() {
+        displayManager?.unregisterDisplayListener(displayListener)
+    }
+
+    private fun currentScreenFingerprint(): String {
+        val size = OverlayScreenBounds.screenSize(windowManager)
+        val insets = OverlayScreenBounds.systemBarInsets(windowManager, context)
+        val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            displayManager?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: 0
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.rotation
+        }
+        return "${size.x}x${size.y}:$rotation:${insets.left},${insets.top},${insets.right},${insets.bottom}"
     }
 
     private fun createLayoutParams(
@@ -284,8 +389,20 @@ class ComposeOverlayHelper(
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    params.x = initialX + (event.rawX - initialTouchX).toInt()
-                    params.y = initialY + (event.rawY - initialTouchY).toInt()
+                    val newX = initialX + (event.rawX - initialTouchX).toInt()
+                    val newY = initialY + (event.rawY - initialTouchY).toInt()
+                    val viewWidth = view.measuredWidth.takeIf { it > 0 } ?: view.width
+                    val viewHeight = view.measuredHeight.takeIf { it > 0 } ?: view.height
+                    val (clampedX, clampedY) = OverlayScreenBounds.clamp(
+                        windowManager = windowManager,
+                        context = context,
+                        x = newX,
+                        y = newY,
+                        viewWidth = viewWidth,
+                        viewHeight = viewHeight,
+                    )
+                    params.x = clampedX
+                    params.y = clampedY
                     windowManager.updateViewLayout(view, params)
                     true
                 }
