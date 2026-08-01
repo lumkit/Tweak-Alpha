@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -57,6 +58,142 @@ data class LineChartXAxisData(
     val dataSet: List<String>,
 )
 
+/** 与 [SmoothLineChart] 实际绘图区一致的内边距（用于叠加层对齐轴线）。 */
+@Immutable
+data class SmoothLineChartPlotPadding(
+    val start: Dp,
+    val top: Dp,
+    val end: Dp,
+    val bottom: Dp,
+)
+
+/**
+ * 按与 [SmoothLineChart] 相同的标签测量规则计算绘图区内边距。
+ */
+@Composable
+fun rememberSmoothLineChartPlotPadding(
+    xAxis: LineChartXAxisData,
+    data: List<LineChartData>,
+    textStyle: TextStyle,
+    showAffix: Boolean = true,
+    yAxisTickCount: Int = 5,
+    xAxisTickCount: Int = 5,
+    xAxisTickIndexes: List<Int>? = null,
+): SmoothLineChartPlotPadding {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(
+        xAxis,
+        data,
+        textStyle,
+        showAffix,
+        yAxisTickCount,
+        xAxisTickCount,
+        xAxisTickIndexes,
+        density,
+        textMeasurer,
+    ) {
+        val sampled = data.map {
+            SampledLineChartData(
+                name = it.name,
+                prefix = it.prefix,
+                suffix = it.suffix,
+                color = it.color,
+                axisType = it.axisType,
+                dataSet = it.dataSet,
+            )
+        }
+        val layout = measureSmoothLineChartPlotLayout(
+            xAxisLabels = xAxis.dataSet,
+            data = sampled,
+            textMeasurer = textMeasurer,
+            density = density,
+            textStyle = textStyle,
+            showAffix = showAffix,
+            yAxisTickCount = yAxisTickCount.coerceIn(1, 5),
+            xAxisTickCount = xAxisTickCount.coerceIn(1, 6),
+            xAxisTickIndexes = xAxisTickIndexes
+                ?.filter { it in xAxis.dataSet.indices }
+                ?.distinct()
+                ?.sorted()
+                ?.takeIf { it.isNotEmpty() },
+        )
+        with(density) {
+            SmoothLineChartPlotPadding(
+                start = layout.leftPx.toDp(),
+                top = layout.topPx.toDp(),
+                end = layout.rightPx.toDp(),
+                bottom = layout.bottomPx.toDp(),
+            )
+        }
+    }
+}
+
+@Immutable
+private data class SmoothLineChartPlotLayout(
+    val leftPx: Float,
+    val topPx: Float,
+    val rightPx: Float,
+    val bottomPx: Float,
+)
+
+private fun measureSmoothLineChartPlotLayout(
+    xAxisLabels: List<String>,
+    data: List<SampledLineChartData>,
+    textMeasurer: TextMeasurer,
+    density: Density,
+    textStyle: TextStyle,
+    showAffix: Boolean,
+    yAxisTickCount: Int,
+    xAxisTickCount: Int,
+    xAxisTickIndexes: List<Int>?,
+): SmoothLineChartPlotLayout {
+    val primaryData = data.filter { it.axisType == LineChartAxisType.Primary }
+    val secondaryData = data.filter { it.axisType == LineChartAxisType.Secondary }
+    val primaryTicks = buildAxisTicks(primaryData, yAxisTickCount)
+    val secondaryTicks = buildAxisTicks(secondaryData, yAxisTickCount)
+    val xTickIndexes = xAxisTickIndexes
+        ?: buildXAxisTickIndexes(xAxisLabels.size, xAxisTickCount)
+
+    val leftFormatter: (Float) -> String = primaryData.firstOrNull()?.let { line ->
+        { value: Float -> formatAxisValue(value, line.prefix, line.suffix, showAffix = showAffix) }
+    } ?: { value: Float -> formatAxisValue(value, "", "", showAffix = showAffix) }
+    val rightFormatter: (Float) -> String = secondaryData.firstOrNull()?.let { line ->
+        { value: Float -> formatAxisValue(value, line.prefix, line.suffix, showAffix = showAffix) }
+    } ?: { value: Float -> formatAxisValue(value, "", "", showAffix = showAffix) }
+
+    val leftLabelWidth = (primaryTicks.tickValues + 0f).maxOfOrNull { tick ->
+        textMeasurer.measure(text = leftFormatter(tick), style = textStyle).size.width
+    } ?: 0
+    val rightLabelWidth = if (secondaryData.isEmpty()) {
+        0
+    } else {
+        (secondaryTicks.tickValues + 0f).maxOfOrNull { tick ->
+            textMeasurer.measure(text = rightFormatter(tick), style = textStyle).size.width
+        } ?: 0
+    }
+    val xLabelHeight = xTickIndexes.maxOfOrNull { index ->
+        val label = xAxisLabels.getOrNull(index).orEmpty()
+        textMeasurer.measure(text = label, style = textStyle).size.height
+    } ?: 0
+
+    val labelSpacingPx = with(density) { 8.dp.toPx() }
+    val leftPadding = leftLabelWidth + labelSpacingPx * 2
+    val rightPadding = if (secondaryData.isEmpty()) {
+        labelSpacingPx
+    } else {
+        rightLabelWidth + labelSpacingPx * 2
+    }
+    val topPadding = labelSpacingPx
+    val bottomPadding = xLabelHeight + labelSpacingPx * 2
+    return SmoothLineChartPlotLayout(
+        leftPx = leftPadding,
+        topPx = topPadding,
+        rightPx = rightPadding,
+        bottomPx = bottomPadding,
+    )
+}
+
 @Immutable
 private data class SampledLineChartData(
     val name: String,
@@ -94,6 +231,8 @@ fun SmoothLineChart(
     yAxisTickCount: Int = 5,
     textStyle: TextStyle = TextStyle.Default,
     showAffix: Boolean = true,
+    /** 显式指定 X 轴刻度点下标；非空时优先于 [xAxisTickCount] 自动均分 */
+    xAxisTickIndexes: List<Int>? = null,
 ) {
     if (data.isEmpty() || xAxis.dataSet.isEmpty()) {
         return
@@ -106,18 +245,37 @@ fun SmoothLineChart(
     }
 
     val textMeasurer = rememberTextMeasurer()
+    val resolvedTickIndexes = xAxisTickIndexes
+        ?.filter { it in xAxis.dataSet.indices }
+        ?.distinct()
+        ?.sorted()
+        ?.takeIf { it.isNotEmpty() }
 
     BoxWithConstraints(modifier = modifier) {
         val maxPoints = remember(maxWidth) {
             // One representative point per pixel is enough for a line chart.
             max(2, floor(maxWidth.value).toInt())
         }
-        val sampledInput = remember(xAxis, data, maxPoints) {
-            sampleLineChartData(
-                xAxis = xAxis,
-                data = data,
-                maxSamples = maxPoints,
-            )
+        // 自定义刻度依赖原始下标，采样会打乱对齐，故跳过降采样
+        val sampledInput = remember(xAxis, data, maxPoints, resolvedTickIndexes) {
+            if (resolvedTickIndexes != null) {
+                SampledXAxisData(xAxis.dataSet) to data.map {
+                    SampledLineChartData(
+                        name = it.name,
+                        prefix = it.prefix,
+                        suffix = it.suffix,
+                        color = it.color,
+                        axisType = it.axisType,
+                        dataSet = it.dataSet,
+                    )
+                }
+            } else {
+                sampleLineChartData(
+                    xAxis = xAxis,
+                    data = data,
+                    maxSamples = maxPoints,
+                )
+            }
         }
 
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -133,10 +291,11 @@ fun SmoothLineChart(
                 showGrid = showGrid,
                 gridColor = gridColor,
                 gridLineWidth = gridLineWidth,
-                xAxisTickCount = xAxisTickCount.coerceIn(1, 5),
+                xAxisTickCount = xAxisTickCount.coerceIn(1, 6),
                 yAxisTickCount = yAxisTickCount.coerceIn(1, 5),
                 textStyle = textStyle,
                 showAffix = showAffix,
+                xAxisTickIndexes = resolvedTickIndexes,
             )
         }
     }
@@ -278,12 +437,14 @@ private fun DrawScope.drawSmoothLineChart(
     yAxisTickCount: Int,
     textStyle: TextStyle,
     showAffix: Boolean,
+    xAxisTickIndexes: List<Int>? = null,
 ) {
     val primaryData = data.filter { it.axisType == LineChartAxisType.Primary }
     val secondaryData = data.filter { it.axisType == LineChartAxisType.Secondary }
     val primaryTicks = buildAxisTicks(primaryData, yAxisTickCount)
     val secondaryTicks = buildAxisTicks(secondaryData, yAxisTickCount)
-    val xTickIndexes = buildXAxisTickIndexes(xAxis.dataSet.size, xAxisTickCount)
+    val xTickIndexes = xAxisTickIndexes
+        ?: buildXAxisTickIndexes(xAxis.dataSet.size, xAxisTickCount)
 
     val leftFormatter = primaryData.firstOrNull()?.let { { value: Float ->
         formatAxisValue(value, it.prefix, it.suffix, showAffix = showAffix)
@@ -292,43 +453,23 @@ private fun DrawScope.drawSmoothLineChart(
         formatAxisValue(value, it.prefix, it.suffix, showAffix = showAffix)
     } } ?: { value: Float -> formatAxisValue(value, "", "", showAffix = showAffix) }
 
-    val leftLabelWidth = (primaryTicks.tickValues + 0f).maxOfOrNull { tick ->
-        textMeasurer.measure(
-            text = leftFormatter(tick),
-            style = textStyle,
-        ).size.width
-    } ?: 0
-    val rightLabelWidth = if (secondaryData.isEmpty()) {
-        0
-    } else {
-        (secondaryTicks.tickValues + 0f).maxOfOrNull { tick ->
-            textMeasurer.measure(
-                text = rightFormatter(tick),
-                style = textStyle,
-            ).size.width
-        } ?: 0
-    }
-    val xLabelHeight = xTickIndexes.maxOfOrNull { index ->
-        textMeasurer.measure(
-            text = xAxis.dataSet[index],
-            style = textStyle,
-        ).size.height
-    } ?: 0
-
+    val plotLayout = measureSmoothLineChartPlotLayout(
+        xAxisLabels = xAxis.dataSet,
+        data = data,
+        textMeasurer = textMeasurer,
+        density = density,
+        textStyle = textStyle,
+        showAffix = showAffix,
+        yAxisTickCount = yAxisTickCount,
+        xAxisTickCount = xAxisTickCount,
+        xAxisTickIndexes = xTickIndexes,
+    )
     val labelSpacingPx = with(density) { 8.dp.toPx() }
-    val leftPadding = leftLabelWidth + labelSpacingPx * 2
-    val rightPadding = if (secondaryData.isEmpty()) {
-        labelSpacingPx
-    } else {
-        rightLabelWidth + labelSpacingPx * 2
-    }
-    val topPadding = labelSpacingPx
-    val bottomPadding = xLabelHeight + labelSpacingPx * 2
 
-    val plotLeft = leftPadding
-    val plotRight = size.width - rightPadding
-    val plotTop = topPadding
-    val plotBottom = size.height - bottomPadding
+    val plotLeft = plotLayout.leftPx
+    val plotRight = size.width - plotLayout.rightPx
+    val plotTop = plotLayout.topPx
+    val plotBottom = size.height - plotLayout.bottomPx
     val plotWidth = (plotRight - plotLeft).coerceAtLeast(1f)
     val plotHeight = (plotBottom - plotTop).coerceAtLeast(1f)
     val axisStroke = with(density) { axisLineWidth.toPx() }

@@ -1,6 +1,8 @@
 package io.github.lumkit.tweak.ui.screen.dischargeStatistics
 
-import io.github.lumkit.tweak.common.component.AppStripSegment
+import androidx.compose.ui.graphics.Color
+import io.github.lumkit.tweak.common.component.AppMinuteBarCell
+import io.github.lumkit.tweak.common.component.AppMinuteBarColumn
 import io.github.lumkit.tweak.common.component.LineChartData
 import io.github.lumkit.tweak.common.component.LineChartXAxisData
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
@@ -10,10 +12,59 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSession
 import io.github.lumkit.tweak.common.utils.AppsHelper
 import io.github.lumkit.tweak.common.utils.formatElapsedTime
 import io.github.lumkit.tweak.ui.screen.chargeStatistics.ChargeSessionChartsMapper
-import androidx.compose.ui.graphics.Color
 import kotlin.math.abs
 
 internal object DischargeSessionMapper {
+
+    private const val FIVE_MIN_MS = 5 * 60_000L
+    private const val MIN_DRAW_SPAN_MS = 30 * 60_000L
+    private const val DRAW_INTERVAL_COUNT = 6
+    private const val MAX_X_TICK_COUNT = 6
+    private const val ICON_SLOTS_PER_INTERVAL = 5
+    private const val LEVEL_POINTS_PER_INTERVAL = 20
+
+    /**
+     * 放电过程图时间轴：
+     * - 区间宽度为 5 分钟的整数倍
+     * - 录制 ≤30 分钟时按 30 分钟绘制（区间=5 分钟）
+     * - 超出后放大区间，始终 6 个绘制区间，X 轴最多 6 个刻度（0..5I，末端多留 1 个区间）
+     * - 每个 X 轴区间再均分 5 格绘制 App 图标
+     */
+    data class ChartAxisScale(
+        val intervalMs: Long,
+        val drawIntervalCount: Int = DRAW_INTERVAL_COUNT,
+        val labeledPointCount: Int = MAX_X_TICK_COUNT,
+        val iconSlotsPerInterval: Int = ICON_SLOTS_PER_INTERVAL,
+        val levelPointsPerInterval: Int = LEVEL_POINTS_PER_INTERVAL,
+    ) {
+        val drawSpanMs: Long get() = intervalMs * drawIntervalCount
+        val iconSlotCount: Int get() = drawIntervalCount * iconSlotsPerInterval
+        val levelPointCount: Int get() = drawIntervalCount * levelPointsPerInterval + 1
+
+        fun xTickIndexes(): List<Int> {
+            return (0 until labeledPointCount).map { tick ->
+                tick * levelPointsPerInterval
+            }
+        }
+    }
+
+    data class LevelChartBuild(
+        val xAxis: LineChartXAxisData,
+        val series: LineChartData,
+        val xTickIndexes: List<Int>,
+        val axisScale: ChartAxisScale,
+    )
+
+    fun resolveAxisScale(durationMs: Long): ChartAxisScale {
+        val duration = durationMs.coerceAtLeast(0L)
+        val intervalMs = if (duration <= MIN_DRAW_SPAN_MS) {
+            FIVE_MIN_MS
+        } else {
+            val rawPerInterval = (duration + DRAW_INTERVAL_COUNT - 1) / DRAW_INTERVAL_COUNT
+            ((rawPerInterval + FIVE_MIN_MS - 1) / FIVE_MIN_MS) * FIVE_MIN_MS
+        }
+        return ChartAxisScale(intervalMs = intervalMs)
+    }
 
     fun buildSummary(
         session: BatteryRecordSessionEntity,
@@ -39,50 +90,106 @@ internal object DischargeSessionMapper {
     }
 
     fun buildLevelChart(
+        session: BatteryRecordSessionEntity,
         samples: List<BatteryRecordSampleEntity>,
         seriesName: String,
         color: Color,
-    ): Pair<LineChartXAxisData, LineChartData>? {
+        nowMs: Long,
+    ): LevelChartBuild? {
         if (samples.isEmpty()) return null
-        val startAt = samples.first().timestamp
-        val xAxis = LineChartXAxisData(
-            dataSet = samples.map { (it.timestamp - startAt).coerceAtLeast(0L).formatElapsedTime() },
+        val sessionStart = session.startedAt
+        val sessionEnd = session.endedAt
+            ?: samples.lastOrNull()?.timestamp
+            ?: nowMs
+        val durationMs = (sessionEnd - sessionStart).coerceAtLeast(0L)
+        val scale = resolveAxisScale(durationMs)
+        val pointCount = scale.levelPointCount
+        val drawSpan = scale.drawSpanMs
+
+        val labels = ArrayList<String>(pointCount)
+        val levels = ArrayList<Float>(pointCount)
+        for (index in 0 until pointCount) {
+            val elapsedMs = drawSpan * index / (pointCount - 1)
+            labels += elapsedMs.formatElapsedTime()
+            levels += levelAtElapsed(samples, sessionStart, elapsedMs)
+        }
+
+        return LevelChartBuild(
+            xAxis = LineChartXAxisData(labels),
+            series = LineChartData(
+                name = seriesName,
+                suffix = "%",
+                dataSet = levels,
+                color = color,
+            ),
+            xTickIndexes = scale.xTickIndexes(),
+            axisScale = scale,
         )
-        // 固定观感接近 0–100：在序列中保留真实电量值，坐标轴由 SmoothLineChart 按最大值取整
-        val series = LineChartData(
-            name = seriesName,
-            suffix = "%",
-            dataSet = samples.map { it.level.toFloat() },
-            color = color,
-        )
-        return xAxis to series
     }
 
-    fun buildAppStripSegments(
+    /**
+     * 在绘制时间轴上按「区间/5」分槽聚合前台应用功耗；
+     * 每列 [cells] 按功耗升序（低在下、高在上）。
+     */
+    fun buildAppMinuteColumns(
         session: BatteryRecordSessionEntity,
         samples: List<BatteryRecordSampleEntity>,
         usages: List<BatteryAppUsageEntity>,
         nowMs: Long,
-    ): List<AppStripSegment> {
+        axisScale: ChartAxisScale,
+    ): List<AppMinuteBarColumn> {
         if (usages.isEmpty() || samples.isEmpty()) return emptyList()
         val sessionStart = session.startedAt
         val sessionEnd = session.endedAt
             ?: samples.lastOrNull()?.timestamp
             ?: nowMs
-        val span = (sessionEnd - sessionStart).coerceAtLeast(1L)
-        return usages.map { usage ->
-            val endAt = usage.endedAt ?: sessionEnd
-            val startRatio = ((usage.startedAt - sessionStart).toFloat() / span).coerceIn(0f, 1f)
-            val endRatio = ((endAt - sessionStart).toFloat() / span).coerceIn(startRatio, 1f)
-            val app = AppsHelper.apps.value.find { it.packageName == usage.packageName }
-            AppStripSegment(
-                packageName = usage.packageName,
-                startRatio = startRatio,
-                endRatio = endRatio,
-                iconPath = app?.iconPath?.takeIf { it.isNotBlank() }
-                    ?: AppsHelper.getIconPath(usage.packageName).takeIf { it.isNotBlank() },
+        val sortedUsages = usages.sortedBy { it.startedAt }
+        val slotCount = axisScale.iconSlotCount
+        val drawSpan = axisScale.drawSpanMs
+        val columns = ArrayList<AppMinuteBarColumn>(slotCount)
+
+        for (slotIndex in 0 until slotCount) {
+            val bucketStart = sessionStart + drawSpan * slotIndex / slotCount
+            val bucketEnd = if (slotIndex == slotCount - 1) {
+                sessionStart + drawSpan
+            } else {
+                sessionStart + drawSpan * (slotIndex + 1) / slotCount
+            }
+            if (bucketEnd <= bucketStart) continue
+
+            val powerSums = LinkedHashMap<String, Long>()
+            val powerCounts = LinkedHashMap<String, Int>()
+            for (sample in samples) {
+                if (sample.timestamp < bucketStart || sample.timestamp >= bucketEnd) continue
+                if (sample.timestamp > sessionEnd) continue
+                val pkg = packageAt(sample.timestamp, sortedUsages) ?: continue
+                if (pkg.isBlank()) continue
+                val power = samplePowerUw(sample) ?: continue
+                powerSums[pkg] = (powerSums[pkg] ?: 0L) + power
+                powerCounts[pkg] = (powerCounts[pkg] ?: 0) + 1
+            }
+            if (powerSums.isEmpty()) continue
+
+            val cells = powerSums.map { (pkg, sum) ->
+                val count = (powerCounts[pkg] ?: 1).coerceAtLeast(1)
+                val app = AppsHelper.apps.value.find { it.packageName == pkg }
+                AppMinuteBarCell(
+                    packageName = pkg,
+                    iconPath = app?.iconPath?.takeIf { it.isNotBlank() }
+                        ?: AppsHelper.getIconPath(pkg).takeIf { it.isNotBlank() },
+                    powerUw = sum / count,
+                )
+            }.sortedBy { it.powerUw }
+
+            columns.add(
+                AppMinuteBarColumn(
+                    minuteIndex = slotIndex,
+                    centerRatio = ((slotIndex + 0.5f) / slotCount).coerceIn(0f, 1f),
+                    cells = cells,
+                ),
             )
         }
+        return columns
     }
 
     fun buildAppUsageRows(
@@ -149,6 +256,38 @@ internal object DischargeSessionMapper {
             temperatureC = last.temperatureC,
             voltageMv = last.voltageMv,
         )
+    }
+
+    private fun levelAtElapsed(
+        samples: List<BatteryRecordSampleEntity>,
+        sessionStart: Long,
+        elapsedMs: Long,
+    ): Float {
+        val target = sessionStart + elapsedMs
+        var previous: BatteryRecordSampleEntity? = null
+        for (sample in samples) {
+            if (sample.timestamp == target) return sample.level.toFloat()
+            if (sample.timestamp > target) {
+                val prev = previous ?: return sample.level.toFloat()
+                val span = (sample.timestamp - prev.timestamp).coerceAtLeast(1L)
+                val ratio = (target - prev.timestamp).toFloat() / span
+                return prev.level + (sample.level - prev.level) * ratio
+            }
+            previous = sample
+        }
+        return previous?.level?.toFloat() ?: samples.first().level.toFloat()
+    }
+
+    private fun packageAt(timestamp: Long, sortedUsages: List<BatteryAppUsageEntity>): String? {
+        var matched: BatteryAppUsageEntity? = null
+        for (usage in sortedUsages) {
+            if (timestamp < usage.startedAt) break
+            val ended = usage.endedAt
+            if (ended == null || timestamp < ended) {
+                matched = usage
+            }
+        }
+        return matched?.packageName
     }
 
     private fun resolveUsageDurationMs(

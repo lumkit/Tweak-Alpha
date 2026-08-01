@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.ui.screen.dischargeStatistics
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -22,11 +24,9 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -102,7 +102,9 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.window.WindowDialog
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_charge
+import tweak_alpha.shared.generated.resources.ic_discharge
 import tweak_alpha.shared.generated.resources.ic_history
+import tweak_alpha.shared.generated.resources.text_battery_level
 import tweak_alpha.shared.generated.resources.text_charge_history_native_daemon_required
 import tweak_alpha.shared.generated.resources.text_charge_history_open_native_daemon
 import tweak_alpha.shared.generated.resources.text_dialog_confirm
@@ -128,14 +130,13 @@ import tweak_alpha.shared.generated.resources.text_discharge_summary_eta
 import tweak_alpha.shared.generated.resources.text_feature_rule_description_update_sys
 import tweak_alpha.shared.generated.resources.text_go_back
 import tweak_alpha.shared.generated.resources.text_native_daemon_loading
-import tweak_alpha.shared.generated.resources.text_battery_level
 
 internal val DischargeStatisticsProvider = object : FeatureProvider {
     override val feature: Feature
         get() = Feature(
             key = "DischargeStatisticsProvider",
             title = Res.string.text_discharge_statistics,
-            icon = Res.drawable.ic_charge,
+            icon = Res.drawable.ic_discharge,
             description = Res.string.text_discharge_statistics_description,
             capabilities = setOf(
                 Capability.SHIZUKU_OR_ROOT,
@@ -196,7 +197,6 @@ fun DischargeStatisticsScreen(
         onConfirm = { viewModel.enableNativeDaemon() },
         onCancel = {
             viewModel.dismissNativeDaemonPrompt()
-            navigator.goBack()
         },
     )
 
@@ -314,7 +314,9 @@ private fun DischargeProcessCard(
     val hasSamples by viewModel.hasChartSamples.collectAsStateWithLifecycle()
     val levelSeries by viewModel.levelSeries.collectAsStateWithLifecycle()
     val levelXAxis by viewModel.levelXAxis.collectAsStateWithLifecycle()
-    val appSegments by viewModel.appSegments.collectAsStateWithLifecycle()
+    val appMinuteColumns by viewModel.appMinuteColumns.collectAsStateWithLifecycle()
+    val chartIconSlotCount by viewModel.chartIconSlotCount.collectAsStateWithLifecycle()
+    val chartXTickIndexes by viewModel.chartXTickIndexes.collectAsStateWithLifecycle()
     val batteryInfo by viewModel.batteryInfoRow.collectAsStateWithLifecycle()
     val currentLevel by viewModel.currentLevel.collectAsStateWithLifecycle()
     val levelLabel = stringResource(Res.string.text_battery_level)
@@ -331,16 +333,6 @@ private fun DischargeProcessCard(
                 text = stringResource(Res.string.text_discharge_process),
                 insideMargin = PaddingValues(0.dp),
             )
-            IconButton(
-                onClick = onHelpClick,
-                modifier = Modifier.size(28.dp),
-            ) {
-                Text(
-                    text = "?",
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                )
-            }
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = currentLevel?.let { "$it%" } ?: PLACEHOLDER,
@@ -370,7 +362,9 @@ private fun DischargeProcessCard(
                     .padding(end = 8.dp),
                 levelSeries = series.copy(name = levelLabel),
                 xAxis = levelXAxis,
-                appSegments = appSegments,
+                minuteColumns = appMinuteColumns,
+                iconSlotCount = chartIconSlotCount,
+                xAxisTickIndexes = chartXTickIndexes,
             )
         }
 
@@ -441,11 +435,12 @@ private fun DischargeSummaryCard(viewModel: DischargeStatisticsViewModel) {
 }
 
 @Composable
-private fun SummaryMetric(
+private fun RowScope.SummaryMetric(
     title: String,
     value: String,
 ) {
     Column(
+        modifier = Modifier.weight(1f),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -482,16 +477,6 @@ private fun DischargeScenesCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SmallTitle(text = stringResource(Res.string.text_discharge_scenes))
-            IconButton(
-                onClick = onHelpClick,
-                modifier = Modifier.size(28.dp),
-            ) {
-                Text(
-                    text = "?",
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                )
-            }
             Spacer(modifier = Modifier.weight(1f))
             Row(
                 modifier = Modifier
@@ -573,20 +558,18 @@ private fun DischargeAppUsageItem(row: DischargeStatisticsViewModel.AppUsageRow)
     BasicComponent(
         modifier = Modifier.fillMaxWidth(),
         startAction = {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MiuixTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
-            ) {
-                AsyncImage(
-                    model = row.iconPath,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape),
-                )
-            }
+            AsyncImage(
+                model = row.iconPath,
+                contentDescription = null,
+                error = null,
+                modifier = Modifier.clip(Rectangle.copy(12.dp))
+                    .border(
+                        width = 1.dp,
+                        shape = Rectangle.copy(12.dp),
+                        color = MiuixTheme.colorScheme.onSurface.copy(.1f)
+                    )
+                    .size(48.dp)
+            )
         },
         endActions = {
             Text(

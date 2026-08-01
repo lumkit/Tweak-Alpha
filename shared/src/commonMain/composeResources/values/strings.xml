@@ -388,6 +388,8 @@
     <string name="text_charge_statistics">充电统计</string>
     <string name="text_charge_statistics_description">查看充电情况</string>
     <string name="text_charge_label_battery_status">电池状态</string>
+    <string name="text_charge_label_battery_cycle_count">循环次数</string>
+    <string name="text_charge_label_battery_cycle_count_fm">%d次</string>
     <string name="text_charge_label_battery_status_charging">充电中</string>
     <string name="text_charge_label_battery_status_full">已充满</string>
     <string name="text_charge_label_battery_status_discharging">放电中</string>

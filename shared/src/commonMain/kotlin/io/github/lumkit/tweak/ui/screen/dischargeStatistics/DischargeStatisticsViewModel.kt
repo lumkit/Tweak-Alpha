@@ -3,7 +3,7 @@ package io.github.lumkit.tweak.ui.screen.dischargeStatistics
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
-import io.github.lumkit.tweak.common.component.AppStripSegment
+import io.github.lumkit.tweak.common.component.AppMinuteBarColumn
 import io.github.lumkit.tweak.common.component.LineChartData
 import io.github.lumkit.tweak.common.component.LineChartXAxisData
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
@@ -97,8 +97,14 @@ class DischargeStatisticsViewModel : BaseViewModel() {
     private val _levelXAxis = MutableStateFlow(LineChartXAxisData(emptyList()))
     val levelXAxis = _levelXAxis.asStateFlow()
 
-    private val _appSegments = MutableStateFlow<List<AppStripSegment>>(emptyList())
-    val appSegments = _appSegments.asStateFlow()
+    private val _appMinuteColumns = MutableStateFlow<List<AppMinuteBarColumn>>(emptyList())
+    val appMinuteColumns = _appMinuteColumns.asStateFlow()
+
+    private val _chartIconSlotCount = MutableStateFlow(30)
+    val chartIconSlotCount = _chartIconSlotCount.asStateFlow()
+
+    private val _chartXTickIndexes = MutableStateFlow<List<Int>>(emptyList())
+    val chartXTickIndexes = _chartXTickIndexes.asStateFlow()
 
     private val _batteryInfoRow = MutableStateFlow<BatteryInfoRow?>(null)
     val batteryInfoRow = _batteryInfoRow.asStateFlow()
@@ -218,8 +224,30 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         val samplesByUsageId = usages.associate { usage ->
             usage.id to repository.querySamplesByUsageId(usage.id)
         }
-        val segments = if (session != null) {
-            DischargeSessionMapper.buildAppStripSegments(session, samples, usages, nowMs)
+        val levelChart = if (session != null) {
+            DischargeSessionMapper.buildLevelChart(
+                session = session,
+                samples = samples,
+                seriesName = "电量",
+                color = Color(0xFF4CAF50).copy(alpha = 0.75f),
+                nowMs = nowMs,
+            )
+        } else {
+            null
+        }
+        val axisScale = levelChart?.axisScale
+            ?: session?.let {
+                val end = it.endedAt ?: samples.lastOrNull()?.timestamp ?: nowMs
+                DischargeSessionMapper.resolveAxisScale((end - it.startedAt).coerceAtLeast(0L))
+            }
+        val minuteColumns = if (session != null && axisScale != null) {
+            DischargeSessionMapper.buildAppMinuteColumns(
+                session = session,
+                samples = samples,
+                usages = usages,
+                nowMs = nowMs,
+                axisScale = axisScale,
+            )
         } else {
             emptyList()
         }
@@ -242,11 +270,6 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         } else {
             null
         }
-        val levelChart = DischargeSessionMapper.buildLevelChart(
-            samples = samples,
-            seriesName = "电量",
-            color = Color(0xFF4CAF50).copy(alpha = 0.75f),
-        )
 
         withContext(Dispatchers.Main.immediate) {
             if (_chartsSessionOverrideId.value != null && session == null) {
@@ -255,7 +278,9 @@ class DischargeStatisticsViewModel : BaseViewModel() {
             _displayedChartsSessionId.value = session?.id
             _summary.value = summary
             _batteryInfoRow.value = infoRow
-            _appSegments.value = segments
+            _appMinuteColumns.value = minuteColumns
+            _chartIconSlotCount.value = axisScale?.iconSlotCount ?: 30
+            _chartXTickIndexes.value = levelChart?.xTickIndexes.orEmpty()
             rawAppRows = appRows
             _appRows.value = sortAppRows(appRows, _appSortMode.value)
             _etaText.value = formatDischargeEtaText(etaMs)
@@ -263,8 +288,8 @@ class DischargeStatisticsViewModel : BaseViewModel() {
             _currentTime.value = nowMs
             _hasChartSamples.value = samples.isNotEmpty()
             if (levelChart != null) {
-                _levelXAxis.value = levelChart.first
-                _levelSeries.value = levelChart.second
+                _levelXAxis.value = levelChart.xAxis
+                _levelSeries.value = levelChart.series
             } else {
                 _levelXAxis.value = LineChartXAxisData(emptyList())
                 _levelSeries.value = null

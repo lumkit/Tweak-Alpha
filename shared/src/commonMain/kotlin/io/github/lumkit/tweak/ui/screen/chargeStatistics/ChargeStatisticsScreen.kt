@@ -131,6 +131,8 @@ import tweak_alpha.shared.generated.resources.text_charge_history_open_native_da
 import tweak_alpha.shared.generated.resources.text_charge_history_title
 import tweak_alpha.shared.generated.resources.text_charge_label_average_power
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_capacity
+import tweak_alpha.shared.generated.resources.text_charge_label_battery_cycle_count
+import tweak_alpha.shared.generated.resources.text_charge_label_battery_cycle_count_fm
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_power
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_status
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_status_charging
@@ -213,7 +215,6 @@ fun ChargeStatisticsScreen(
         onConfirm = { viewModel.enableNativeDaemonForChargeHistory() },
         onCancel = {
             viewModel.dismissChargeHistoryNativeDaemonPrompt()
-            navigator.goBack()
         },
     )
 
@@ -342,12 +343,7 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
     val batteryCapacityText = remember(batterySnapshot) {
         val snapshot = batterySnapshot
         snapshot?.designCapacityMah?.let { designCapacity ->
-            val cycleCount = snapshot.cycleCount
-            if (cycleCount != null) {
-                "$designCapacity mAh（$cycleCount）"
-            } else {
-                "$designCapacity mAh"
-            }
+            "$designCapacity mAh"
         }
     }
 
@@ -356,7 +352,8 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
     ) {
         Row(
             modifier = Modifier.fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(top = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // 电池状态Labels
@@ -410,6 +407,21 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
                     value = powerText,
                 )
             }
+        }
+
+        batterySnapshot?.cycleCount?.let { count ->
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp)
+            ) {
+                ChargeStateLabel(
+                    title = stringResource(Res.string.text_charge_label_battery_cycle_count),
+                    value = stringResource(Res.string.text_charge_label_battery_cycle_count_fm).format(count),
+                )
+            }
+        } ?: run {
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
         AnimatedVisibility(
