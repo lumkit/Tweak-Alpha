@@ -2,9 +2,12 @@ package io.github.lumkit.tweak.common.database.battery.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import io.github.lumkit.tweak.common.database.battery.BatteryPowerAggregate
+import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import kotlinx.coroutines.flow.Flow
@@ -215,4 +218,70 @@ interface BatteryRecordDao {
         """,
     )
     suspend fun maxSampleTimestamp(sessionId: Long): Long?
+
+    @Query(
+        """
+        SELECT * FROM battery_record_session
+        WHERE deleted = 0 AND state = :state
+        ORDER BY startedAt DESC
+        """,
+    )
+    fun observeSessionsByState(state: Int): Flow<List<BatteryRecordSessionEntity>>
+
+    @Query(
+        """
+        SELECT * FROM battery_app_usage
+        WHERE sessionId = :sessionId
+        ORDER BY startedAt ASC
+        """,
+    )
+    fun observeAppUsagesBySessionId(sessionId: Long): Flow<List<BatteryAppUsageEntity>>
+
+    @Query(
+        """
+        SELECT * FROM battery_app_usage
+        WHERE sessionId = :sessionId
+        ORDER BY startedAt ASC
+        """,
+    )
+    suspend fun queryAppUsagesBySessionId(sessionId: Long): List<BatteryAppUsageEntity>
+
+    @Query(
+        """
+        SELECT id FROM battery_record_sample
+        WHERE sessionId = :sessionId AND timestamp = :timestamp
+        LIMIT 1
+        """,
+    )
+    suspend fun querySampleIdBySessionAndTimestamp(sessionId: Long, timestamp: Long): Long?
+
+    @Query(
+        """
+        SELECT s.* FROM battery_record_sample s
+        INNER JOIN battery_app_usage_sample m ON m.sampleId = s.id
+        WHERE m.usageId = :usageId
+        ORDER BY s.timestamp ASC
+        """,
+    )
+    suspend fun querySamplesByUsageId(usageId: Long): List<BatteryRecordSampleEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAppUsage(entity: BatteryAppUsageEntity): Long
+
+    @Update
+    suspend fun updateAppUsage(entity: BatteryAppUsageEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAppUsageSamples(rows: List<BatteryAppUsageSampleEntity>)
+
+    @Query(
+        """
+        DELETE FROM battery_app_usage_sample
+        WHERE usageId IN (SELECT id FROM battery_app_usage WHERE sessionId = :sessionId)
+        """,
+    )
+    suspend fun deleteAppUsageSamplesBySessionId(sessionId: Long)
+
+    @Query("DELETE FROM battery_app_usage WHERE sessionId = :sessionId")
+    suspend fun deleteAppUsagesBySessionId(sessionId: Long)
 }

@@ -5,6 +5,8 @@ import io.github.lumkit.tweak.common.database.battery.BatteryPowerAggregate
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDatabase
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogSync
+import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import io.github.lumkit.tweak.common.utils.getDatabaseBuilder
@@ -20,7 +22,9 @@ class BatteryRecordRepository {
 
     companion object {
         private val database by lazy {
-            getDatabaseBuilder<BatteryRecordDatabase>("battery_record.db").build()
+            getDatabaseBuilder<BatteryRecordDatabase>("battery_record.db")
+                .addMigrations(BatteryRecordDatabase.MIGRATION_1_2)
+                .build()
         }
     }
 
@@ -78,6 +82,10 @@ class BatteryRecordRepository {
         dao.observeLatestChargingSessions(BatteryChargeState.CHARGING.code)
             .map { it.firstOrNull() }
 
+    fun observeLatestDischargingSession(): Flow<BatteryRecordSessionEntity?> =
+        dao.observeLatestChargingSessions(BatteryChargeState.DISCHARGING.code)
+            .map { it.firstOrNull() }
+
     /**
      * 图表与充电摘要所用会话：正在充电时用当前活跃充电 session，否则用最近一条充电 session。
      */
@@ -90,6 +98,21 @@ class BatteryRecordRepository {
                 active
             } else {
                 latestCharging
+            }
+        }.distinctUntilChangedBy { session -> session?.id to session?.endedAt }
+
+    /**
+     * 耗电统计图表会话：正在放电用活跃 session，否则最近一条放电 session。
+     */
+    fun observeDischargingSessionForCharts(): Flow<BatteryRecordSessionEntity?> =
+        combine(
+            observeActiveSession(),
+            observeLatestDischargingSession(),
+        ) { active, latestDischarging ->
+            if (active?.chargeState == BatteryChargeState.DISCHARGING) {
+                active
+            } else {
+                latestDischarging
             }
         }.distinctUntilChangedBy { session -> session?.id to session?.endedAt }
 
@@ -113,6 +136,30 @@ class BatteryRecordRepository {
 
     fun observeChargingSessions(): Flow<List<BatteryRecordSessionEntity>> =
         dao.observeChargingSessions(BatteryChargeState.CHARGING.code)
+
+    fun observeDischargingSessions(): Flow<List<BatteryRecordSessionEntity>> =
+        dao.observeSessionsByState(BatteryChargeState.DISCHARGING.code)
+
+    fun observeAppUsagesBySessionId(sessionId: Long): Flow<List<BatteryAppUsageEntity>> =
+        dao.observeAppUsagesBySessionId(sessionId)
+
+    suspend fun queryAppUsagesBySessionId(sessionId: Long): List<BatteryAppUsageEntity> =
+        dao.queryAppUsagesBySessionId(sessionId)
+
+    suspend fun querySamplesByUsageId(usageId: Long): List<BatteryRecordSampleEntity> =
+        dao.querySamplesByUsageId(usageId)
+
+    suspend fun querySampleIdBySessionAndTimestamp(sessionId: Long, timestamp: Long): Long? =
+        dao.querySampleIdBySessionAndTimestamp(sessionId, timestamp)
+
+    suspend fun insertAppUsage(entity: BatteryAppUsageEntity): Long =
+        dao.insertAppUsage(entity)
+
+    suspend fun updateAppUsage(entity: BatteryAppUsageEntity) =
+        dao.updateAppUsage(entity)
+
+    suspend fun insertAppUsageSamples(rows: List<BatteryAppUsageSampleEntity>) =
+        dao.insertAppUsageSamples(rows)
 
     suspend fun confirmSession(sessionId: Long) =
         dao.confirmSession(sessionId)
@@ -139,6 +186,8 @@ class BatteryRecordRepository {
                 sessionId = sessionId,
             )
         }
+        dao.deleteAppUsageSamplesBySessionId(sessionId)
+        dao.deleteAppUsagesBySessionId(sessionId)
         dao.deleteSamplesBySessionId(sessionId)
         dao.deleteSession(sessionId)
     }
