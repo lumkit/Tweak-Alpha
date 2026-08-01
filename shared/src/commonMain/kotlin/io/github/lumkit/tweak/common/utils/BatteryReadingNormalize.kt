@@ -53,11 +53,7 @@ object BatteryReadingNormalize {
     fun normalizeCurrent(raw: Long): Int {
         val cfg = calibration
         val scale = coerceScale(cfg.scale)
-        var scaled = if (scale < 0L) {
-            raw / -scale
-        } else {
-            raw * scale
-        }
+        var scaled = raw / -scale
         if (cfg.dualCell) {
             scaled *= 2L
         }

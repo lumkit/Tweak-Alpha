@@ -73,10 +73,10 @@
     <string name="text_auto_start_description">部分机型需手动开启权限</string>
     <string name="text_native_daemon">后台采集进程</string>
     <string name="text_native_daemon_description">用于采集设备数据以实现可视化图表</string>
-    <string name="text_native_daemon_loading">正在切换 Native Daemon...</string>
+    <string name="text_native_daemon_loading">正在切换采集进程...</string>
     <string name="text_runtime_mode_loading">正在切换运行模式...</string>
     <string name="text_a11y_daemon">无障碍服务</string>
-    <string name="text_a11y_daemon_description">用于ADB权限下帧率检测</string>
+    <string name="text_a11y_daemon_description">增强数据测量准确性，建议开启</string>
     <string name="text_auto_listen_system_update">自动监听系统更新服务</string>
     <string name="text_auto_listen_system_update_description">开启后自动推送系统更新状态通知</string>
     <string name="text_panel_refresh_tick">面板刷新间隔</string>
@@ -404,7 +404,7 @@
     <string name="text_charge_chart_mode_power">功率</string>
     <string name="text_charge_chart_mode_current">电流</string>
     <string name="text_charge_history_title">充电记录</string>
-    <string name="text_charge_history_native_daemon_required">采样进程未运行，需要先开启 Native Daemon 后才支持数据写入，是否开启？</string>
+    <string name="text_charge_history_native_daemon_required">采样进程未运行，需要先开启后台采集进程后才支持数据写入，是否开启？</string>
     <string name="text_charge_history_open_native_daemon">打开</string>
     <string name="text_dialog_delete_charge_history_notes">确定要删除选中的充电记录吗？将同时删除相关采样数据，删除后无法恢复。</string>
     <string name="text_charge_history_empty">暂无充电记录</string>
