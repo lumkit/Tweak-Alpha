@@ -46,7 +46,10 @@ actual object BatteryRecordLogWatcher {
             if (name.startsWith("/")) name else "$dir/$name"
 
         fun isBatteryLog(name: String): Boolean =
-            name.contains(".brlog") || name.endsWith(".log") || name.contains(".log.")
+            name.contains(".brlog") ||
+                name.contains(".applog") ||
+                name.endsWith(".log") ||
+                name.contains(".log.")
 
         fun debounceAppend(path: String) {
             pendingAppend.remove(path)?.cancel()

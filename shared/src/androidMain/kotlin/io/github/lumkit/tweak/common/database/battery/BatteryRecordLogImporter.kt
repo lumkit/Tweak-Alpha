@@ -3,6 +3,8 @@ package io.github.lumkit.tweak.common.database.battery
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.daemon.DaemonPaths
 import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
+import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import io.github.lumkit.tweak.common.shell.ReusableShells
@@ -11,6 +13,7 @@ import io.github.lumkit.tweak.common.utils.NativeFileResult
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
+import io.github.lumkit.tweak.server.battery.ApplogWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -148,7 +151,9 @@ object BatteryRecordLogImporter {
         val mark = TimeSource.Monotonic.markNow()
         val paths = DaemonPaths.resolve()
         ensureLogsDir(paths)
-        val files = listLogFiles(paths).sorted()
+        val files = listLogFiles(paths).sortedWith(
+            compareBy<String> { isApplogPath(it) }.thenBy { it },
+        )
         if (files.isEmpty()) {
             logD("no battery log files under ${paths.batteryLogsDir}", TAG)
             return
@@ -213,6 +218,10 @@ object BatteryRecordLogImporter {
             startOffset = 0L
         }
 
+        if (isApplogPath(path) || (startOffset == 0L && looksLikeApplog(path))) {
+            return importApplog(path, fileLen, startOffset, mutableOffsets, budget)
+        }
+
         // brlog：无论有无新字节都先同步 header（endedAt / confirmed / deleted）
         // 否则 session 结束只改头、长度不变时 Room 永远停在「进行中」
         val brlog = isBrlogPath(path) || (startOffset == 0L && looksLikeBrlog(path, 0L))
@@ -230,6 +239,109 @@ object BatteryRecordLogImporter {
         } else {
             importLegacyText(path, fileLen, startOffset, mutableOffsets, budget)
         }
+    }
+
+    private suspend fun importApplog(
+        path: String,
+        fileLen: Long,
+        startOffset: Long,
+        mutableOffsets: MutableMap<String, Long>,
+        budget: Long,
+    ): Consumed {
+        val headerSize = ApplogWriter.HEADER_SIZE.toInt()
+        val headerBytes = readBytes(path, 0, headerSize) ?: return Consumed(0, 0)
+        if (headerBytes.size < headerSize || !ApplogWriter.isTwA1(headerBytes)) {
+            return Consumed(0, 0)
+        }
+        val header = ByteBuffer.wrap(headerBytes).order(ByteOrder.LITTLE_ENDIAN)
+        header.position(4)
+        header.short // version
+        header.short // headerSize field
+        header.int // intervalMs
+        val state = header.int
+        val startedAt = header.long
+        header.long // createdAt
+        val endedAt = header.long
+        val chargeState = BatteryChargeState.fromCode(state)
+        val session = repository.querySessionByStartedAtAndState(startedAt, chargeState)
+            ?: return Consumed(0, 0)
+
+        var offset = if (startOffset < headerSize) headerSize.toLong() else startOffset
+        if (offset >= fileLen) {
+            mutableOffsets[path] = fileLen
+            closeOpenUsages(session.id, endedAt)
+            return Consumed(0, 0)
+        }
+
+        var currentUsage = repository.queryAppUsagesBySessionId(session.id)
+            .lastOrNull { it.endedAt == null }
+        var samples = 0
+        var bytes = 0L
+
+        while (offset < fileLen && bytes < budget) {
+            val fixed = readBytes(path, offset, 10) ?: break
+            if (fixed.size < 10) break
+            val recordBuf = ByteBuffer.wrap(fixed).order(ByteOrder.LITTLE_ENDIAN)
+            val timestamp = recordBuf.long
+            val nameLen = recordBuf.short.toInt() and 0xFFFF
+            if (nameLen < 0 || nameLen > 512) break
+            val nameBytes = readBytes(path, offset + 10, nameLen) ?: break
+            if (nameBytes.size < nameLen) break
+            val pkg = nameBytes.decodeToString()
+            val recordSize = 10L + nameLen
+
+            if (pkg.isBlank()) {
+                offset += recordSize
+                bytes += recordSize
+                continue
+            }
+            val sampleId = repository.querySampleIdBySessionAndTimestamp(session.id, timestamp)
+            if (sampleId == null) {
+                break
+            }
+
+            if (currentUsage == null || currentUsage.packageName != pkg) {
+                if (currentUsage != null) {
+                    repository.updateAppUsage(currentUsage.copy(endedAt = timestamp))
+                }
+                val usageId = repository.insertAppUsage(
+                    BatteryAppUsageEntity(
+                        sessionId = session.id,
+                        packageName = pkg,
+                        startedAt = timestamp,
+                        endedAt = null,
+                    ),
+                )
+                currentUsage = BatteryAppUsageEntity(
+                    id = usageId,
+                    sessionId = session.id,
+                    packageName = pkg,
+                    startedAt = timestamp,
+                    endedAt = null,
+                )
+            }
+            repository.insertAppUsageSamples(
+                listOf(BatteryAppUsageSampleEntity(usageId = currentUsage.id, sampleId = sampleId)),
+            )
+            offset += recordSize
+            bytes += recordSize
+            samples++
+        }
+
+        if (endedAt > 0L) {
+            closeOpenUsages(session.id, endedAt)
+        }
+        mutableOffsets[path] = offset
+        return Consumed(bytes, samples)
+    }
+
+    private suspend fun closeOpenUsages(sessionId: Long, endedAt: Long) {
+        if (endedAt <= 0L) return
+        repository.queryAppUsagesBySessionId(sessionId)
+            .filter { it.endedAt == null }
+            .forEach { usage ->
+                repository.updateAppUsage(usage.copy(endedAt = endedAt))
+            }
     }
 
     /** 仅根据文件头 upsert/结束对应 Room session，不消费样本字节 */
@@ -371,16 +483,27 @@ object BatteryRecordLogImporter {
 
     private fun isLogPath(nameOrPath: String): Boolean {
         val name = nameOrPath.substringAfterLast('/')
-        return name.contains(".brlog") || name.endsWith(".log") || name.contains(".log.")
+        return name.contains(".brlog") ||
+            name.contains(".applog") ||
+            name.endsWith(".log") ||
+            name.contains(".log.")
     }
 
     private fun isBrlogPath(path: String): Boolean =
         path.substringAfterLast('/').contains(".brlog")
 
+    private fun isApplogPath(path: String): Boolean =
+        path.substringAfterLast('/').contains(".applog")
+
     private suspend fun looksLikeBrlog(path: String, offset: Long): Boolean {
         if (offset > 0) return false
         val head = readBytes(path, 0, 4) ?: return false
         return isTwb2(head)
+    }
+
+    private suspend fun looksLikeApplog(path: String): Boolean {
+        val head = readBytes(path, 0, 4) ?: return false
+        return ApplogWriter.isTwA1(head)
     }
 
     private fun isTwb2(bytes: ByteArray): Boolean =
