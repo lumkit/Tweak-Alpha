@@ -417,7 +417,7 @@
     <string name="text_discharge_summary">耗电摘要</string>
     <string name="text_discharge_summary_avg_power">平均功耗</string>
     <string name="text_discharge_summary_duration">已使用时长</string>
-    <string name="text_discharge_summary_eta">理论续航</string>
+    <string name="text_discharge_summary_eta">剩余续航</string>
     <string name="text_discharge_scenes">使用场景</string>
     <string name="text_discharge_scenes_help">按前台应用聚合本次放电的平均功耗、温度与使用时长，可按时长或平均功耗排序。</string>
     <string name="text_discharge_sort_duration">时长</string>

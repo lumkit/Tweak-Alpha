@@ -9,12 +9,14 @@ import kotlin.test.assertTrue
 class DischargeEtaTest {
 
     @Test
-    fun prefersCapacityOverSlope() {
+    fun prefersCapacityScaledByRemaining() {
         val designMah = 5000
         val avgPowerUw = 3_530_000L
-        val expected = (
+        val remaining = 80
+        val fullMs = (
             designMah / 1000.0 * 3.7 / (avgPowerUw / 1_000_000.0) * 3_600_000.0
-            ).toLong()
+            )
+        val expected = (fullMs * remaining / 100.0).toLong()
         val ms = estimateDischargeEtaMs(
             DischargeEtaInput(
                 designCapacityMah = designMah,
@@ -22,14 +24,15 @@ class DischargeEtaTest {
                 durationMs = 43 * 60_000L,
                 startLevel = 100,
                 endLevel = 80,
-                remainingLevel = 80,
+                remainingLevel = remaining,
             ),
         )
         assertEquals(expected, ms)
     }
 
     @Test
-    fun fallsBackToFullSlopeWhenNoCapacity() {
+    fun fallsBackToSlopeTimesRemainingWhenNoCapacity() {
+        // 1h 掉 50% → 每 % 需 72s；剩余 50% → 1h
         val ms = estimateDischargeEtaMs(
             DischargeEtaInput(
                 designCapacityMah = null,
@@ -40,7 +43,22 @@ class DischargeEtaTest {
                 remainingLevel = 50,
             ),
         )
-        assertEquals(7_200_000L, ms)
+        assertEquals(3_600_000L, ms)
+    }
+
+    @Test
+    fun returnsNullWhenRemainingIsZero() {
+        val ms = estimateDischargeEtaMs(
+            DischargeEtaInput(
+                designCapacityMah = 4000,
+                avgPowerUw = 2_000_000L,
+                durationMs = 3_600_000L,
+                startLevel = 10,
+                endLevel = 0,
+                remainingLevel = 0,
+            ),
+        )
+        assertNull(ms)
     }
 
     @Test
