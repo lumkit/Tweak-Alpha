@@ -2,28 +2,45 @@ package io.github.lumkit.tweak.ui.screen.dischargeStatistics
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DischargeEtaTest {
 
     @Test
-    fun prefersCapacityScaledByRemaining() {
-        val designMah = 5000
-        val avgPowerUw = 3_530_000L
-        val remaining = 80
-        val fullMs = (
-            designMah / 1000.0 * 3.7 / (avgPowerUw / 1_000_000.0) * 3_600_000.0
-            )
-        val expected = (fullMs * remaining / 100.0).toLong()
+    fun slopePreferredWhenDropAndDurationEnough() {
+        // 1h 掉 10% → 每 % 需 6min；剩余 50% → 5h
         val ms = estimateDischargeEtaMs(
             DischargeEtaInput(
-                designCapacityMah = designMah,
-                avgPowerUw = avgPowerUw,
-                durationMs = 43 * 60_000L,
-                startLevel = 100,
-                endLevel = 80,
+                capacityMah = 5000,
+                avgPowerUw = 1_000_000L,
+                avgVoltageMv = 3700,
+                durationMs = 3_600_000L,
+                startLevel = 60,
+                endLevel = 50,
+                remainingLevel = 50,
+            ),
+        )
+        assertEquals(18_000_000L, ms)
+    }
+
+    @Test
+    fun energyFallbackWhenDropBelowThreshold() {
+        // 掉 1% < 2 → E: remainingWh/avgW
+        val capacity = 5000
+        val remaining = 50
+        val avgW = 2.0
+        val v = 3.7
+        val remainingWh = capacity / 1000.0 * v * remaining / 100.0
+        val expected = (remainingWh / avgW * 3_600_000.0).toLong()
+        val ms = estimateDischargeEtaMs(
+            DischargeEtaInput(
+                capacityMah = capacity,
+                avgPowerUw = 2_000_000L,
+                avgVoltageMv = 3700,
+                durationMs = 3_600_000L,
+                startLevel = 51,
+                endLevel = 50,
                 remainingLevel = remaining,
             ),
         )
@@ -31,64 +48,65 @@ class DischargeEtaTest {
     }
 
     @Test
-    fun fallsBackToSlopeTimesRemainingWhenNoCapacity() {
-        // 1h 掉 50% → 每 % 需 72s；剩余 50% → 1h
+    fun energyFallbackWhenDurationTooShort() {
         val ms = estimateDischargeEtaMs(
             DischargeEtaInput(
-                designCapacityMah = null,
-                avgPowerUw = 0L,
-                durationMs = 3_600_000L,
-                startLevel = 100,
+                capacityMah = 4000,
+                avgPowerUw = 2_000_000L,
+                avgVoltageMv = 3700,
+                durationMs = 60_000L, // < 3min
+                startLevel = 60,
                 endLevel = 50,
                 remainingLevel = 50,
             ),
         )
-        assertEquals(3_600_000L, ms)
+        assertTrue(ms != null && ms > 0L)
+        // 不得等于斜率 1min/10%*50 = 5min
+        assertTrue(ms != 300_000L)
+    }
+
+    @Test
+    fun returnsNullWhenNoInputs() {
+        assertNull(
+            estimateDischargeEtaMs(
+                DischargeEtaInput(
+                    capacityMah = null,
+                    avgPowerUw = 0L,
+                    avgVoltageMv = null,
+                    durationMs = 0L,
+                    startLevel = 50,
+                    endLevel = 50,
+                    remainingLevel = 50,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun energyUsesProvidedVoltageNotHardcoded() {
+        val a = estimateDischargeEtaMs(
+            DischargeEtaInput(4000, 2_000_000L, 4000, 0L, 50, 50, 50),
+        )
+        val b = estimateDischargeEtaMs(
+            DischargeEtaInput(4000, 2_000_000L, 3400, 0L, 50, 50, 50),
+        )
+        assertTrue(a != null && b != null && a != b)
     }
 
     @Test
     fun returnsNullWhenRemainingIsZero() {
-        val ms = estimateDischargeEtaMs(
-            DischargeEtaInput(
-                designCapacityMah = 4000,
-                avgPowerUw = 2_000_000L,
-                durationMs = 3_600_000L,
-                startLevel = 10,
-                endLevel = 0,
-                remainingLevel = 0,
+        assertNull(
+            estimateDischargeEtaMs(
+                DischargeEtaInput(
+                    capacityMah = 4000,
+                    avgPowerUw = 2_000_000L,
+                    avgVoltageMv = 3700,
+                    durationMs = 3_600_000L,
+                    startLevel = 10,
+                    endLevel = 0,
+                    remainingLevel = 0,
+                ),
             ),
         )
-        assertNull(ms)
-    }
-
-    @Test
-    fun returnsNullWhenNoValidInputs() {
-        val ms = estimateDischargeEtaMs(
-            DischargeEtaInput(
-                designCapacityMah = null,
-                avgPowerUw = 0L,
-                durationMs = 0L,
-                startLevel = 50,
-                endLevel = 50,
-                remainingLevel = 50,
-            ),
-        )
-        assertNull(ms)
-    }
-
-    @Test
-    fun capacityPathIsPositive() {
-        val ms = estimateDischargeEtaMs(
-            DischargeEtaInput(
-                designCapacityMah = 4000,
-                avgPowerUw = 2_000_000L,
-                durationMs = 1_000L,
-                startLevel = 90,
-                endLevel = 89,
-                remainingLevel = 89,
-            ),
-        )
-        assertNotNull(ms)
-        assertTrue(ms!! > 0L)
     }
 }

@@ -2,14 +2,19 @@ package io.github.lumkit.tweak.common.database.battery
 
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.daemon.DaemonPaths
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogImporter.syncOnStartup
 import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
 import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryUidPowerEntity
 import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.NativeFileResult
+import io.github.lumkit.tweak.common.utils.battery.UidPowerMath
+import io.github.lumkit.tweak.common.utils.battery.UidPowerReading
+import io.github.lumkit.tweak.common.utils.battery.UidpowCodec
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
@@ -19,17 +24,17 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.time.Clock
 import kotlin.time.TimeSource
 
 /**
  * 将 TweakServer / 旧 tweakd 电池日志同步到 Room。
- * 支持 v2 `.brlog`（定长）与旧空格分隔 `.log`。
+ * 支持 v2 `.brlog`（定长）、旁路 `.applog` / `.uidpow` 与旧空格分隔 `.log`。
  */
 object BatteryRecordLogImporter {
 
@@ -152,7 +157,7 @@ object BatteryRecordLogImporter {
         val paths = DaemonPaths.resolve()
         ensureLogsDir(paths)
         val files = listLogFiles(paths).sortedWith(
-            compareBy<String> { isApplogPath(it) }.thenBy { it },
+            compareBy<String> { isApplogPath(it) || isUidpowPath(it) }.thenBy { it },
         )
         if (files.isEmpty()) {
             logD("no battery log files under ${paths.batteryLogsDir}", TAG)
@@ -216,6 +221,10 @@ object BatteryRecordLogImporter {
         var startOffset = (mutableOffsets[path] ?: 0L).coerceAtMost(fileLen)
         if (forceHeader) {
             startOffset = 0L
+        }
+
+        if (isUidpowPath(path) || (startOffset == 0L && looksLikeUidpow(path))) {
+            return importUidpow(path, fileLen, mutableOffsets)
         }
 
         if (isApplogPath(path) || (startOffset == 0L && looksLikeApplog(path))) {
@@ -485,6 +494,7 @@ object BatteryRecordLogImporter {
         val name = nameOrPath.substringAfterLast('/')
         return name.contains(".brlog") ||
             name.contains(".applog") ||
+            name.contains(".uidpow") ||
             name.endsWith(".log") ||
             name.contains(".log.")
     }
@@ -495,6 +505,9 @@ object BatteryRecordLogImporter {
     private fun isApplogPath(path: String): Boolean =
         path.substringAfterLast('/').contains(".applog")
 
+    private fun isUidpowPath(path: String): Boolean =
+        path.substringAfterLast('/').contains(".uidpow")
+
     private suspend fun looksLikeBrlog(path: String, offset: Long): Boolean {
         if (offset > 0) return false
         val head = readBytes(path, 0, 4) ?: return false
@@ -504,6 +517,90 @@ object BatteryRecordLogImporter {
     private suspend fun looksLikeApplog(path: String): Boolean {
         val head = readBytes(path, 0, 4) ?: return false
         return ApplogWriter.isTwA1(head)
+    }
+
+    private suspend fun looksLikeUidpow(path: String): Boolean {
+        val head = readFromOffsetAsString(path, 0, 64) ?: return false
+        val firstLine = head.lineSequence().firstOrNull()?.trim().orEmpty()
+        return UidpowCodec.decodeHeader(firstLine) != null
+    }
+
+    private suspend fun importUidpow(
+        path: String,
+        fileLen: Long,
+        mutableOffsets: MutableMap<String, Long>,
+    ): Consumed {
+        val text = readFromOffsetAsString(path, 0, fileLen.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+            ?: return Consumed(0, 0)
+        val parsed = UidpowCodec.parseFile(text)
+        if (parsed == null) {
+            mutableOffsets[path] = fileLen
+            return Consumed(fileLen, 0)
+        }
+        val (header, frames) = parsed
+        val session = repository.querySessionByStartedAtAndState(
+            startedAt = header.startedAt,
+            state = BatteryChargeState.fromCode(header.state),
+        )
+        if (session == null) {
+            logD("uidpow session missing startedAt=${header.startedAt} state=${header.state}", TAG)
+            // session 可能尚未由 brlog 导入；下次再试
+            return Consumed(0, 0)
+        }
+        if (frames.size < 2) {
+            mutableOffsets[path] = fileLen
+            return Consumed(fileLen, 0)
+        }
+        val first = frames.first()
+        val last = frames.last()
+        val startMap = first.entries.associate { e ->
+            e.uid to UidPowerReading(
+                uid = e.uid,
+                totalMah = e.totalMah,
+                fgMah = e.fgMah,
+                bgMah = e.bgMah,
+                fgsMah = e.fgsMah,
+                cachedMah = e.cachedMah,
+            )
+        }
+        val endMap = last.entries.associate { e ->
+            e.uid to UidPowerReading(
+                uid = e.uid,
+                totalMah = e.totalMah,
+                fgMah = e.fgMah,
+                bgMah = e.bgMah,
+                fgsMah = e.fgsMah,
+                cachedMah = e.cachedMah,
+            )
+        }
+        val deltas = UidPowerMath.diff(startMap, endMap)
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (deltas == null) {
+            logE("uidpow stats reset for session=${session.id}", tag = TAG)
+            repository.replaceUidPowers(session.id, emptyList())
+        } else {
+            val pm = application.packageManager
+            val rows = deltas.map { d ->
+                val pkg = runCatching {
+                    pm.getPackagesForUid(d.uid)?.firstOrNull()
+                }.getOrNull()
+                BatteryUidPowerEntity(
+                    sessionId = session.id,
+                    uid = d.uid,
+                    packageName = pkg,
+                    deltaMah = d.deltaMah,
+                    fgMah = d.fgMah,
+                    bgMah = d.bgMah,
+                    fgsMah = d.fgsMah,
+                    capturedAt = last.capturedAt,
+                    updatedAt = now,
+                )
+            }
+            repository.replaceUidPowers(session.id, rows)
+            logD("uidpow imported session=${session.id} uids=${rows.size}", TAG)
+        }
+        mutableOffsets[path] = fileLen
+        return Consumed(fileLen, 0)
     }
 
     private fun isTwb2(bytes: ByteArray): Boolean =

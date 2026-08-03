@@ -110,6 +110,7 @@ import tweak_alpha.shared.generated.resources.text_charge_history_open_native_da
 import tweak_alpha.shared.generated.resources.text_dialog_confirm
 import tweak_alpha.shared.generated.resources.text_dialog_delete_discharge_history_notes
 import tweak_alpha.shared.generated.resources.text_dialog_tip
+import tweak_alpha.shared.generated.resources.text_discharge_app_usage_collecting
 import tweak_alpha.shared.generated.resources.text_discharge_app_usage_empty
 import tweak_alpha.shared.generated.resources.text_discharge_history_empty
 import tweak_alpha.shared.generated.resources.text_discharge_history_title
@@ -463,6 +464,7 @@ private fun DischargeScenesCard(
     onHelpClick: () -> Unit,
 ) {
     val appRows by viewModel.appRows.collectAsStateWithLifecycle()
+    val appPowerListStatus by viewModel.appPowerListStatus.collectAsStateWithLifecycle()
     val sortMode by viewModel.appSortMode.collectAsStateWithLifecycle()
     var sortPopupVisible by remember { mutableStateOf(false) }
     val sortDuration = stringResource(Res.string.text_discharge_sort_duration)
@@ -527,7 +529,9 @@ private fun DischargeScenesCard(
             }
         }
 
-        if (appRows.isEmpty()) {
+        if (appPowerListStatus != DischargeStatisticsViewModel.AppPowerListStatus.Ready ||
+            appRows.isEmpty()
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -535,7 +539,13 @@ private fun DischargeScenesCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = stringResource(Res.string.text_discharge_app_usage_empty),
+                    text = stringResource(
+                        when (appPowerListStatus) {
+                            DischargeStatisticsViewModel.AppPowerListStatus.Collecting ->
+                                Res.string.text_discharge_app_usage_collecting
+                            else -> Res.string.text_discharge_app_usage_empty
+                        },
+                    ),
                     style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.31f),
                 )

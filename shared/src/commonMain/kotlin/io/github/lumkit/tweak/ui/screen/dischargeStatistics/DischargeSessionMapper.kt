@@ -9,6 +9,7 @@ import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryUidPowerEntity
 import io.github.lumkit.tweak.common.utils.AppsHelper
 import io.github.lumkit.tweak.common.utils.formatElapsedTime
 import io.github.lumkit.tweak.ui.screen.chargeStatistics.ChargeSessionChartsMapper
@@ -190,6 +191,67 @@ internal object DischargeSessionMapper {
             )
         }
         return columns
+    }
+
+    fun buildUidPowerRows(
+        uidPowers: List<BatteryUidPowerEntity>,
+        usages: List<BatteryAppUsageEntity>,
+        samplesByUsageId: Map<Long, List<BatteryRecordSampleEntity>>,
+        avgVoltageMv: Int?,
+        sessionDurationMs: Long,
+        nowMs: Long,
+    ): List<DischargeStatisticsViewModel.AppUsageRow> {
+        if (uidPowers.isEmpty()) return emptyList()
+        data class UsageAcc(
+            var durationMs: Long = 0L,
+            var tempSum: Double = 0.0,
+            var tempCount: Int = 0,
+            var maxTemp: Float = Float.NEGATIVE_INFINITY,
+        )
+        val usageByPackage = linkedMapOf<String, UsageAcc>()
+        for (usage in usages) {
+            val samples = samplesByUsageId[usage.id].orEmpty()
+            val duration = resolveUsageDurationMs(usage, samples, nowMs)
+            val acc = usageByPackage.getOrPut(usage.packageName) { UsageAcc() }
+            acc.durationMs += duration
+            for (sample in samples) {
+                val temp = sample.temperatureC
+                if (temp != null) {
+                    acc.tempSum += temp.toDouble()
+                    acc.tempCount += 1
+                    if (temp > acc.maxTemp) acc.maxTemp = temp
+                }
+            }
+        }
+        val vNom = avgVoltageMv?.takeIf { it > 0 }?.div(1000.0) ?: 3.7
+        val durationHours = sessionDurationMs / 3_600_000.0
+        return uidPowers
+            .filter { it.deltaMah > 0.0 }
+            .map { row ->
+                val packageName = row.packageName?.takeIf { it.isNotBlank() } ?: "uid:${row.uid}"
+                val usageAcc = row.packageName?.let { usageByPackage[it] }
+                val avgW = if (durationHours > 0.0) {
+                    ((row.deltaMah / 1000.0) * vNom / durationHours).toFloat()
+                } else {
+                    0f
+                }
+                val app = AppsHelper.apps.value.find { it.packageName == packageName }
+                DischargeStatisticsViewModel.AppUsageRow(
+                    packageName = packageName,
+                    appName = app?.appName?.takeIf { it.isNotBlank() }
+                        ?: if (row.packageName.isNullOrBlank()) "UID ${row.uid}" else packageName,
+                    iconPath = app?.iconPath?.takeIf { it.isNotBlank() }
+                        ?: AppsHelper.getIconPath(packageName).takeIf { it.isNotBlank() },
+                    avgW = avgW,
+                    avgTemp = if (usageAcc != null && usageAcc.tempCount > 0) {
+                        (usageAcc.tempSum / usageAcc.tempCount).toFloat()
+                    } else {
+                        0f
+                    },
+                    maxTemp = usageAcc?.maxTemp?.takeIf { it.isFinite() } ?: 0f,
+                    durationMs = usageAcc?.durationMs ?: 0L,
+                )
+            }
     }
 
     fun buildAppUsageRows(

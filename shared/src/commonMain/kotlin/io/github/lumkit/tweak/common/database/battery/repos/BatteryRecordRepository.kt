@@ -9,6 +9,7 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntit
 import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryUidPowerEntity
 import io.github.lumkit.tweak.common.utils.getDatabaseBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -23,7 +24,10 @@ class BatteryRecordRepository {
     companion object {
         private val database by lazy {
             getDatabaseBuilder<BatteryRecordDatabase>("battery_record.db")
-                .addMigrations(BatteryRecordDatabase.MIGRATION_1_2)
+                .addMigrations(
+                    BatteryRecordDatabase.MIGRATION_1_2,
+                    BatteryRecordDatabase.MIGRATION_2_3,
+                )
                 .build()
         }
     }
@@ -188,8 +192,22 @@ class BatteryRecordRepository {
         }
         dao.deleteAppUsageSamplesBySessionId(sessionId)
         dao.deleteAppUsagesBySessionId(sessionId)
+        dao.deleteUidPowersBySessionId(sessionId)
         dao.deleteSamplesBySessionId(sessionId)
         dao.deleteSession(sessionId)
+    }
+
+    fun observeUidPowersBySessionId(sessionId: Long): Flow<List<BatteryUidPowerEntity>> =
+        dao.observeUidPowersBySessionId(sessionId)
+
+    suspend fun queryUidPowersBySessionId(sessionId: Long): List<BatteryUidPowerEntity> =
+        dao.queryUidPowersBySessionId(sessionId)
+
+    suspend fun replaceUidPowers(sessionId: Long, rows: List<BatteryUidPowerEntity>) {
+        dao.deleteUidPowersBySessionId(sessionId)
+        if (rows.isNotEmpty()) {
+            dao.insertUidPowers(rows)
+        }
     }
 
     suspend fun querySessionByStartedAtAndState(

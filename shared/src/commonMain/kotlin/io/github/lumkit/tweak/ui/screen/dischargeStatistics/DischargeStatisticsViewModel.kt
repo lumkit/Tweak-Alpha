@@ -14,6 +14,7 @@ import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordReposit
 import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryUidPowerEntity
 import io.github.lumkit.tweak.common.utils.AppsHelper
 import io.github.lumkit.tweak.common.utils.BatteryUtils
 import io.github.lumkit.tweak.common.utils.TweakDataStore
@@ -46,6 +47,12 @@ class DischargeStatisticsViewModel : BaseViewModel() {
     enum class AppSortMode {
         Duration,
         AvgPower,
+    }
+
+    enum class AppPowerListStatus {
+        Collecting,
+        Empty,
+        Ready,
     }
 
     data class DischargeSessionSummary(
@@ -111,6 +118,9 @@ class DischargeStatisticsViewModel : BaseViewModel() {
 
     private val _appRows = MutableStateFlow<List<AppUsageRow>>(emptyList())
     val appRows = _appRows.asStateFlow()
+
+    private val _appPowerListStatus = MutableStateFlow(AppPowerListStatus.Empty)
+    val appPowerListStatus = _appPowerListStatus.asStateFlow()
 
     private val _etaText = MutableStateFlow("--")
     val etaText = _etaText.asStateFlow()
@@ -190,8 +200,9 @@ class DischargeStatisticsViewModel : BaseViewModel() {
                                     .distinctUntilChangedBy { it?.id to it?.endedAt },
                                 repository.observeSamplesBySessionId(overrideId),
                                 repository.observeAppUsagesBySessionId(overrideId),
-                            ) { session, samples, usages ->
-                                DischargeChartsUpdate(session, samples, usages)
+                                repository.observeUidPowersBySessionId(overrideId),
+                            ) { session, samples, usages, uidPowers ->
+                                DischargeChartsUpdate(session, samples, usages, uidPowers)
                             }
                         }
                         defaultSession != null -> {
@@ -200,11 +211,12 @@ class DischargeStatisticsViewModel : BaseViewModel() {
                                     .distinctUntilChangedBy { it?.id to it?.endedAt },
                                 repository.observeSamplesBySessionId(defaultSession.id),
                                 repository.observeAppUsagesBySessionId(defaultSession.id),
-                            ) { session, samples, usages ->
-                                DischargeChartsUpdate(session, samples, usages)
+                                repository.observeUidPowersBySessionId(defaultSession.id),
+                            ) { session, samples, usages, uidPowers ->
+                                DischargeChartsUpdate(session, samples, usages, uidPowers)
                             }
                         }
-                        else -> flowOf(DischargeChartsUpdate(null, emptyList(), emptyList()))
+                        else -> flowOf(DischargeChartsUpdate(null, emptyList(), emptyList(), emptyList()))
                     }
                 }
                 .combine(AppsHelper.apps) { update, _ -> update }
@@ -219,6 +231,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         val session = update.session
         val samples = update.samples
         val usages = update.usages
+        val uidPowers = update.uidPowers
 
         val summary = session?.let { DischargeSessionMapper.buildSummary(it, samples, nowMs) }
         val samplesByUsageId = usages.associate { usage ->
@@ -251,17 +264,38 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         } else {
             emptyList()
         }
-        val appRows = DischargeSessionMapper.buildAppUsageRows(usages, samplesByUsageId, nowMs)
+        val avgVoltageMv = samples.mapNotNull { it.voltageMv }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
+            ?.toInt()
+        val sessionDurationMs = summary?.let {
+            (it.endedAt - it.startedAt).coerceAtLeast(0L)
+        } ?: 0L
+        val appRows = DischargeSessionMapper.buildUidPowerRows(
+            uidPowers = uidPowers,
+            usages = usages,
+            samplesByUsageId = samplesByUsageId,
+            avgVoltageMv = avgVoltageMv,
+            sessionDurationMs = sessionDurationMs,
+            nowMs = nowMs,
+        )
+        val listStatus = when {
+            appRows.isNotEmpty() -> AppPowerListStatus.Ready
+            session != null && session.endedAt == null -> AppPowerListStatus.Collecting
+            else -> AppPowerListStatus.Empty
+        }
         val infoRow = summary?.let {
             DischargeSessionMapper.buildBatteryInfoRow(samples, it.energyUw)
         }
-        val designCapacity = BatteryUtils.getDesignCapacity()
+        val capacity = BatteryUtils.getCurrentFullCapacity()
+            ?: BatteryUtils.getDesignCapacity()
         val etaMs = if (summary != null) {
             estimateDischargeEtaMs(
                 DischargeEtaInput(
-                    designCapacityMah = designCapacity,
+                    capacityMah = capacity,
                     avgPowerUw = summary.averagePowerUw,
-                    durationMs = (summary.endedAt - summary.startedAt).coerceAtLeast(0L),
+                    avgVoltageMv = avgVoltageMv,
+                    durationMs = sessionDurationMs,
                     startLevel = summary.startLevel,
                     endLevel = summary.endLevel,
                     remainingLevel = summary.endLevel,
@@ -283,6 +317,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
             _chartXTickIndexes.value = levelChart?.xTickIndexes.orEmpty()
             rawAppRows = appRows
             _appRows.value = sortAppRows(appRows, _appSortMode.value)
+            _appPowerListStatus.value = listStatus
             _etaText.value = formatDischargeEtaText(etaMs)
             _currentLevel.value = samples.lastOrNull()?.level
             _currentTime.value = nowMs
@@ -308,6 +343,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         val session: BatteryRecordSessionEntity?,
         val samples: List<BatteryRecordSampleEntity>,
         val usages: List<BatteryAppUsageEntity>,
+        val uidPowers: List<BatteryUidPowerEntity>,
     )
 
     // region 历史

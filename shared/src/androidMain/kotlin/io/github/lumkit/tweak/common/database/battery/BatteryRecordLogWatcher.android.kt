@@ -48,6 +48,7 @@ actual object BatteryRecordLogWatcher {
         fun isBatteryLog(name: String): Boolean =
             name.contains(".brlog") ||
                 name.contains(".applog") ||
+                name.contains(".uidpow") ||
                 name.endsWith(".log") ||
                 name.contains(".log.")
 

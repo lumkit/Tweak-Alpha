@@ -10,6 +10,7 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntit
 import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryUidPowerEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -284,4 +285,28 @@ interface BatteryRecordDao {
 
     @Query("DELETE FROM battery_app_usage WHERE sessionId = :sessionId")
     suspend fun deleteAppUsagesBySessionId(sessionId: Long)
+
+    @Query(
+        """
+        SELECT * FROM battery_uid_power
+        WHERE sessionId = :sessionId
+        ORDER BY deltaMah DESC
+        """,
+    )
+    fun observeUidPowersBySessionId(sessionId: Long): Flow<List<BatteryUidPowerEntity>>
+
+    @Query(
+        """
+        SELECT * FROM battery_uid_power
+        WHERE sessionId = :sessionId
+        ORDER BY deltaMah DESC
+        """,
+    )
+    suspend fun queryUidPowersBySessionId(sessionId: Long): List<BatteryUidPowerEntity>
+
+    @Insert
+    suspend fun insertUidPowers(rows: List<BatteryUidPowerEntity>)
+
+    @Query("DELETE FROM battery_uid_power WHERE sessionId = :sessionId")
+    suspend fun deleteUidPowersBySessionId(sessionId: Long)
 }

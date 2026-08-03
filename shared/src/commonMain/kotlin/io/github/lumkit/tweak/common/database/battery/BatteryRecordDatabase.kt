@@ -12,6 +12,7 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntit
 import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
+import io.github.lumkit.tweak.common.database.battery.table.BatteryUidPowerEntity
 
 @Database(
     entities = [
@@ -19,8 +20,9 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSession
         BatteryRecordSampleEntity::class,
         BatteryAppUsageEntity::class,
         BatteryAppUsageSampleEntity::class,
+        BatteryUidPowerEntity::class,
     ],
-    version = 2,
+    version = 3,
 )
 @ConstructedBy(BatteryRecordDatabaseConstructor::class)
 abstract class BatteryRecordDatabase : RoomDatabase() {
@@ -60,6 +62,33 @@ abstract class BatteryRecordDatabase : RoomDatabase() {
                 )
                 connection.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_battery_app_usage_sample_usageId` ON `battery_app_usage_sample` (`usageId`)",
+                )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `battery_uid_power` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `sessionId` INTEGER NOT NULL,
+                        `uid` INTEGER NOT NULL,
+                        `packageName` TEXT,
+                        `deltaMah` REAL NOT NULL,
+                        `fgMah` REAL,
+                        `bgMah` REAL,
+                        `fgsMah` REAL,
+                        `capturedAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_battery_uid_power_sessionId_uid` ON `battery_uid_power` (`sessionId`, `uid`)",
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_battery_uid_power_sessionId` ON `battery_uid_power` (`sessionId`)",
                 )
             }
         }

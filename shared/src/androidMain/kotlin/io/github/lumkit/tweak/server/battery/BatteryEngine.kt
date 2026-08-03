@@ -24,6 +24,7 @@ class BatteryEngine(
     private var thread: Thread? = null
     private var writer: BrlogWriter? = null
     private var applogWriter: ApplogWriter? = null
+    private var uidpowWriter: UidpowWriter? = null
 
     @Volatile
     var lastStatusLine: String = "battery_enabled=0 battery_interval_ms=0"
@@ -161,15 +162,46 @@ class BatteryEngine(
             ),
         )
         applogWriter = aw
+        if (state == BatteryChargeState.DISCHARGING.code) {
+            val uw = UidpowWriter(logsDir)
+            uw.openSession(session.startedAt, session.state)
+            uidpowWriter = uw
+            Thread({
+                runCatching {
+                    UidPowerSampler().capture()?.let { uw.appendFrame(it) }
+                }.onFailure { logE("uidpow baseline failed: ${it.message}", it, TAG) }
+            }, "uidpow-baseline").apply {
+                isDaemon = true
+                start()
+            }
+        }
         return session
     }
 
     private fun endActive(active: ActiveSession?, endedAt: Long): ActiveSession? {
         if (active == null) return null
+        val uw = uidpowWriter
+        val startedAt = active.startedAt
+        val state = active.state
         writer?.closeSession(endedAt)
         writer = null
         applogWriter?.closeSession(endedAt)
         applogWriter = null
+        uidpowWriter = null
+        if (uw != null && state == BatteryChargeState.DISCHARGING.code) {
+            Thread({
+                runCatching {
+                    UidPowerSampler().capture(endedAt)?.let { uw.appendFrame(it) }
+                }.onFailure {
+                    logE("uidpow end failed startedAt=$startedAt: ${it.message}", it, TAG)
+                }.also {
+                    uw.closeSession()
+                }
+            }, "uidpow-end").apply {
+                isDaemon = true
+                start()
+            }
+        }
         return null
     }
 
