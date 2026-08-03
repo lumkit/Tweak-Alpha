@@ -104,6 +104,7 @@ import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_charge
 import tweak_alpha.shared.generated.resources.ic_discharge
 import tweak_alpha.shared.generated.resources.ic_history
+import tweak_alpha.shared.generated.resources.ic_process_linux
 import tweak_alpha.shared.generated.resources.text_battery_level
 import tweak_alpha.shared.generated.resources.text_charge_history_native_daemon_required
 import tweak_alpha.shared.generated.resources.text_charge_history_open_native_daemon
@@ -571,7 +572,7 @@ private fun DischargeAppUsageItem(row: DischargeStatisticsViewModel.AppUsageRow)
             AsyncImage(
                 model = row.iconPath,
                 contentDescription = null,
-                error = null,
+                error = painterResource(Res.drawable.ic_process_linux),
                 modifier = Modifier.clip(Rectangle.copy(12.dp))
                     .border(
                         width = 1.dp,
