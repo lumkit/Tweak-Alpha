@@ -14,13 +14,15 @@ import kotlinx.coroutines.launch
 import java.io.Closeable
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 actual object BatteryRecordLogWatcher {
 
     private const val TAG = "BatteryRecordLogWatcher"
-    private const val DEBOUNCE_MS = 200L
-    private const val POLL_MS = 1_500L
+    private const val DEBOUNCE_MS = 120L
+    /** FileObserver 对 root 写入偶发丢失时的兜底轮询；不宜过大以免 UI 卡顿感 */
+    private const val POLL_MS = 400L
 
     private val watchMask =
         FileObserver.CREATE or
@@ -41,6 +43,7 @@ actual object BatteryRecordLogWatcher {
         val pendingAppend = ConcurrentHashMap<String, Job>()
         val lengthCache = ConcurrentHashMap<String, Long>()
         val mtimeCache = ConcurrentHashMap<String, Long>()
+        val primed = AtomicBoolean(false)
 
         fun absolute(dir: String, name: String): String =
             if (name.startsWith("/")) name else "$dir/$name"
@@ -88,7 +91,6 @@ actual object BatteryRecordLogWatcher {
                             scope.launch { runCatching { onRemoved(abs) } }
                         }
                         (event and (MODIFY or CLOSE_WRITE)) != 0 -> {
-                            // 含 header-only 更新（session 结束写 endedAt、长度不变）
                             debounceAppend(abs)
                         }
                     }
@@ -106,15 +108,29 @@ actual object BatteryRecordLogWatcher {
             attachObserver(dirPath)
 
             while (isActive) {
-                delay(POLL_MS)
                 val dir = File(dirPath)
                 if (!dir.isDirectory) {
                     dir.mkdirs()
                     attachObserver(dirPath)
+                    delay(POLL_MS)
                     continue
                 }
                 val files = dir.listFiles()?.filter { it.isFile && isBatteryLog(it.name) }.orEmpty()
                 val seen = files.map { it.absolutePath }.toHashSet()
+
+                if (!primed.get()) {
+                    // 首次只灌缓存，避免进页时对全部历史日志触发 onCreated 把 mutex 堵死
+                    for (f in files) {
+                        val abs = f.absolutePath
+                        lengthCache[abs] = f.length()
+                        mtimeCache[abs] = f.lastModified()
+                    }
+                    primed.set(true)
+                    logD("poll primed files=${files.size}", TAG)
+                    delay(POLL_MS)
+                    continue
+                }
+
                 for (f in files) {
                     val abs = f.absolutePath
                     val len = f.length()
@@ -124,7 +140,6 @@ actual object BatteryRecordLogWatcher {
                     when {
                         prevLen == null -> runCatching { onCreated(abs) }
                         len > prevLen -> debounceAppend(abs)
-                        // session 结束只改 header：长度不变但 mtime 变
                         prevMtime != null && mtime > prevMtime -> debounceAppend(abs)
                     }
                 }
@@ -134,6 +149,7 @@ actual object BatteryRecordLogWatcher {
                     mtimeCache.remove(path)
                     runCatching { onRemoved(path) }
                 }
+                delay(POLL_MS)
             }
         }
 

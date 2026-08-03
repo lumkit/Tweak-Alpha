@@ -202,10 +202,12 @@ internal object DischargeSessionMapper {
         usages: List<BatteryAppUsageEntity>,
         samplesByUsageId: Map<Long, List<BatteryRecordSampleEntity>>,
         avgVoltageMv: Int?,
+        sessionStartMs: Long,
         sessionDurationMs: Long,
-        nowMs: Long,
     ): List<DischargeStatisticsViewModel.AppUsageRow> {
         if (uidPowers.isEmpty()) return emptyList()
+        val sessionEndMs = (sessionStartMs + sessionDurationMs.coerceAtLeast(0L))
+            .coerceAtLeast(sessionStartMs)
         data class UsageAcc(
             var durationMs: Long = 0L,
             var tempSum: Double = 0.0,
@@ -215,7 +217,11 @@ internal object DischargeSessionMapper {
         val usageByPackage = linkedMapOf<String, UsageAcc>()
         for (usage in usages) {
             val samples = samplesByUsageId[usage.id].orEmpty()
-            val duration = resolveUsageDurationMs(usage, samples, nowMs)
+            val duration = resolveUsageDurationMs(
+                usage = usage,
+                sessionStartMs = sessionStartMs,
+                sessionEndMs = sessionEndMs,
+            )
             val acc = usageByPackage.getOrPut(usage.packageName) { UsageAcc() }
             acc.durationMs += duration
             for (sample in samples) {
@@ -226,6 +232,10 @@ internal object DischargeSessionMapper {
                     if (temp > acc.maxTemp) acc.maxTemp = temp
                 }
             }
+        }
+        // 同包多段累加后仍不得超过会话时长
+        usageByPackage.values.forEach { acc ->
+            acc.durationMs = acc.durationMs.coerceIn(0L, sessionDurationMs.coerceAtLeast(0L))
         }
         val vNom = avgVoltageMv?.takeIf { it > 0 }?.div(1000.0) ?: 3.7
         val durationHours = sessionDurationMs / 3_600_000.0
@@ -261,9 +271,12 @@ internal object DischargeSessionMapper {
     fun buildAppUsageRows(
         usages: List<BatteryAppUsageEntity>,
         samplesByUsageId: Map<Long, List<BatteryRecordSampleEntity>>,
-        nowMs: Long,
+        sessionStartMs: Long,
+        sessionDurationMs: Long,
     ): List<DischargeStatisticsViewModel.AppUsageRow> {
         if (usages.isEmpty()) return emptyList()
+        val sessionEndMs = (sessionStartMs + sessionDurationMs.coerceAtLeast(0L))
+            .coerceAtLeast(sessionStartMs)
         data class Acc(
             var durationMs: Long = 0L,
             var powerSumUw: Double = 0.0,
@@ -275,7 +288,11 @@ internal object DischargeSessionMapper {
         val byPackage = linkedMapOf<String, Acc>()
         for (usage in usages) {
             val samples = samplesByUsageId[usage.id].orEmpty()
-            val duration = resolveUsageDurationMs(usage, samples, nowMs)
+            val duration = resolveUsageDurationMs(
+                usage = usage,
+                sessionStartMs = sessionStartMs,
+                sessionEndMs = sessionEndMs,
+            )
             val acc = byPackage.getOrPut(usage.packageName) { Acc() }
             acc.durationMs += duration
             for (sample in samples) {
@@ -291,6 +308,9 @@ internal object DischargeSessionMapper {
                     if (temp > acc.maxTemp) acc.maxTemp = temp
                 }
             }
+        }
+        byPackage.values.forEach { acc ->
+            acc.durationMs = acc.durationMs.coerceIn(0L, sessionDurationMs.coerceAtLeast(0L))
         }
         return byPackage.map { (packageName, acc) ->
             val app = AppsHelper.apps.value.find { it.packageName == packageName }
@@ -356,22 +376,20 @@ internal object DischargeSessionMapper {
         return matched?.packageName
     }
 
-    private fun resolveUsageDurationMs(
+    /**
+     * 应用前台时长必须落在会话 [sessionStartMs, sessionEndMs] 内。
+     * 未闭合 usage 用会话结束时刻收口（活跃会话=now，历史/废弃会话=冻结结束点），
+     * 禁止再用墙钟 now 单独计时，否则会出现「应用时长 > 使用时长」。
+     */
+    internal fun resolveUsageDurationMs(
         usage: BatteryAppUsageEntity,
-        samples: List<BatteryRecordSampleEntity>,
-        nowMs: Long,
+        sessionStartMs: Long,
+        sessionEndMs: Long,
     ): Long {
-        val ended = usage.endedAt
-        if (ended != null) {
-            return (ended - usage.startedAt).coerceAtLeast(0L)
-        }
-        if (samples.size >= 2) {
-            return (samples.last().timestamp - samples.first().timestamp).coerceAtLeast(0L)
-        }
-        if (samples.isNotEmpty()) {
-            return (samples.last().timestamp - usage.startedAt).coerceAtLeast(0L)
-        }
-        return (nowMs - usage.startedAt).coerceAtLeast(0L)
+        val start = maxOf(usage.startedAt, sessionStartMs)
+        val rawEnd = usage.endedAt ?: sessionEndMs
+        val end = minOf(rawEnd, sessionEndMs).coerceAtLeast(start)
+        return (end - start).coerceAtLeast(0L)
     }
 
     private fun averagePowerUw(samples: List<BatteryRecordSampleEntity>): Long {

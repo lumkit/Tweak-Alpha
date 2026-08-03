@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.ui.screen.dischargeStatistics
 
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
+import io.github.lumkit.tweak.common.database.battery.table.BatteryAppUsageEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import kotlin.test.Test
@@ -10,6 +11,73 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DischargeSessionSummaryTest {
+
+    @Test
+    fun openUsageDurationClampedToFrozenSessionEnd() {
+        // 历史/废弃会话已冻结在 lastSample=10_000，但 usage 未闭合；
+        // 旧逻辑用墙钟 now 会算出远超会话的时长。
+        val usage = BatteryAppUsageEntity(
+            id = 1L,
+            sessionId = 1L,
+            packageName = "com.example.app",
+            startedAt = 1_000L,
+            endedAt = null,
+        )
+        val duration = DischargeSessionMapper.resolveUsageDurationMs(
+            usage = usage,
+            sessionStartMs = 1_000L,
+            sessionEndMs = 10_000L,
+        )
+        assertEquals(9_000L, duration)
+    }
+
+    @Test
+    fun closedUsagePastSessionEndIsClamped() {
+        val usage = BatteryAppUsageEntity(
+            id = 2L,
+            sessionId = 1L,
+            packageName = "com.example.app",
+            startedAt = 1_000L,
+            endedAt = 50_000L,
+        )
+        val duration = DischargeSessionMapper.resolveUsageDurationMs(
+            usage = usage,
+            sessionStartMs = 1_000L,
+            sessionEndMs = 10_000L,
+        )
+        assertEquals(9_000L, duration)
+    }
+
+    @Test
+    fun appUsageRowsNeverExceedSessionDuration() {
+        val sessionStart = 1_000L
+        val sessionDuration = 9_000L
+        val usages = listOf(
+            BatteryAppUsageEntity(
+                id = 1L,
+                sessionId = 1L,
+                packageName = "com.example.app",
+                startedAt = 1_000L,
+                endedAt = null,
+            ),
+            BatteryAppUsageEntity(
+                id = 2L,
+                sessionId = 1L,
+                packageName = "com.example.app",
+                startedAt = 2_000L,
+                endedAt = null,
+            ),
+        )
+        val rows = DischargeSessionMapper.buildAppUsageRows(
+            usages = usages,
+            samplesByUsageId = emptyMap(),
+            sessionStartMs = sessionStart,
+            sessionDurationMs = sessionDuration,
+        )
+        assertEquals(1, rows.size)
+        assertTrue(rows.single().durationMs <= sessionDuration)
+        assertEquals(sessionDuration, rows.single().durationMs)
+    }
 
     @Test
     fun abandonedOpenSessionFreezesAtLastSample() {

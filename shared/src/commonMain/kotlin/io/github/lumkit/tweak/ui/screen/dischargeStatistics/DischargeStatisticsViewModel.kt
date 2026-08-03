@@ -167,7 +167,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
             onRemoved = { path -> BatteryRecordLogSync.syncOnLogRemoved(path) },
         )
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { BatteryRecordLogSync.syncOnStartup() }
+            runCatching { BatteryRecordLogSync.syncActiveSessionLogs() }
         }
     }
 
@@ -287,8 +287,8 @@ class DischargeStatisticsViewModel : BaseViewModel() {
             usages = usages,
             samplesByUsageId = samplesByUsageId,
             avgVoltageMv = avgVoltageMv,
+            sessionStartMs = summary?.startedAt ?: session?.startedAt ?: 0L,
             sessionDurationMs = sessionDurationMs,
-            nowMs = nowMs,
         )
         val listStatus = when {
             appRows.isNotEmpty() -> AppPowerListStatus.Ready

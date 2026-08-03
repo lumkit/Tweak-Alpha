@@ -49,6 +49,11 @@ object BatteryRecordLogImporter {
     private val repository = BatteryRecordRepository()
     private val json = Json { ignoreUnknownKeys = true }
     private val lastTsCache = HashMap<Long, Long>()
+    /** 可在持锁导入期间继续登记，drain 循环会吃掉尾部，避免卡顿丢同步 */
+    private val pendingAppendPaths =
+        java.util.Collections.synchronizedSet(LinkedHashSet<String>())
+    private val pendingCreatedPaths =
+        java.util.Collections.synchronizedSet(LinkedHashSet<String>())
 
     @Serializable
     private data class ImportState(
@@ -74,12 +79,84 @@ object BatteryRecordLogImporter {
         mutex.withLock { importLogsIncremental(budgetLimit = MAX_BYTES_PER_SYNC) }
     }
 
+    /**
+     * 页面进场轻量同步：只导入当前活跃会话相关日志，避免全目录重扫堵死实时 append。
+     */
+    suspend fun syncActiveSessionLogs() = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val active = repository.queryActiveSession() ?: return@withLock
+            val prefix = "${active.startedAt}_${active.state}."
+            val paths = DaemonPaths.resolve()
+            ensureLogsDir(paths)
+            val targets = listLogFiles(paths)
+                .filter { it.substringAfterLast('/').startsWith(prefix) }
+            if (targets.isEmpty()) return@withLock
+            val mutableOffsets = loadState().offsets.toMutableMap()
+            for (path in targets) {
+                importPathInto(
+                    path = path,
+                    mutableOffsets = mutableOffsets,
+                    budget = MAX_BYTES_PER_SYNC,
+                    forceHeader = false,
+                )
+            }
+            saveState(ImportState(mutableOffsets))
+            logD(
+                "active sync session=${active.id} files=${targets.size} prefix=$prefix",
+                TAG,
+            )
+        }
+    }
+
     suspend fun syncOnLogAppended(path: String) = withContext(Dispatchers.IO) {
-        mutex.withLock { importSingleFile(path, forceHeader = false) }
+        pendingAppendPaths.add(path)
+        mutex.withLock { drainPendingLocked() }
     }
 
     suspend fun syncOnLogCreated(path: String) = withContext(Dispatchers.IO) {
-        mutex.withLock { importSingleFile(path, forceHeader = true) }
+        pendingCreatedPaths.add(path)
+        mutex.withLock { drainPendingLocked() }
+    }
+
+    private suspend fun drainPendingLocked() {
+        val mutableOffsets = loadState().offsets.toMutableMap()
+        while (true) {
+            val created = synchronized(pendingCreatedPaths) {
+                if (pendingCreatedPaths.isEmpty()) emptyList()
+                else pendingCreatedPaths.toList().also { pendingCreatedPaths.clear() }
+            }
+            val appended = synchronized(pendingAppendPaths) {
+                if (pendingAppendPaths.isEmpty()) emptyList()
+                else pendingAppendPaths.toList().also { pendingAppendPaths.clear() }
+            }
+            if (created.isEmpty() && appended.isEmpty()) break
+
+            for (path in created) {
+                if (!isLogPath(path)) continue
+                val consumed = importPathInto(
+                    path = path,
+                    mutableOffsets = mutableOffsets,
+                    budget = MAX_BYTES_PER_SYNC,
+                    forceHeader = true,
+                )
+                if (consumed.samples > 0 || consumed.bytes > 0L) {
+                    logD("created sync path=$path samples=${consumed.samples} bytes=${consumed.bytes}", TAG)
+                }
+            }
+            for (path in appended) {
+                if (!isLogPath(path)) continue
+                val consumed = importPathInto(
+                    path = path,
+                    mutableOffsets = mutableOffsets,
+                    budget = MAX_BYTES_PER_SYNC,
+                    forceHeader = false,
+                )
+                if (consumed.samples > 0 || consumed.bytes > 0L) {
+                    logD("append sync path=$path samples=${consumed.samples} bytes=${consumed.bytes}", TAG)
+                }
+            }
+        }
+        saveState(ImportState(mutableOffsets))
     }
 
     suspend fun syncOnLogRemoved(path: String) = withContext(Dispatchers.IO) {
@@ -185,9 +262,11 @@ object BatteryRecordLogImporter {
             budget -= consumed.bytes
         }
 
-        // uidpow 体积小但常排在大 brlog 之后；预算耗尽时仍强制再导入一遍
+        // uidpow：仅当文件相对上次 offset 有增长（或从未导入）时再解析，避免进页扫全历史
         for (path in files.filter { isUidpowPath(it) }) {
             val fileLen = fileLength(path) ?: continue
+            val prev = mutableOffsets[path] ?: -1L
+            if (prev >= 0L && fileLen <= prev) continue
             importUidpow(path, fileLen, mutableOffsets)
         }
 

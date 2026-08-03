@@ -1,5 +1,8 @@
 package io.github.lumkit.tweak.common.database.battery
 
+import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogSync.syncOnStartup
+
+
 /**
  * 电池日志 → Room 同步入口（C2 事件分流）。
  */
@@ -12,6 +15,9 @@ expect object BatteryRecordLogSync {
 
     /** 启动后台：有预算的目录增量同步 */
     suspend fun syncOnStartup()
+
+    /** 进页轻量同步：仅当前活跃会话相关日志 */
+    suspend fun syncActiveSessionLogs()
 
     /** 单文件尾部增量（MODIFY / CLOSE_WRITE） */
     suspend fun syncOnLogAppended(path: String)
