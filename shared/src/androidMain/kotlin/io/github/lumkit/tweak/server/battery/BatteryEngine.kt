@@ -25,6 +25,7 @@ class BatteryEngine(
     private var writer: BrlogWriter? = null
     private var applogWriter: ApplogWriter? = null
     private var uidpowWriter: UidpowWriter? = null
+    private val uidpowCaptureInFlight = AtomicBoolean(false)
 
     @Volatile
     var lastStatusLine: String = "battery_enabled=0 battery_interval_ms=0"
@@ -122,10 +123,36 @@ class BatteryEngine(
                 writer?.appendSample(sample.copy(timestampMs = now, state = newState))
                 val pkg = runCatching { packageReader.resolve() }.getOrDefault("")
                 applogWriter?.append(now, pkg)
+                maybeCaptureUidpowPeriodic(session, now)
                 sleepInterruptible(cfg.intervalMs.toLong())
             }
         } finally {
             endActive(active, System.currentTimeMillis())
+        }
+    }
+
+    private fun maybeCaptureUidpowPeriodic(session: ActiveSession, now: Long) {
+        if (session.state != BatteryChargeState.DISCHARGING.code) return
+        val uw = uidpowWriter ?: return
+        if (now - session.lastUidpowCaptureAtMs < UidpowPeriodicIntervalMs) return
+        if (!uidpowCaptureInFlight.compareAndSet(false, true)) return
+        session.lastUidpowCaptureAtMs = now
+        Thread({
+            try {
+                runCatching {
+                    UidPowerSampler().capture(now)?.let { frame ->
+                        // 会话可能已结束并换了 writer；仅当前 writer 仍挂着时写入
+                        if (uidpowWriter === uw) {
+                            uw.appendFrame(frame)
+                        }
+                    }
+                }.onFailure { logE("uidpow periodic failed: ${it.message}", it, TAG) }
+            } finally {
+                uidpowCaptureInFlight.set(false)
+            }
+        }, "uidpow-periodic").apply {
+            isDaemon = true
+            start()
         }
     }
 
@@ -166,6 +193,7 @@ class BatteryEngine(
             val uw = UidpowWriter(logsDir)
             uw.openSession(session.startedAt, session.state)
             uidpowWriter = uw
+            session.lastUidpowCaptureAtMs = now
             Thread({
                 runCatching {
                     UidPowerSampler().capture()?.let { uw.appendFrame(it) }
@@ -227,10 +255,15 @@ class BatteryEngine(
         val confirmMs: Int,
         var confirmed: Boolean,
         var deleted: Boolean,
+        var lastUidpowCaptureAtMs: Long = 0L,
     )
 
     companion object {
         private const val TAG = "BatteryEngine"
+        /** 放电中 batterystats 中间帧间隔（避免与 brlog 同频）。 */
+        private const val UidpowPeriodicIntervalMs = 10L * 60L * 1000L
+
+        private const val DefaultConfirmMs = 5_000
 
         private fun fmtMv(voltageMv: Int): String =
             if (voltageMv == Int.MIN_VALUE) "n/a" else "${voltageMv}mV"
@@ -242,7 +275,9 @@ class BatteryEngine(
             if (tempCenti == Short.MIN_VALUE) {
                 "n/a"
             } else {
-                String.format("%.2fC", tempCenti / 100.0)
+                val v = tempCenti / 100.0
+                val rounded = (kotlin.math.round(v * 100.0) / 100.0)
+                "${rounded}C"
             }
 
         fun createDefault(daemonDir: File): BatteryEngine {
