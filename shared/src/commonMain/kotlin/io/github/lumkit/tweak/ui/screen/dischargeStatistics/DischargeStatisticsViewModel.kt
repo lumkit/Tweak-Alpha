@@ -166,6 +166,9 @@ class DischargeStatisticsViewModel : BaseViewModel() {
             onAppended = { path -> BatteryRecordLogSync.syncOnLogAppended(path) },
             onRemoved = { path -> BatteryRecordLogSync.syncOnLogRemoved(path) },
         )
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { BatteryRecordLogSync.syncOnStartup() }
+        }
     }
 
     override fun onCleared() {

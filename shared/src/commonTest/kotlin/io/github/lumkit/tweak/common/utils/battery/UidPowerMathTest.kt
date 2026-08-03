@@ -37,15 +37,24 @@ class UidPowerMathTest {
     fun diff_positiveDeltas() {
         val start = mapOf(10224 to UidPowerReading(10224, 1.0, null, null, null, null))
         val end = mapOf(10224 to UidPowerReading(10224, 1.5, null, null, null, null))
-        val d = UidPowerMath.diff(start, end)!!
+        val d = UidPowerMath.diff(start, end)
         assertEquals(1, d.size)
         assertEquals(0.5, d[0].deltaMah, 1e-6)
     }
 
     @Test
-    fun diff_returnsNullOnReset() {
-        val start = mapOf(1 to UidPowerReading(1, 2.0, null, null, null, null))
-        val end = mapOf(1 to UidPowerReading(1, 1.0, null, null, null, null))
-        assertNull(UidPowerMath.diff(start, end))
+    fun diff_skipsNegativeUidKeepsPositive() {
+        val start = mapOf(
+            1 to UidPowerReading(1, 2.0, null, null, null, null),
+            2 to UidPowerReading(2, 1.0, null, null, null, null),
+        )
+        val end = mapOf(
+            1 to UidPowerReading(1, 1.0, null, null, null, null),
+            2 to UidPowerReading(2, 1.5, null, null, null, null),
+        )
+        val d = UidPowerMath.diff(start, end)
+        assertEquals(1, d.size)
+        assertEquals(2, d[0].uid)
+        assertEquals(0.5, d[0].deltaMah, 1e-6)
     }
 }

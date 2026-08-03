@@ -90,19 +90,19 @@ object UidPowerMath {
     }
 
     /**
-     * @return 差分列表；若任一侧出现负 Δ（stats reset）则返回 null。
+     * 会话差分。单个 UID 出现负 Δ 时跳过该 UID（batterystats 重算噪声常见），
+     * 不整段作废；仅保留正 Δ。
      */
     fun diff(
         start: Map<Int, UidPowerReading>,
         end: Map<Int, UidPowerReading>,
-    ): List<UidPowerDelta>? {
+    ): List<UidPowerDelta> {
         val deltas = ArrayList<UidPowerDelta>(end.size)
         for ((uid, endReading) in end) {
-            val startTotal = start[uid]?.totalMah ?: 0.0
-            val delta = endReading.totalMah - startTotal
-            if (delta < 0.0) return null
-            if (delta <= 0.0) continue
             val startReading = start[uid]
+            val startTotal = startReading?.totalMah ?: 0.0
+            val delta = endReading.totalMah - startTotal
+            if (delta <= 0.0) continue
             deltas += UidPowerDelta(
                 uid = uid,
                 deltaMah = delta,

@@ -185,6 +185,12 @@ object BatteryRecordLogImporter {
             budget -= consumed.bytes
         }
 
+        // uidpow 体积小但常排在大 brlog 之后；预算耗尽时仍强制再导入一遍
+        for (path in files.filter { isUidpowPath(it) }) {
+            val fileLen = fileLength(path) ?: continue
+            importUidpow(path, fileLen, mutableOffsets)
+        }
+
         saveState(ImportState(mutableOffsets))
         logD(
             "startup sync files=$filesTouched samples=$totalImportedSamples " +
@@ -575,30 +581,25 @@ object BatteryRecordLogImporter {
         }
         val deltas = UidPowerMath.diff(startMap, endMap)
         val now = Clock.System.now().toEpochMilliseconds()
-        if (deltas == null) {
-            logE("uidpow stats reset for session=${session.id}", tag = TAG)
-            repository.replaceUidPowers(session.id, emptyList())
-        } else {
-            val pm = application.packageManager
-            val rows = deltas.map { d ->
-                val pkg = runCatching {
-                    pm.getPackagesForUid(d.uid)?.firstOrNull()
-                }.getOrNull()
-                BatteryUidPowerEntity(
-                    sessionId = session.id,
-                    uid = d.uid,
-                    packageName = pkg,
-                    deltaMah = d.deltaMah,
-                    fgMah = d.fgMah,
-                    bgMah = d.bgMah,
-                    fgsMah = d.fgsMah,
-                    capturedAt = last.capturedAt,
-                    updatedAt = now,
-                )
-            }
-            repository.replaceUidPowers(session.id, rows)
-            logD("uidpow imported session=${session.id} uids=${rows.size}", TAG)
+        val pm = application.packageManager
+        val rows = deltas.map { d ->
+            val pkg = runCatching {
+                pm.getPackagesForUid(d.uid)?.firstOrNull()
+            }.getOrNull()
+            BatteryUidPowerEntity(
+                sessionId = session.id,
+                uid = d.uid,
+                packageName = pkg,
+                deltaMah = d.deltaMah,
+                fgMah = d.fgMah,
+                bgMah = d.bgMah,
+                fgsMah = d.fgsMah,
+                capturedAt = last.capturedAt,
+                updatedAt = now,
+            )
         }
+        repository.replaceUidPowers(session.id, rows)
+        logD("uidpow imported session=${session.id} uids=${rows.size}", TAG)
         mutableOffsets[path] = fileLen
         return Consumed(fileLen, 0)
     }
