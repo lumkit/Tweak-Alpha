@@ -167,8 +167,13 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                     }
                 }
                 .collect { update ->
+                    val liveActiveSessionId = repository.queryActiveSession()?.id
                     val summary = update.session?.let { session ->
-                        ChargeSessionChartsMapper.buildSummary(session, update.samples)
+                        ChargeSessionChartsMapper.buildSummary(
+                            session = session,
+                            samples = update.samples,
+                            liveActiveSessionId = liveActiveSessionId,
+                        )
                     }
                     val chartSamples = ChargeSessionChartsMapper.buildChartSamples(update.samples)
                     withContext(Dispatchers.Main.immediate) {
@@ -455,19 +460,14 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         historyObserveJob = viewModelScope.launch(Dispatchers.IO) {
             combine(
                 repository.observeChargingSessions(),
-                repository.observeChargingSessionForCharts().map { it?.id }.distinctUntilChanged(),
-                _chartsSessionOverrideId,
-            ) { sessions, defaultChartSessionId, overrideId ->
-                sessions.filter { _ ->
-                    when {
-                        overrideId != null -> true
-                        defaultChartSessionId == null -> true
-                        else -> true
-                    }
-                }
+                repository.observeActiveSession().map { it?.id }.distinctUntilChanged(),
+            ) { sessions, liveActiveSessionId ->
+                sessions to liveActiveSessionId
             }
-                .distinctUntilChangedBy { sessions -> sessions.map { it.id } }
-                .flatMapLatest { sessions ->
+                .distinctUntilChangedBy { (sessions, liveId) ->
+                    sessions.map { it.id } to liveId
+                }
+                .flatMapLatest { (sessions, liveActiveSessionId) ->
                     if (sessions.isEmpty()) {
                         flowOf(emptyList())
                     } else {
@@ -478,8 +478,11 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                             },
                         ) { sessionSamples ->
                             sessionSamples.mapNotNull { (session, samples) ->
-                                val summary = ChargeSessionChartsMapper.buildSummary(session, samples)
-                                    ?: return@mapNotNull null
+                                val summary = ChargeSessionChartsMapper.buildSummary(
+                                    session = session,
+                                    samples = samples,
+                                    liveActiveSessionId = liveActiveSessionId,
+                                ) ?: return@mapNotNull null
                                 ChargeHistoryItem(
                                     sessionId = session.id,
                                     startedAt = session.startedAt,

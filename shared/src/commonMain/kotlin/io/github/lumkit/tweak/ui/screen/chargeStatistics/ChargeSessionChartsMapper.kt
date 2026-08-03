@@ -10,11 +10,14 @@ internal object ChargeSessionChartsMapper {
     fun buildSummary(
         session: BatteryRecordSessionEntity,
         samples: List<BatteryRecordSampleEntity>,
+        liveActiveSessionId: Long? = null,
     ): ChargeStatisticsViewModel.ChargingSessionSummary? {
         val first = samples.firstOrNull() ?: return null
         val last = samples.last()
         val isOngoingCharging =
-            session.chargeState == BatteryChargeState.CHARGING && session.endedAt == null
+            session.endedAt == null &&
+                session.id == liveActiveSessionId &&
+                session.chargeState == BatteryChargeState.CHARGING
         return ChargeStatisticsViewModel.ChargingSessionSummary(
             startedAt = session.startedAt,
             endedAt = session.endedAt ?: last.timestamp,

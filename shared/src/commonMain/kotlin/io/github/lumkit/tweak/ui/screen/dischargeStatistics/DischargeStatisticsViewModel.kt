@@ -236,7 +236,15 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         val usages = update.usages
         val uidPowers = update.uidPowers
 
-        val summary = session?.let { DischargeSessionMapper.buildSummary(it, samples, nowMs) }
+        val liveActiveSessionId = repository.queryActiveSession()?.id
+        val summary = session?.let {
+            DischargeSessionMapper.buildSummary(
+                session = it,
+                samples = samples,
+                nowMs = nowMs,
+                liveActiveSessionId = liveActiveSessionId,
+            )
+        }
         val samplesByUsageId = usages.associate { usage ->
             usage.id to repository.querySamplesByUsageId(usage.id)
         }
@@ -284,7 +292,9 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         )
         val listStatus = when {
             appRows.isNotEmpty() -> AppPowerListStatus.Ready
-            session != null && session.endedAt == null -> AppPowerListStatus.Collecting
+            session != null &&
+                session.endedAt == null &&
+                session.id == liveActiveSessionId -> AppPowerListStatus.Collecting
             else -> AppPowerListStatus.Empty
         }
         val infoRow = summary?.let {
@@ -465,9 +475,16 @@ class DischargeStatisticsViewModel : BaseViewModel() {
     private fun observeDischargeHistory() {
         historyObserveJob?.cancel()
         historyObserveJob = viewModelScope.launch(Dispatchers.IO) {
-            repository.observeDischargingSessions()
-                .distinctUntilChangedBy { sessions -> sessions.map { it.id } }
-                .flatMapLatest { sessions ->
+            combine(
+                repository.observeDischargingSessions(),
+                repository.observeActiveSession().map { it?.id }.distinctUntilChanged(),
+            ) { sessions, liveActiveSessionId ->
+                sessions to liveActiveSessionId
+            }
+                .distinctUntilChangedBy { (sessions, liveId) ->
+                    sessions.map { it.id } to liveId
+                }
+                .flatMapLatest { (sessions, liveActiveSessionId) ->
                     if (sessions.isEmpty()) {
                         flowOf(emptyList())
                     } else {
@@ -479,8 +496,12 @@ class DischargeStatisticsViewModel : BaseViewModel() {
                         ) { sessionSamples ->
                             val nowMs = Clock.System.now().toEpochMilliseconds()
                             sessionSamples.mapNotNull { (session, samples) ->
-                                val summary = DischargeSessionMapper.buildSummary(session, samples, nowMs)
-                                    ?: return@mapNotNull null
+                                val summary = DischargeSessionMapper.buildSummary(
+                                    session = session,
+                                    samples = samples,
+                                    nowMs = nowMs,
+                                    liveActiveSessionId = liveActiveSessionId,
+                                ) ?: return@mapNotNull null
                                 DischargeHistoryItem(
                                     sessionId = session.id,
                                     startedAt = session.startedAt,

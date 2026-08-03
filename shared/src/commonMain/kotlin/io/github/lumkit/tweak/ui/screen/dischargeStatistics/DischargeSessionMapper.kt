@@ -71,11 +71,15 @@ internal object DischargeSessionMapper {
         session: BatteryRecordSessionEntity,
         samples: List<BatteryRecordSampleEntity>,
         nowMs: Long,
+        liveActiveSessionId: Long? = null,
     ): DischargeStatisticsViewModel.DischargeSessionSummary? {
         val first = samples.firstOrNull() ?: return null
         val last = samples.last()
+        // 仅「当前仍在采样的活跃会话」实时计时；endedAt 为空的历史脏数据冻结在末采样点
         val isOngoing =
-            session.chargeState == BatteryChargeState.DISCHARGING && session.endedAt == null
+            session.endedAt == null &&
+                session.id == liveActiveSessionId &&
+                session.chargeState == BatteryChargeState.DISCHARGING
         val endedAt = session.endedAt ?: if (isOngoing) nowMs else last.timestamp
         val energyUw = ChargeSessionChartsMapper.calculateEnergyGainUw(samples)
         val avgPowerUw = averagePowerUw(samples)
