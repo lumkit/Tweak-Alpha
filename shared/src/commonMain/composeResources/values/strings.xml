@@ -401,6 +401,9 @@
     <string name="text_charge_label_battery_capacity">设计容量</string>
     <string name="text_charge_label_battery_capacity_full">充满容量</string>
     <string name="text_charge_label_estimating">估算中</string>
+    <string name="text_charge_label_capacity_mah_format">%1$d mAh</string>
+    <string name="text_charge_label_wait_finish_for_estimation">等待充电结束</string>
+    <string name="text_charge_label_no_estimated_capacity">暂无估算数据</string>
     <string name="text_charge_chart_power_time">功率 / 时间</string>
     <string name="text_charge_chart_current_time">电流 / 时间</string>
     <string name="text_charge_chart_level_time">电量 / 时间</string>

@@ -14,6 +14,7 @@ import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogWatcher
 import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
+import io.github.lumkit.tweak.common.utils.BatteryCapacityEstimateStore
 import io.github.lumkit.tweak.common.utils.BatterySnapshot
 import io.github.lumkit.tweak.common.utils.BatteryUtils
 import io.github.lumkit.tweak.common.utils.TweakDataStore
@@ -33,6 +34,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.getString
+import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.text_charge_label_capacity_mah_format
+import tweak_alpha.shared.generated.resources.text_charge_label_no_estimated_capacity
+import tweak_alpha.shared.generated.resources.text_charge_label_wait_finish_for_estimation
 import java.io.Closeable
 import kotlin.math.abs
 import kotlin.time.Clock
@@ -122,12 +128,23 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             combine(
                 batterySnapshot,
+                chargeState,
                 TweakDataStore.estimatedBatteryFullCapacityMahFlow(),
-            ) { snapshot, estimated ->
+            ) { snapshot, currentChargeState, estimated ->
                 when {
-                    snapshot?.currentFullCapacityMah != null -> "${snapshot.currentFullCapacityMah} mAh"
-                    estimated != null && estimated > 0 -> "$estimated mAh"
-                    else -> "估算中"
+                    snapshot?.currentFullCapacityMah != null -> {
+                        getString(
+                            Res.string.text_charge_label_capacity_mah_format,
+                            snapshot.currentFullCapacityMah,
+                        )
+                    }
+                    estimated != null && estimated > 0 -> {
+                        getString(Res.string.text_charge_label_capacity_mah_format, estimated)
+                    }
+                    currentChargeState == BatteryChargeState.CHARGING -> {
+                        getString(Res.string.text_charge_label_wait_finish_for_estimation)
+                    }
+                    else -> getString(Res.string.text_charge_label_no_estimated_capacity)
                 }
             }.collect { text ->
                 withContext(Dispatchers.Main.immediate) {
@@ -463,6 +480,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
                 ids.forEach { sessionId ->
                     repository.deleteSession(sessionId)
                 }
+                BatteryCapacityEstimateStore.refreshFromChargingHistory(repository)
             } finally {
                 withContext(Dispatchers.Main.immediate) {
                     if (_chartsSessionOverrideId.value in ids) {

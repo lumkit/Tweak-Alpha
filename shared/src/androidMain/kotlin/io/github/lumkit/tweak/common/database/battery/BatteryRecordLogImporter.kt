@@ -10,6 +10,7 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleE
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSessionEntity
 import io.github.lumkit.tweak.common.database.battery.table.BatteryUidPowerEntity
 import io.github.lumkit.tweak.common.shell.ReusableShells
+import io.github.lumkit.tweak.common.utils.BatteryCapacityEstimateStore
 import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.NativeFileResult
 import io.github.lumkit.tweak.common.utils.battery.UidPowerMath
@@ -754,6 +755,7 @@ object BatteryRecordLogImporter {
             state = chargeState,
         )
         return if (existing != null) {
+            val wasOpen = existing.endedAt == null
             if (deleted && !existing.confirmed) {
                 repository.softDeleteUnconfirmedSession(
                     existing.id,
@@ -774,6 +776,15 @@ object BatteryRecordLogImporter {
             if (!lastTsCache.containsKey(existing.id)) {
                 lastTsCache[existing.id] = repository.maxSampleTimestamp(existing.id) ?: 0L
             }
+            if (
+                chargeState == BatteryChargeState.CHARGING &&
+                existing.confirmed &&
+                !deleted &&
+                wasOpen &&
+                endedAt != null
+            ) {
+                BatteryCapacityEstimateStore.refreshFromChargingHistory(repository)
+            }
             existing.id
         } else {
             val id = repository.insertSession(
@@ -789,6 +800,14 @@ object BatteryRecordLogImporter {
                 ),
             )
             lastTsCache[id] = 0L
+            if (
+                chargeState == BatteryChargeState.CHARGING &&
+                confirmed &&
+                !deleted &&
+                endedAt != null
+            ) {
+                BatteryCapacityEstimateStore.refreshFromChargingHistory(repository)
+            }
             id
         }
     }
@@ -890,6 +909,7 @@ object BatteryRecordLogImporter {
             state = BatteryChargeState.fromCode(state),
         )
         return if (existing != null) {
+            val wasOpen = existing.endedAt == null
             repository.updateSession(
                 existing.copy(
                     intervalMs = intervalMs,
@@ -901,6 +921,15 @@ object BatteryRecordLogImporter {
             )
             if (!lastTsCache.containsKey(existing.id)) {
                 lastTsCache[existing.id] = repository.maxSampleTimestamp(existing.id) ?: 0L
+            }
+            if (
+                state == BatteryChargeState.CHARGING.code &&
+                existing.confirmed &&
+                !deleted &&
+                wasOpen &&
+                endedAt != null
+            ) {
+                BatteryCapacityEstimateStore.refreshFromChargingHistory(repository)
             }
             existing.id
         } else {
@@ -917,6 +946,14 @@ object BatteryRecordLogImporter {
                 ),
             )
             lastTsCache[id] = 0L
+            if (
+                state == BatteryChargeState.CHARGING.code &&
+                confirmed &&
+                !deleted &&
+                endedAt != null
+            ) {
+                BatteryCapacityEstimateStore.refreshFromChargingHistory(repository)
+            }
             id
         }
     }
@@ -944,6 +981,7 @@ object BatteryRecordLogImporter {
         val confirmed = parts[2] == "1"
         val deleted = parts[3] == "1"
         val target = repository.querySessionById(sessionId) ?: return
+        val wasOpen = target.endedAt == null
         if (deleted && !target.confirmed) {
             repository.softDeleteUnconfirmedSession(target.id, endedAt)
         } else {
@@ -954,6 +992,14 @@ object BatteryRecordLogImporter {
                     deleted = deleted || target.deleted,
                 ),
             )
+            if (
+                target.chargeState == BatteryChargeState.CHARGING &&
+                target.confirmed &&
+                !deleted &&
+                wasOpen
+            ) {
+                BatteryCapacityEstimateStore.refreshFromChargingHistory(repository)
+            }
         }
     }
 }

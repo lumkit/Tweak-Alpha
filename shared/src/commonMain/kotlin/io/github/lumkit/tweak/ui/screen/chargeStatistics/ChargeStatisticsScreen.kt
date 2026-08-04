@@ -389,6 +389,13 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
                         title = stringResource(Res.string.text_charge_label_battery_capacity),
                         value = batteryCapacityText,
                     )
+                } else {
+                    batteryFullCapacityText?.let { fullCapacityText ->
+                        ChargeStateLabel(
+                            title = stringResource(Res.string.text_charge_label_battery_capacity_full),
+                            value = fullCapacityText,
+                        )
+                    }
                 }
             }
 
@@ -429,18 +436,6 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
                     modifier = Modifier.weight(1f),
                     title = stringResource(Res.string.text_charge_label_battery_cycle_count),
                     value = stringResource(Res.string.text_charge_label_battery_cycle_count_fm).format(count),
-                )
-            }
-        } ?: batteryFullCapacityText?.let { fullCapacityText ->
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 16.dp, top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ChargeStateLabel(
-                    title = stringResource(Res.string.text_charge_label_battery_capacity_full),
-                    value = fullCapacityText,
                 )
             }
         } ?: run {
