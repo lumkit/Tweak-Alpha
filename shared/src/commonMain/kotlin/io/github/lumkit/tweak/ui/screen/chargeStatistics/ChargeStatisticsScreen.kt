@@ -131,6 +131,7 @@ import tweak_alpha.shared.generated.resources.text_charge_history_open_native_da
 import tweak_alpha.shared.generated.resources.text_charge_history_title
 import tweak_alpha.shared.generated.resources.text_charge_label_average_power
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_capacity
+import tweak_alpha.shared.generated.resources.text_charge_label_battery_capacity_full
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_cycle_count
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_cycle_count_fm
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_power
@@ -141,6 +142,7 @@ import tweak_alpha.shared.generated.resources.text_charge_label_battery_status_f
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_temperature
 import tweak_alpha.shared.generated.resources.text_charge_label_battery_voltage
 import tweak_alpha.shared.generated.resources.text_charge_label_current
+import tweak_alpha.shared.generated.resources.text_charge_label_estimating
 import tweak_alpha.shared.generated.resources.text_charge_statistics
 import tweak_alpha.shared.generated.resources.text_charge_statistics_description
 import tweak_alpha.shared.generated.resources.text_dialog_confirm
@@ -321,6 +323,7 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
     val batteryTemperatureC by viewModel.batteryTemperatureC.collectAsStateWithLifecycle()
     val batteryVoltageMv by viewModel.batteryVoltageMv.collectAsStateWithLifecycle()
     val batterySnapshot by viewModel.batterySnapshot.collectAsStateWithLifecycle()
+    val batteryFullCapacityText by viewModel.batteryFullCapacityText.collectAsStateWithLifecycle()
     val currentSessionSummary by viewModel.currentSessionSummary.collectAsStateWithLifecycle()
     val currentTime by viewModel.currentTime.collectAsStateWithLifecycle()
 
@@ -413,11 +416,31 @@ private fun ChargeStateContent(viewModel: ChargeStatisticsViewModel) {
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = 16.dp, top = 4.dp),
+                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 ChargeStateLabel(
+                    modifier = Modifier.weight(1f),
+                    title = stringResource(Res.string.text_charge_label_battery_capacity_full),
+                    value = batteryFullCapacityText ?: stringResource(Res.string.text_charge_label_estimating),
+                )
+                ChargeStateLabel(
+                    modifier = Modifier.weight(1f),
                     title = stringResource(Res.string.text_charge_label_battery_cycle_count),
                     value = stringResource(Res.string.text_charge_label_battery_cycle_count_fm).format(count),
+                )
+            }
+        } ?: batteryFullCapacityText?.let { fullCapacityText ->
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ChargeStateLabel(
+                    title = stringResource(Res.string.text_charge_label_battery_capacity_full),
+                    value = fullCapacityText,
                 )
             }
         } ?: run {
@@ -478,11 +501,12 @@ private const val PLACEHOLDER = "—"
 
 @Composable
 private fun ChargeStateLabel(
+    modifier: Modifier = Modifier,
     title: String,
     value: String,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {

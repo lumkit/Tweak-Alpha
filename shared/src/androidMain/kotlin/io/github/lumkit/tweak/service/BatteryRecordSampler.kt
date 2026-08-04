@@ -8,7 +8,9 @@ import android.os.PowerManager
 import io.github.lumkit.tweak.common.database.battery.BatteryChargeState
 import io.github.lumkit.tweak.common.database.battery.repos.BatteryRecordRepository
 import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
+import io.github.lumkit.tweak.common.utils.BatteryFullCapacityEstimator
 import io.github.lumkit.tweak.common.utils.BatteryUtils
+import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.model.GlobalViewModel
@@ -142,6 +144,7 @@ class BatteryRecordSampler(
             repository.softDeleteUnconfirmedSession(active.id, endedAt = now)
         } else {
             repository.endSession(active.id, endedAt = now)
+            maybeUpdateEstimatedFullCapacity(active.id)
         }
 
         return repository.startSession(
@@ -161,6 +164,15 @@ class BatteryRecordSampler(
             repository.confirmSession(sessionId)
             logD("charging session confirmed id=$sessionId", TAG)
         }
+    }
+
+    private suspend fun maybeUpdateEstimatedFullCapacity(sessionId: Long) {
+        val session = repository.querySessionById(sessionId) ?: return
+        if (session.chargeState != BatteryChargeState.CHARGING || !session.confirmed) return
+        if (BatteryUtils.getCurrentFullCapacity() != null) return
+        val samples = repository.querySamplesBySessionId(sessionId)
+        val estimatedMah = BatteryFullCapacityEstimator.estimateMah(session, samples) ?: return
+        TweakDataStore.setEstimatedBatteryFullCapacityMah(estimatedMah)
     }
 
     private fun resolveChargeState(): BatteryChargeState {

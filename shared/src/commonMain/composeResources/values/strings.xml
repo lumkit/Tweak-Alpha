@@ -399,6 +399,8 @@
     <string name="text_charge_label_battery_voltage">当前电压</string>
     <string name="text_charge_label_current">当前电流</string>
     <string name="text_charge_label_battery_capacity">设计容量</string>
+    <string name="text_charge_label_battery_capacity_full">充满容量</string>
+    <string name="text_charge_label_estimating">估算中</string>
     <string name="text_charge_chart_power_time">功率 / 时间</string>
     <string name="text_charge_chart_current_time">电流 / 时间</string>
     <string name="text_charge_chart_level_time">电量 / 时间</string>

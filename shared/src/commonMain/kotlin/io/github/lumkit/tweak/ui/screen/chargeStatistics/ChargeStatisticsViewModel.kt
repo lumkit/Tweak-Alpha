@@ -71,6 +71,9 @@ class ChargeStatisticsViewModel : BaseViewModel() {
     private val _batterySnapshot = MutableStateFlow<BatterySnapshot?>(null)
     val batterySnapshot = _batterySnapshot.asStateFlow()
 
+    private val _batteryFullCapacityText = MutableStateFlow<String?>(null)
+    val batteryFullCapacityText = _batteryFullCapacityText.asStateFlow()
+
     private val _chargeState = MutableStateFlow<BatteryChargeState?>(null)
     val chargeState = _chargeState.asStateFlow()
 
@@ -110,8 +113,28 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         chartState.bindScope(viewModelScope)
         observeChargingSessionCharts()
         observeLiveActiveSession()
+        observeBatteryFullCapacity()
         refreshBatterySnapshotOnce()
         startBatteryLogWatcher()
+    }
+
+    private fun observeBatteryFullCapacity() {
+        viewModelScope.launch(Dispatchers.IO) {
+            combine(
+                batterySnapshot,
+                TweakDataStore.estimatedBatteryFullCapacityMahFlow(),
+            ) { snapshot, estimated ->
+                when {
+                    snapshot?.currentFullCapacityMah != null -> "${snapshot.currentFullCapacityMah} mAh"
+                    estimated != null && estimated > 0 -> "$estimated mAh"
+                    else -> "估算中"
+                }
+            }.collect { text ->
+                withContext(Dispatchers.Main.immediate) {
+                    _batteryFullCapacityText.value = text
+                }
+            }
+        }
     }
 
     private fun startBatteryLogWatcher() {

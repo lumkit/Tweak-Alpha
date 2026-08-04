@@ -9,7 +9,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.lumkit.tweak.common.daemon.BatteryRecordDaemonConfig
-import io.github.lumkit.tweak.common.daemon.DaemonPaths
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.model.BatteryDisplayType
 import io.github.lumkit.tweak.model.RuntimeMode
@@ -62,6 +61,7 @@ object TweakDataStore {
     private val batteryDualCell = booleanPreferencesKey("battery_dual_cell")
     // 电流数量级缩放（默认 -1000：µA→mA）
     private val batteryCurrentScale = longPreferencesKey("battery_current_scale")
+    private val estimatedBatteryFullCapacityMah = intPreferencesKey("estimated_battery_full_capacity_mah")
     // Native Daemon（TweakServer）开关
     private val nativeDaemonEnabled = booleanPreferencesKey("native_daemon_enabled")
     // 无障碍服务开关（设置页）
@@ -269,6 +269,22 @@ object TweakDataStore {
         }
         refreshBatteryCurrentCalibration()
         BatteryRecordDaemonConfig.syncFromDataStore()
+    }
+
+    fun estimatedBatteryFullCapacityMahFlow(): Flow<Int?> = preferences.data.map {
+        it[estimatedBatteryFullCapacityMah]
+    }
+
+    suspend fun setEstimatedBatteryFullCapacityMah(value: Int?) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                if (value == null || value <= 0) {
+                    preferences.remove(estimatedBatteryFullCapacityMah)
+                } else {
+                    preferences[estimatedBatteryFullCapacityMah] = value
+                }
+            }
+        }
     }
 
     /** 从 DataStore 当前值刷新进程内电流校准缓存。 */
