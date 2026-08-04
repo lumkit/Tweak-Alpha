@@ -92,9 +92,20 @@ object GlobalViewModel: BaseViewModel() {
             initialValue = true
         )
 
+    val hideInBackgroundState = TweakDataStore.hideInBackgroundFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false,
+        )
+
     init {
         viewModelScope.launch {
             enabledFloatNavBar.collect {  }
+        }
+        viewModelScope.launch {
+            hideInBackgroundState.collect { }
         }
         // 进程启动即加载电流校准，并持续与 DataStore 同步
         viewModelScope.launch {
@@ -112,6 +123,12 @@ object GlobalViewModel: BaseViewModel() {
                         ),
                     )
                 }
+        }
+    }
+
+    fun setHideInBackground(enabled: Boolean) {
+        viewModelScope.launch {
+            TweakDataStore.setHideInBackground(enabled)
         }
     }
 }

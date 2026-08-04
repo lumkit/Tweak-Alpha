@@ -68,6 +68,8 @@ object TweakDataStore {
     private val a11yDaemonEnabled = booleanPreferencesKey("a11y_daemon_enabled")
     // 自动启动应用开关
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
+    // 后台隐藏：开启后不在最近任务列表显示
+    private val hideInBackground = booleanPreferencesKey("hide_in_background")
     // 是否自动监听系统更新并推送通知（关闭后需进入系统更新页才发通知）
     private val autoListenSystemUpdate = booleanPreferencesKey("auto_listen_system_update")
     // 是否申请过通知权限
@@ -352,6 +354,18 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[autoStartAppSwitch] = enable
+            }
+        }
+    }
+
+    fun hideInBackgroundFlow(): Flow<Boolean> = preferences.data.map {
+        it[hideInBackground] ?: false
+    }
+
+    suspend fun setHideInBackground(enable: Boolean) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[hideInBackground] = enable
             }
         }
     }

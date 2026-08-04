@@ -122,12 +122,13 @@ import tweak_alpha.shared.generated.resources.text_framework_mode_shizuku
 import tweak_alpha.shared.generated.resources.text_framework_mode_unknow
 import tweak_alpha.shared.generated.resources.text_github
 import tweak_alpha.shared.generated.resources.text_github_web
+import tweak_alpha.shared.generated.resources.text_hide_in_background
+import tweak_alpha.shared.generated.resources.text_hide_in_background_description
 import tweak_alpha.shared.generated.resources.text_join_qq
 import tweak_alpha.shared.generated.resources.text_jump_to_app_info
 import tweak_alpha.shared.generated.resources.text_native_daemon
 import tweak_alpha.shared.generated.resources.text_native_daemon_description
 import tweak_alpha.shared.generated.resources.text_native_daemon_loading
-import tweak_alpha.shared.generated.resources.text_runtime_mode_loading
 import tweak_alpha.shared.generated.resources.text_navigation_bar_enable_blur
 import tweak_alpha.shared.generated.resources.text_navigation_bar_enable_blur_description
 import tweak_alpha.shared.generated.resources.text_notification_permission
@@ -138,6 +139,7 @@ import tweak_alpha.shared.generated.resources.text_panel_refresh_tick_descriptio
 import tweak_alpha.shared.generated.resources.text_process_info_overview
 import tweak_alpha.shared.generated.resources.text_process_info_overview_description
 import tweak_alpha.shared.generated.resources.text_qq_url
+import tweak_alpha.shared.generated.resources.text_runtime_mode_loading
 import tweak_alpha.shared.generated.resources.text_settings
 import tweak_alpha.shared.generated.resources.text_theme
 import tweak_alpha.shared.generated.resources.text_theme_dark
@@ -540,6 +542,18 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                     )
                 }
             }
+        }
+
+        // 后台隐藏
+        Block {
+            val hideInBackground by GlobalViewModel.hideInBackgroundState.collectAsStateWithLifecycle()
+
+            SwitchPreference(
+                title = stringResource(Res.string.text_hide_in_background),
+                summary = stringResource(Res.string.text_hide_in_background_description),
+                checked = hideInBackground,
+                onCheckedChange = GlobalViewModel::setHideInBackground,
+            )
         }
 
         // 通知权限

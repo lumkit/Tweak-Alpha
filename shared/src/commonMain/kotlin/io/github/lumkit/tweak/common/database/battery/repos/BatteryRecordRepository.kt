@@ -46,10 +46,23 @@ class BatteryRecordRepository {
         startedAt: Long = Clock.System.now().toEpochMilliseconds(),
         confirmMs: Int = BatteryRecordDefaults.CONFIRM_MS,
     ): Long {
+        val active = dao.queryActiveSession()
+        if (active != null && active.chargeState == state) {
+            val nextIntervalMs = intervalMs.coerceAtLeast(100)
+            if (active.intervalMs != nextIntervalMs || active.confirmMs != confirmMs) {
+                dao.updateSession(
+                    active.copy(
+                        intervalMs = nextIntervalMs,
+                        confirmMs = confirmMs,
+                    ),
+                )
+            }
+            return active.id
+        }
         return dao.insertSession(
             BatteryRecordSessionEntity(
                 startedAt = startedAt,
-                intervalMs = intervalMs,
+                intervalMs = intervalMs.coerceAtLeast(100),
                 state = state.code,
                 confirmed = state.defaultConfirmed,
                 confirmMs = confirmMs,

@@ -6,6 +6,9 @@ import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import java.io.File
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -99,7 +102,7 @@ class BatteryEngine(
 
                 val newState = sample.state
                 if (active == null) {
-                    active = beginSession(now, newState, cfg)
+                    active = resumeOpenSession(newState, cfg) ?: beginSession(now, newState, cfg)
                 } else if (active.state != newState) {
                     if (active.state == BatteryChargeState.CHARGING.code && !active.confirmed) {
                         writer?.markDeleted()
@@ -204,6 +207,105 @@ class BatteryEngine(
             }
         }
         return session
+    }
+
+    private fun resumeOpenSession(state: Int, cfg: BatteryRecordConf): ActiveSession? {
+        val meta = findLatestOpenSessionMeta(state) ?: return null
+        val session = ActiveSession(
+            startedAt = meta.startedAt,
+            createdAt = meta.createdAt,
+            intervalMs = meta.intervalMs,
+            state = meta.state,
+            confirmMs = meta.confirmMs,
+            confirmed = meta.confirmed,
+            deleted = meta.deleted,
+        )
+        val w = BrlogWriter(logsDir, cfg.maxPartBytes)
+        w.openSession(meta)
+        writer = w
+
+        val aw = ApplogWriter(logsDir, cfg.maxPartBytes)
+        aw.openSession(
+            ApplogWriter.SessionMeta(
+                startedAt = meta.startedAt,
+                state = meta.state,
+                intervalMs = meta.intervalMs,
+                createdAt = meta.createdAt,
+                endedAt = meta.endedAt,
+            ),
+        )
+        applogWriter = aw
+
+        if (state == BatteryChargeState.DISCHARGING.code) {
+            val uw = UidpowWriter(logsDir)
+            uw.openSession(meta.startedAt, meta.state)
+            uidpowWriter = uw
+        }
+        logD("resumed open session startedAt=${meta.startedAt} state=${meta.state}", TAG)
+        return session
+    }
+
+    private fun findLatestOpenSessionMeta(state: Int): BrlogWriter.SessionMeta? {
+        val candidates = logsDir.listFiles()
+            ?.asSequence()
+            ?.filter { file ->
+                file.isFile &&
+                    file.name.contains(".brlog") &&
+                    file.name.startsWith("_ignore_").not()
+            }
+            ?.mapNotNull { file -> readSessionMeta(file) }
+            ?.filter { meta ->
+                meta.state == state &&
+                    meta.endedAt <= 0L &&
+                    !meta.deleted
+            }
+            ?.sortedByDescending { it.startedAt }
+            ?: return null
+        return candidates.firstOrNull()
+    }
+
+    private fun readSessionMeta(file: File): BrlogWriter.SessionMeta? {
+        return runCatching {
+            RandomAccessFile(file, "r").use { raf ->
+                if (raf.length() < BrlogWriter.HEADER_SIZE.toLong()) return null
+                val bytes = ByteArray(BrlogWriter.HEADER_SIZE.toInt())
+                raf.readFully(bytes)
+                val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+                if (
+                    bytes[0] != 'T'.code.toByte() ||
+                    bytes[1] != 'W'.code.toByte() ||
+                    bytes[2] != 'B'.code.toByte() ||
+                    bytes[3] != '2'.code.toByte()
+                ) {
+                    return null
+                }
+                buf.position(4)
+                val version = buf.short.toInt() and 0xFFFF
+                if (version != BrlogWriter.VERSION.toInt()) return null
+                buf.short // header size
+                buf.short // record size
+                buf.short // flags
+                val intervalMs = buf.int
+                val state = buf.int
+                val confirmMs = buf.int
+                val startedAt = buf.long
+                val createdAt = buf.long
+                val confirmed = buf.get().toInt() == 1
+                val deleted = buf.get().toInt() == 1
+                buf.short // pad
+                val endedAt = buf.long
+                BrlogWriter.SessionMeta(
+                    startedAt = startedAt,
+                    intervalMs = intervalMs,
+                    state = state,
+                    confirmMs = confirmMs,
+                    createdAt = createdAt,
+                    confirmed = confirmed,
+                    deleted = deleted,
+                    endedAt = endedAt,
+                )
+            }
+        }.getOrNull()
     }
 
     private fun endActive(active: ActiveSession?, endedAt: Long): ActiveSession? {

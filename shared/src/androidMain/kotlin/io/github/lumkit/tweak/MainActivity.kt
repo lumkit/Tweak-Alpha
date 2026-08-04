@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak
 
+import android.app.ActivityManager
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -7,17 +8,21 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.lifecycleScope
 import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.model.CrashReporter
+import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.NavigationIntent
 import io.github.lumkit.tweak.model.NavigationViewModel
 import io.github.lumkit.tweak.model.parseDeeplinkRoute
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        observeHideInBackground()
         handleIntentForNavIntent(intent)
 
         setContent {
@@ -36,6 +41,21 @@ class MainActivity : ComponentActivity() {
             encodeDefaults = true
             classDiscriminator = "type"
         }
+    }
+
+    private fun observeHideInBackground() {
+        lifecycleScope.launch {
+            GlobalViewModel.hideInBackgroundState.collect { enabled ->
+                applyHideInBackground(enabled)
+            }
+        }
+    }
+
+    private fun applyHideInBackground(enabled: Boolean) {
+        val am = getSystemService(ActivityManager::class.java) ?: return
+        am.appTasks
+            .firstOrNull { task -> task.taskInfo?.taskId == taskId }
+            ?.setExcludeFromRecents(enabled)
     }
 
     /**
