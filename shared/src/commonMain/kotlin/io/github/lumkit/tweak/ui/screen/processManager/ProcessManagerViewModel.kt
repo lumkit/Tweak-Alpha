@@ -84,6 +84,7 @@ class ProcessManagerViewModel : BaseViewModel() {
     )
 
     private var refreshJob: Job? = null
+    private var hasCompletedInitialRefresh = false
 
     init {
         viewModelScope.launch {
@@ -225,20 +226,28 @@ class ProcessManagerViewModel : BaseViewModel() {
     }
 
     private suspend fun refreshOnceInternal() {
-        _loading.value = true
+        val shouldShowLoading = !hasCompletedInitialRefresh && _processes.value.isEmpty()
+        if (shouldShowLoading) {
+            _loading.value = true
+        }
         try {
             val isSupported = ProcessUtils.supported()
             _supported.value = isSupported
             if (!isSupported) {
-                _processes.value = emptyList()
+                if (!hasCompletedInitialRefresh) {
+                    _processes.value = emptyList()
+                }
                 return
             }
             _processes.value = ProcessUtils.getAllProcess()
         } catch (_: Throwable) {
             ProcessUtils.reset()
-            _supported.value = false
-            _processes.value = emptyList()
+            if (!hasCompletedInitialRefresh) {
+                _supported.value = false
+                _processes.value = emptyList()
+            }
         } finally {
+            hasCompletedInitialRefresh = true
             _loading.value = false
         }
     }

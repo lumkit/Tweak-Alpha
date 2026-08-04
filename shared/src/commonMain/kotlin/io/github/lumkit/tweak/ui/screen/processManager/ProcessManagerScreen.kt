@@ -440,38 +440,36 @@ private fun ProcessManagerTopBar(
             }
         },
         expander = {
-            if (!searchMode) {
-                val sortTabs = listOf(
-                    stringResource(Res.string.text_process_sort_cpu),
-                    stringResource(Res.string.text_process_sort_res),
-                    stringResource(Res.string.text_process_sort_pid),
-                    stringResource(Res.string.text_process_sort_none),
-                )
-                val selectedSortIndex = when (sortMode) {
-                    ProcessSortMode.Cpu -> 0
-                    ProcessSortMode.Res -> 1
-                    ProcessSortMode.Pid -> 2
-                    ProcessSortMode.None -> 3
-                }
-                TabRowWithContour(
-                    tabs = sortTabs,
-                    selectedTabIndex = selectedSortIndex,
-                    onTabSelected = { index ->
-                        onSortChange(
-                            when (index) {
-                                0 -> ProcessSortMode.Cpu
-                                1 -> ProcessSortMode.Res
-                                2 -> ProcessSortMode.Pid
-                                else -> ProcessSortMode.None
-                            }
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 16.dp),
-                )
+            val sortTabs = listOf(
+                stringResource(Res.string.text_process_sort_cpu),
+                stringResource(Res.string.text_process_sort_res),
+                stringResource(Res.string.text_process_sort_pid),
+                stringResource(Res.string.text_process_sort_none),
+            )
+            val selectedSortIndex = when (sortMode) {
+                ProcessSortMode.Cpu -> 0
+                ProcessSortMode.Res -> 1
+                ProcessSortMode.Pid -> 2
+                ProcessSortMode.None -> 3
             }
+            TabRowWithContour(
+                tabs = sortTabs,
+                selectedTabIndex = selectedSortIndex,
+                onTabSelected = { index ->
+                    onSortChange(
+                        when (index) {
+                            0 -> ProcessSortMode.Cpu
+                            1 -> ProcessSortMode.Res
+                            2 -> ProcessSortMode.Pid
+                            else -> ProcessSortMode.None
+                        }
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+            )
 
             AnimatedVisibility(visible = searchMode) {
                 ProcessManagerSearchField(
