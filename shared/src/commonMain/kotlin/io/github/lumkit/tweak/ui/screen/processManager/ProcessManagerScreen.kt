@@ -31,7 +31,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,7 +44,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +51,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -172,11 +171,11 @@ fun ProcessManagerContent(
     val navigator = LocalNavigator.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val direction = LocalLayoutDirection.current
-    var resumeGeneration by remember { mutableIntStateOf(0) }
-    var hasResumedOnce by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val background = MiuixTheme.colorScheme.surface
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
+    val scrollBehavior = MiuixScrollBehavior()
+    val backdrop = rememberLayerBackdropColor()
 
     val supported by viewModel.supported.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
@@ -203,27 +202,11 @@ fun ProcessManagerContent(
     var confirmKillPid by remember { mutableStateOf<Int?>(null) }
     var confirmStopApp by remember { mutableStateOf<ProcessInfo?>(null) }
 
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> {
-                    if (hasResumedOnce) {
-                        resumeGeneration++
-                    } else {
-                        hasResumedOnce = true
-                    }
-                    viewModel.startAutoRefresh()
-                }
-                Lifecycle.Event.ON_PAUSE -> viewModel.stopAutoRefresh()
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.stopAutoRefresh()
-        }
-    }
+    ProcessManagerRefreshEffect(
+        lifecycleOwner = lifecycleOwner,
+        onResume = viewModel::onResume,
+        onPause = viewModel::stopAutoRefresh,
+    )
 
     LaunchedEffect(processes, pendingScroll) {
         if (!pendingScroll || processes.isEmpty()) {
@@ -288,110 +271,132 @@ fun ProcessManagerContent(
     )
 
     ScreenSurface {
-        key(resumeGeneration) {
-            val scrollBehavior = MiuixScrollBehavior()
-            val backdrop = rememberLayerBackdropColor()
-            Scaffold(
-                topBar = {
-                    ProcessManagerTopBar(
-                        title = stringResource(Res.string.text_process_manager),
-                        subTitle = stringResource(Res.string.text_process_count_format)
-                            .format(processes.size),
-                        searchMode = searchMode,
-                        searchQuery = searchQuery,
-                        scrollBehavior = scrollBehavior,
-                        backdrop = backdrop,
-                        onNavigationClick = {
-                            if (searchMode) {
-                                viewModel.setSearchMode(false)
-                            } else {
-                                navigator.goBack()
-                            }
-                        },
-                        onSearchClick = { viewModel.setSearchMode(true) },
-                        onSearchQueryChange = viewModel::setSearchQuery,
-                        onSizeChanged = { topHeight = it.height },
-                        sortMode = sortMode,
-                        onSortChange = viewModel::setSortMode
-                    )
-                },
-                floatingToolbarPosition = ToolbarPosition.BottomCenter,
-                containerColor = MiuixTheme.colorScheme.surface,
-            ) { padding ->
-                val contentPadding = remember(padding, bottomToolBarHeight, direction, topHeight) {
-                    val topInset = maxOf(padding.calculateTopPadding(), topHeight)
-                    PaddingValues(
-                        start = padding.calculateLeftPadding(direction) + 16.dp,
-                        end = padding.calculateRightPadding(direction) + 16.dp,
-                        top = topInset + 12.dp,
-                        bottom = padding.calculateBottomPadding() +
-                                bottomToolBarHeight + 16.dp,
-                    )
-                }
-
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    when {
-                        loading -> {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                InfiniteProgressIndicator()
-                            }
+        Scaffold(
+            topBar = {
+                ProcessManagerTopBar(
+                    title = stringResource(Res.string.text_process_manager),
+                    subTitle = stringResource(Res.string.text_process_count_format)
+                        .format(processes.size),
+                    searchMode = searchMode,
+                    searchQuery = searchQuery,
+                    scrollBehavior = scrollBehavior,
+                    backdrop = backdrop,
+                    onNavigationClick = {
+                        if (searchMode) {
+                            viewModel.setSearchMode(false)
+                        } else {
+                            navigator.goBack()
                         }
+                    },
+                    onSearchClick = { viewModel.setSearchMode(true) },
+                    onSearchQueryChange = viewModel::setSearchQuery,
+                    onSizeChanged = { topHeight = it.height },
+                    sortMode = sortMode,
+                    onSortChange = viewModel::setSortMode
+                )
+            },
+            floatingToolbarPosition = ToolbarPosition.BottomCenter,
+            containerColor = MiuixTheme.colorScheme.surface,
+        ) { padding ->
+            val contentPadding = remember(padding, bottomToolBarHeight, direction, topHeight) {
+                val topInset = maxOf(padding.calculateTopPadding(), topHeight)
+                PaddingValues(
+                    start = padding.calculateLeftPadding(direction) + 16.dp,
+                    end = padding.calculateRightPadding(direction) + 16.dp,
+                    top = topInset + 12.dp,
+                    bottom = padding.calculateBottomPadding() +
+                        bottomToolBarHeight + 16.dp,
+                )
+            }
 
-                        !supported -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(contentPadding),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = stringResource(Res.string.text_process_unsupported),
-                                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                    style = MiuixTheme.textStyles.body2,
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                when {
+                    loading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            InfiniteProgressIndicator()
+                        }
+                    }
+
+                    !supported -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(contentPadding),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.text_process_unsupported),
+                                color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                style = MiuixTheme.textStyles.body2,
+                            )
+                        }
+                    }
+
+                    else -> {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize()
+                                .layerBackdrop(backdrop = backdrop)
+                                .nestedScroll(scrollBehavior.nestedScrollConnection),
+                            contentPadding = contentPadding,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            // 不使用稳定 key：刷新重排时按 index+offset 固定视口，
+                            // 避免 LazyList 跟着上次可见 Item 滚动。
+                            itemsIndexed(items = processes) { _, process ->
+                                ProcessListItem(
+                                    process = process,
+                                    highlighted = (highlightPid > 0 && process.pid == highlightPid) ||
+                                        (highlightPackage.isNotBlank() &&
+                                            process.appPackageName == highlightPackage),
+                                    onClick = { viewModel.openDetail(process) },
                                 )
                             }
                         }
 
-                        else -> {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier.fillMaxSize()
-                                    .layerBackdrop(backdrop = backdrop)
-                                    .nestedScroll(scrollBehavior.nestedScrollConnection),
-                                contentPadding = contentPadding,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                // 不使用稳定 key：刷新重排时按 index+offset 固定视口，
-                                // 避免 LazyList 跟着上次可见 Item 滚动。
-                                itemsIndexed(items = processes) { _, process ->
-                                    ProcessListItem(
-                                        process = process,
-                                        highlighted = (highlightPid > 0 && process.pid == highlightPid) ||
-                                                (highlightPackage.isNotBlank() &&
-                                                        process.appPackageName == highlightPackage),
-                                        onClick = { viewModel.openDetail(process) },
-                                    )
-                                }
-                            }
-
-                            ProcessFilterToolbar(
-                                filterMode = filterMode,
-                                onFilterChange = viewModel::setFilterMode,
-                                background = background,
-                                advancedBackdropEffectSupported = advancedBackdropEffectSupported,
-                                backdrop = backdrop,
-                                onHeight = { bottomToolBarHeight = it },
-                            )
-                        }
+                        ProcessFilterToolbar(
+                            filterMode = filterMode,
+                            onFilterChange = viewModel::setFilterMode,
+                            background = background,
+                            advancedBackdropEffectSupported = advancedBackdropEffectSupported,
+                            backdrop = backdrop,
+                            onHeight = { bottomToolBarHeight = it },
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ProcessManagerRefreshEffect(
+    lifecycleOwner: androidx.lifecycle.LifecycleOwner,
+    onResume: () -> Unit,
+    onPause: () -> Unit,
+) {
+    DisposableEffect(lifecycleOwner, onResume, onPause) {
+        val lifecycle = lifecycleOwner.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> onResume()
+                Lifecycle.Event.ON_PAUSE -> onPause()
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer)
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            onResume()
+        }
+        onDispose {
+            lifecycle.removeObserver(observer)
+            onPause()
         }
     }
 }

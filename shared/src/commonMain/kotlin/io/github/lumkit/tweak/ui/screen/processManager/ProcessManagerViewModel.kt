@@ -86,9 +86,6 @@ class ProcessManagerViewModel : BaseViewModel() {
     private var refreshJob: Job? = null
 
     init {
-        viewModelScope.launch(Dispatchers.IO) {
-            _supported.value = ProcessUtils.supported()
-        }
         viewModelScope.launch {
             val ordinal = TweakDataStore.processManagerFilterModeOrdinalFlow().first()
             _filterMode.value = ProcessFilterMode.entries.getOrNull(ordinal)
@@ -126,10 +123,15 @@ class ProcessManagerViewModel : BaseViewModel() {
         }
         refreshJob = viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
-                refreshOnce()
+                refreshOnceInternal()
                 delay(3.seconds)
             }
         }
+    }
+
+    fun onResume() {
+        refreshOnce()
+        startAutoRefresh()
     }
 
     fun stopAutoRefresh() {
@@ -139,15 +141,7 @@ class ProcessManagerViewModel : BaseViewModel() {
 
     fun refreshOnce() {
         viewModelScope.launch(Dispatchers.IO) {
-            if (!_supported.value) {
-                _supported.value = ProcessUtils.supported()
-            }
-            if (!_supported.value) {
-                _loading.value = false
-                return@launch
-            }
-            _processes.value = ProcessUtils.getAllProcess()
-            _loading.value = false
+            refreshOnceInternal()
         }
     }
 
@@ -228,6 +222,25 @@ class ProcessManagerViewModel : BaseViewModel() {
             info.command.contains(q, ignoreCase = true) ||
             info.cmdline.contains(q, ignoreCase = true) ||
             info.pid.toString().contains(q)
+    }
+
+    private suspend fun refreshOnceInternal() {
+        _loading.value = true
+        try {
+            val isSupported = ProcessUtils.supported()
+            _supported.value = isSupported
+            if (!isSupported) {
+                _processes.value = emptyList()
+                return
+            }
+            _processes.value = ProcessUtils.getAllProcess()
+        } catch (_: Throwable) {
+            ProcessUtils.reset()
+            _supported.value = false
+            _processes.value = emptyList()
+        } finally {
+            _loading.value = false
+        }
     }
 
     private fun sortComparator(sort: ProcessSortMode): Comparator<ProcessInfo> {

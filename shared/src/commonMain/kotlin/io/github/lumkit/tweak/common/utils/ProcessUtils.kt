@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.common.utils
 
 import io.github.lumkit.tweak.common.shell.ReusableShells
+import io.github.lumkit.tweak.common.utils.ProcessUtils.staticExcludes
 import io.github.lumkit.tweak.model.ProcessInfo
 import io.github.lumkit.tweak.model.withAppMeta
 import kotlinx.coroutines.sync.Mutex
@@ -33,6 +34,10 @@ object ProcessUtils {
 
     suspend fun supported(): Boolean = mutex.withLock {
         ensureProbed()
+        if (listCommand.isNullOrBlank() || detailCommand.isNullOrBlank()) {
+            resetProbeState()
+            ensureProbed()
+        }
         !listCommand.isNullOrBlank() && !detailCommand.isNullOrBlank()
     }
 
@@ -92,6 +97,10 @@ object ProcessUtils {
     }
 
     suspend fun reset() = mutex.withLock {
+        resetProbeState()
+    }
+
+    private fun resetProbeState() {
         listCommand = null
         detailCommand = null
         probed = false
