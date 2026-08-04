@@ -16,6 +16,16 @@ import kotlinx.coroutines.sync.withLock
 object ProcessUtils {
     private val mutex = Mutex()
     private val whitespaceRegex = Regex("\\s+")
+    private val shellRuntimeNames = setOf(
+        "sh",
+        "su",
+        "bash",
+        "dash",
+        "ash",
+        "mksh",
+        "busybox",
+        "toybox",
+    )
 
     private var listCommand: String? = null
     private var detailCommand: String? = null
@@ -132,7 +142,7 @@ object ProcessUtils {
         val outsideCmd =
             if (outsideToybox.isNotBlank()) "$outsideToybox $insideCmd" else ""
 
-        for (cmd in listOf(outsidePerfectCmd, perfectCmd, outsideCmd, insideCmd)) {
+        for (cmd in listOf(outsideCmd, insideCmd, outsidePerfectCmd, perfectCmd)) {
             if (cmd.isBlank()) continue
             if (isUsableListCommand(cmd)) {
                 listCommand = cmd
@@ -162,23 +172,19 @@ object ProcessUtils {
 
     /** 对齐 vtools：`%CPU RES SWAP NAME PID USER COMMAND CMDLINE…` */
     private fun readRow(row: String): ProcessInfo? {
-        val columns = row.split(whitespaceRegex)
-        if (columns.size < 6) {
+        val columns = row.split(whitespaceRegex, 8)
+        if (columns.size < 7) {
             return null
         }
         return try {
-            val name = columns[3]
-            val command = columns.getOrElse(6) { "" }
-            val cmdline = if (command.isNotEmpty()) {
-                val idx = row.indexOf(command)
-                if (idx >= 0) {
-                    row.substring(idx + command.length).trim()
-                } else {
-                    ""
-                }
-            } else {
-                ""
-            }
+            val rawName = columns[3]
+            val command = columns[6]
+            val cmdline = columns.getOrElse(7) { "" }
+            val name = resolveProcessName(
+                rawName = rawName,
+                command = command,
+                cmdline = cmdline,
+            )
             if (isExcluded(name, command, cmdline)) {
                 return null
             }
@@ -194,6 +200,37 @@ object ProcessUtils {
             )
         } catch (_: Exception) {
             null
+        }
+    }
+
+    private fun resolveProcessName(
+        rawName: String,
+        command: String,
+        cmdline: String,
+    ): String {
+        val trimmedName = rawName.trim()
+        val commandLeaf = command.substringAfterLast('/').trim()
+        val arg0 = cmdline
+            .substringBefore('\u0000')
+            .substringBefore(' ')
+            .trim()
+
+        if (trimmedName.isBlank()) {
+            return arg0.ifBlank { commandLeaf }
+        }
+        if (arg0.isBlank()) {
+            return trimmedName
+        }
+
+        val lowerName = trimmedName.lowercase()
+        val lowerCommand = commandLeaf.lowercase()
+        val shouldUseArg0 = trimmedName == commandLeaf ||
+            lowerName in shellRuntimeNames ||
+            lowerCommand in shellRuntimeNames
+        return if (shouldUseArg0) {
+            arg0
+        } else {
+            trimmedName
         }
     }
 
