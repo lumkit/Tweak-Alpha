@@ -13,6 +13,9 @@ fun formatDischargeSessionDuration(startedAt: Long, endedAt: Long): String =
 fun formatDischargeEnergyWh(energyUw: Long): String =
     formatChargeEnergyGainWh(energyUw)
 
+fun formatDischargeUsedMah(usedMah: Float): String =
+    "%.2f mAh".format(usedMah)
+
 fun formatDischargeEtaText(etaMs: Long?): String {
     if (etaMs == null || etaMs <= 0L) return "--"
     return formatChargeSessionDuration(0L, etaMs)
@@ -37,8 +40,8 @@ fun formatDischargeSessionSummaryLine(
     }
 }
 
-fun formatDischargeAppAvgLine(avgW: Float, avgTemp: Float): String =
-    "AVG %.2fW / %.1f℃".format(avgW, avgTemp)
+fun formatDischargeAppUsedLine(usedMah: Float, avgTemp: Float): String =
+    "%.2f mAh / %.1f℃".format(usedMah, avgTemp)
 
 fun formatDischargeAppMaxTemp(maxTemp: Float): String =
     "MAX %.1f℃".format(maxTemp)

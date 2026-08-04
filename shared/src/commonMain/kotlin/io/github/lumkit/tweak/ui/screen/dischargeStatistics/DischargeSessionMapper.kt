@@ -201,7 +201,6 @@ internal object DischargeSessionMapper {
         uidPowers: List<BatteryUidPowerEntity>,
         usages: List<BatteryAppUsageEntity>,
         samplesByUsageId: Map<Long, List<BatteryRecordSampleEntity>>,
-        avgVoltageMv: Int?,
         sessionStartMs: Long,
         sessionDurationMs: Long,
     ): List<DischargeStatisticsViewModel.AppUsageRow> {
@@ -237,18 +236,11 @@ internal object DischargeSessionMapper {
         usageByPackage.values.forEach { acc ->
             acc.durationMs = acc.durationMs.coerceIn(0L, sessionDurationMs.coerceAtLeast(0L))
         }
-        val vNom = avgVoltageMv?.takeIf { it > 0 }?.div(1000.0) ?: 3.7
-        val durationHours = sessionDurationMs / 3_600_000.0
         return uidPowers
             .filter { it.deltaMah > 0.0 }
             .map { row ->
                 val packageName = row.packageName?.takeIf { it.isNotBlank() } ?: "uid:${row.uid}"
                 val usageAcc = row.packageName?.let { usageByPackage[it] }
-                val avgW = if (durationHours > 0.0) {
-                    ((row.deltaMah / 1000.0) * vNom / durationHours).toFloat()
-                } else {
-                    0f
-                }
                 val app = AppsHelper.apps.value.find { it.packageName == packageName }
                 DischargeStatisticsViewModel.AppUsageRow(
                     packageName = packageName,
@@ -256,7 +248,7 @@ internal object DischargeSessionMapper {
                         ?: if (row.packageName.isNullOrBlank()) "UID ${row.uid}" else packageName,
                     iconPath = app?.iconPath?.takeIf { it.isNotBlank() }
                         ?: AppsHelper.getIconPath(packageName).takeIf { it.isNotBlank() },
-                    avgW = avgW,
+                    usedMah = row.deltaMah.toFloat(),
                     avgTemp = if (usageAcc != null && usageAcc.tempCount > 0) {
                         (usageAcc.tempSum / usageAcc.tempCount).toFloat()
                     } else {
@@ -324,7 +316,7 @@ internal object DischargeSessionMapper {
                 appName = app?.appName?.takeIf { it.isNotBlank() } ?: packageName,
                 iconPath = app?.iconPath?.takeIf { it.isNotBlank() }
                     ?: AppsHelper.getIconPath(packageName).takeIf { it.isNotBlank() },
-                avgW = avgPowerUw / 1_000_000f,
+                usedMah = 0f,
                 avgTemp = if (acc.tempCount > 0) (acc.tempSum / acc.tempCount).toFloat() else 0f,
                 maxTemp = if (acc.maxTemp.isFinite()) acc.maxTemp else 0f,
                 durationMs = acc.durationMs,
@@ -339,9 +331,24 @@ internal object DischargeSessionMapper {
         val last = samples.lastOrNull() ?: return null
         return DischargeStatisticsViewModel.BatteryInfoRow(
             energyUw = energyUw,
+            usedMah = calculateUsedMah(samples),
             temperatureC = last.temperatureC,
             voltageMv = last.voltageMv,
         )
+    }
+
+    private fun calculateUsedMah(samples: List<BatteryRecordSampleEntity>): Float {
+        if (samples.size < 2) return 0f
+        var total = 0.0
+        for (index in 1 until samples.size) {
+            val previous = samples[index - 1]
+            val current = samples[index]
+            val currentMa = previous.currentMa ?: continue
+            val durationHours =
+                (current.timestamp - previous.timestamp).coerceAtLeast(0L) / 3_600_000.0
+            total += abs(currentMa.toDouble()) * durationHours
+        }
+        return total.toFloat()
     }
 
     private fun levelAtElapsed(

@@ -421,7 +421,7 @@
     <string name="text_discharge_scenes">使用场景</string>
     <string name="text_discharge_scenes_help">按前台应用聚合本次放电的平均功耗、温度与使用时长，可按时长或平均功耗排序。</string>
     <string name="text_discharge_sort_duration">时长</string>
-    <string name="text_discharge_sort_avg_power">平均功耗</string>
+    <string name="text_discharge_sort_used_mah">已使用电量</string>
     <string name="text_discharge_app_usage_empty">暂无分应用估算数据</string>
     <string name="text_discharge_app_usage_collecting">分应用功耗采集中</string>
     <string name="text_discharge_history_title">耗电记录</string>

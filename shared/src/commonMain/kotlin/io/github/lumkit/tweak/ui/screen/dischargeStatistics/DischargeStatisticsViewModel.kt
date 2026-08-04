@@ -46,7 +46,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
 
     enum class AppSortMode {
         Duration,
-        AvgPower,
+        UsedMah,
     }
 
     enum class AppPowerListStatus {
@@ -67,6 +67,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
 
     data class BatteryInfoRow(
         val energyUw: Long,
+        val usedMah: Float,
         val temperatureC: Float?,
         val voltageMv: Int?,
     )
@@ -75,7 +76,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         val packageName: String,
         val appName: String,
         val iconPath: String?,
-        val avgW: Float,
+        val usedMah: Float,
         val avgTemp: Float,
         val maxTemp: Float,
         val durationMs: Long,
@@ -275,10 +276,6 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         } else {
             emptyList()
         }
-        val avgVoltageMv = samples.mapNotNull { it.voltageMv }
-            .takeIf { it.isNotEmpty() }
-            ?.average()
-            ?.toInt()
         val sessionDurationMs = summary?.let {
             (it.endedAt - it.startedAt).coerceAtLeast(0L)
         } ?: 0L
@@ -286,7 +283,6 @@ class DischargeStatisticsViewModel : BaseViewModel() {
             uidPowers = uidPowers,
             usages = usages,
             samplesByUsageId = samplesByUsageId,
-            avgVoltageMv = avgVoltageMv,
             sessionStartMs = summary?.startedAt ?: session?.startedAt ?: 0L,
             sessionDurationMs = sessionDurationMs,
         )
@@ -297,6 +293,10 @@ class DischargeStatisticsViewModel : BaseViewModel() {
                 session.id == liveActiveSessionId -> AppPowerListStatus.Collecting
             else -> AppPowerListStatus.Empty
         }
+        val avgVoltageMv = samples.mapNotNull { it.voltageMv }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
+            ?.toInt()
         val infoRow = summary?.let {
             DischargeSessionMapper.buildBatteryInfoRow(samples, it.energyUw)
         }
@@ -348,7 +348,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
     private fun sortAppRows(rows: List<AppUsageRow>, mode: AppSortMode): List<AppUsageRow> {
         return when (mode) {
             AppSortMode.Duration -> rows.sortedByDescending { it.durationMs }
-            AppSortMode.AvgPower -> rows.sortedByDescending { it.avgW }
+            AppSortMode.UsedMah -> rows.sortedByDescending { it.usedMah }
         }
     }
 

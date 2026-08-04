@@ -120,8 +120,8 @@ import tweak_alpha.shared.generated.resources.text_discharge_process
 import tweak_alpha.shared.generated.resources.text_discharge_process_help
 import tweak_alpha.shared.generated.resources.text_discharge_scenes
 import tweak_alpha.shared.generated.resources.text_discharge_scenes_help
-import tweak_alpha.shared.generated.resources.text_discharge_sort_avg_power
 import tweak_alpha.shared.generated.resources.text_discharge_sort_duration
+import tweak_alpha.shared.generated.resources.text_discharge_sort_used_mah
 import tweak_alpha.shared.generated.resources.text_discharge_statistics
 import tweak_alpha.shared.generated.resources.text_discharge_statistics_description
 import tweak_alpha.shared.generated.resources.text_discharge_status_not_charging
@@ -378,7 +378,7 @@ private fun DischargeProcessCard(
                 .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            val energyText = batteryInfo?.let { formatDischargeEnergyWh(it.energyUw) } ?: PLACEHOLDER
+            val energyText = batteryInfo?.let { formatDischargeUsedMah(it.usedMah) } ?: PLACEHOLDER
             val tempText = batteryInfo?.temperatureC?.let { "%.1f℃".format(it) } ?: PLACEHOLDER
             val voltageText = batteryInfo?.voltageMv?.formatVoltage() ?: PLACEHOLDER
             InfoChip(text = energyText)
@@ -393,7 +393,7 @@ private fun DischargeProcessCard(
 private fun InfoChip(text: String) {
     Text(
         text = text,
-        style = MiuixTheme.textStyles.footnote2,
+        style = MiuixTheme.textStyles.footnote2.copy(fontSize = 10.sp),
         color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.45f),
     )
 }
@@ -469,10 +469,10 @@ private fun DischargeScenesCard(
     val sortMode by viewModel.appSortMode.collectAsStateWithLifecycle()
     var sortPopupVisible by remember { mutableStateOf(false) }
     val sortDuration = stringResource(Res.string.text_discharge_sort_duration)
-    val sortAvgPower = stringResource(Res.string.text_discharge_sort_avg_power)
+    val sortUsedMah = stringResource(Res.string.text_discharge_sort_used_mah)
     val sortLabel = when (sortMode) {
         DischargeStatisticsViewModel.AppSortMode.Duration -> sortDuration
-        DischargeStatisticsViewModel.AppSortMode.AvgPower -> sortAvgPower
+        DischargeStatisticsViewModel.AppSortMode.UsedMah -> sortUsedMah
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -515,7 +515,7 @@ private fun DischargeScenesCard(
                         DropdownImpl(
                             text = when (entry) {
                                 DischargeStatisticsViewModel.AppSortMode.Duration -> sortDuration
-                                DischargeStatisticsViewModel.AppSortMode.AvgPower -> sortAvgPower
+                                DischargeStatisticsViewModel.AppSortMode.UsedMah -> sortUsedMah
                             },
                             optionSize = DischargeStatisticsViewModel.AppSortMode.entries.size,
                             isSelected = sortMode == entry,
@@ -598,7 +598,7 @@ private fun DischargeAppUsageItem(row: DischargeStatisticsViewModel.AppUsageRow)
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = formatDischargeAppAvgLine(row.avgW, row.avgTemp),
+            text = formatDischargeAppUsedLine(row.usedMah, row.avgTemp),
             color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.45f),
             style = MiuixTheme.textStyles.footnote2.copy(
                 fontSize = 10.sp,
