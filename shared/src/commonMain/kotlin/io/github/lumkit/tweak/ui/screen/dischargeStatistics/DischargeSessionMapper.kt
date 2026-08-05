@@ -94,6 +94,37 @@ internal object DischargeSessionMapper {
         )
     }
 
+    fun calculateScreenOnDurationMs(
+        session: BatteryRecordSessionEntity,
+        samples: List<BatteryRecordSampleEntity>,
+        nowMs: Long,
+        liveActiveSessionId: Long? = null,
+    ): Long? {
+        if (samples.isEmpty()) return null
+        val last = samples.last()
+        val isOngoing =
+            session.endedAt == null &&
+                session.id == liveActiveSessionId &&
+                session.chargeState == BatteryChargeState.DISCHARGING
+        val endedAt = session.endedAt ?: if (isOngoing) nowMs else last.timestamp
+        if (endedAt <= session.startedAt) return 0L
+        var screenOnMs = 0L
+        for (i in 0 until samples.lastIndex) {
+            val current = samples[i]
+            val next = samples[i + 1]
+            val segmentEnd = minOf(next.timestamp, endedAt)
+            if (segmentEnd <= current.timestamp) continue
+            if (current.screenOn) {
+                screenOnMs += (segmentEnd - current.timestamp)
+            }
+        }
+        val tail = endedAt - last.timestamp
+        if (tail > 0L && last.screenOn) {
+            screenOnMs += tail
+        }
+        return screenOnMs.coerceAtLeast(0L)
+    }
+
     fun buildLevelChart(
         session: BatteryRecordSessionEntity,
         samples: List<BatteryRecordSampleEntity>,

@@ -126,6 +126,9 @@ class DischargeStatisticsViewModel : BaseViewModel() {
     private val _etaText = MutableStateFlow("--")
     val etaText = _etaText.asStateFlow()
 
+    private val _screenOnDurationMs = MutableStateFlow<Long?>(null)
+    val screenOnDurationMs = _screenOnDurationMs.asStateFlow()
+
     private val _currentLevel = MutableStateFlow<Int?>(null)
     val currentLevel = _currentLevel.asStateFlow()
 
@@ -246,6 +249,14 @@ class DischargeStatisticsViewModel : BaseViewModel() {
                 liveActiveSessionId = liveActiveSessionId,
             )
         }
+        val screenOnDurationMs = session?.let {
+            DischargeSessionMapper.calculateScreenOnDurationMs(
+                session = it,
+                samples = samples,
+                nowMs = nowMs,
+                liveActiveSessionId = liveActiveSessionId,
+            )
+        }
         val samplesByUsageId = usages.associate { usage ->
             usage.id to repository.querySamplesByUsageId(usage.id)
         }
@@ -332,6 +343,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
             _appRows.value = sortAppRows(appRows, _appSortMode.value)
             _appPowerListStatus.value = listStatus
             _etaText.value = formatDischargeEtaText(etaMs)
+            _screenOnDurationMs.value = screenOnDurationMs
             _currentLevel.value = samples.lastOrNull()?.level
             _currentTime.value = nowMs
             _hasChartSamples.value = samples.isNotEmpty()

@@ -401,15 +401,14 @@ private fun InfoChip(text: String) {
 @Composable
 private fun DischargeSummaryCard(viewModel: DischargeStatisticsViewModel) {
     val summary by viewModel.summary.collectAsStateWithLifecycle()
-    val currentTime by viewModel.currentTime.collectAsStateWithLifecycle()
     val etaText by viewModel.etaText.collectAsStateWithLifecycle()
+    val screenOnDurationMs by viewModel.screenOnDurationMs.collectAsStateWithLifecycle()
 
     val avgPowerText = summary?.averagePowerUw?.takeIf { it > 0L }?.let {
         (it / 1000L).toInt().formatPower()
     } ?: PLACEHOLDER
-    val durationText = summary?.let {
-        val endedAt = if (it.isCurrentDischargingSession) currentTime else it.endedAt
-        formatDischargeSessionDuration(it.startedAt, endedAt)
+    val durationText = screenOnDurationMs?.let {
+        formatDischargeSessionDuration(0L, it)
     } ?: PLACEHOLDER
 
     Card(modifier = Modifier.fillMaxWidth()) {
