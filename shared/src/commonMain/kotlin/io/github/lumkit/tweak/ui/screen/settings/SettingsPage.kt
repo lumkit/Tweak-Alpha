@@ -82,7 +82,6 @@ import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SnackbarResult
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
@@ -433,6 +432,14 @@ private fun ThemeContent(viewModel: SettingsViewModel) {
                             scaleText = it
                         },
                         modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            Text(
+                                text = "%",
+                                style = MiuixTheme.textStyles.body1,
+                                color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                        }
                     )
 
                     Row(
