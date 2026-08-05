@@ -100,6 +100,15 @@ object GlobalViewModel: BaseViewModel() {
             initialValue = false,
         )
 
+    // 全局缩放比
+    val globalScaleDensityState = TweakDataStore.globalScaleDensityFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = 1.0f
+        )
+
     init {
         viewModelScope.launch {
             enabledFloatNavBar.collect {  }
@@ -129,6 +138,13 @@ object GlobalViewModel: BaseViewModel() {
     fun setHideInBackground(enabled: Boolean) {
         viewModelScope.launch {
             TweakDataStore.setHideInBackground(enabled)
+        }
+    }
+
+    // 设置全局缩放比
+    fun setGlobalScaleDensity(density: Float) {
+        viewModelScope.launch {
+            TweakDataStore.setGlobalScaleDensity(density)
         }
     }
 }

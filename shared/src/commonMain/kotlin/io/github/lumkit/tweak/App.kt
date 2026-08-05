@@ -1,5 +1,7 @@
 package io.github.lumkit.tweak
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,13 +19,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Density
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import io.github.lumkit.tweak.common.utils.ripple
 import io.github.lumkit.tweak.model.CrashSession
+import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Navigator
 import io.github.lumkit.tweak.navigation.Screen
@@ -90,17 +96,31 @@ val LocalSnackBarHostState = staticCompositionLocalOf<SnackbarHostState> { error
 private fun GlobalCompositionProvider(
     content: @Composable () -> Unit
 ) {
+    val density = LocalDensity.current
+
     val startRoute = remember {
         if (CrashSession.hasPending()) Screen.Crash else Screen.Splash
     }
     val navigationState = rememberNavigationState(startRoute = startRoute)
     val navigator = remember { Navigator(navigationState) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val globalScaleDensity by GlobalViewModel.globalScaleDensityState.collectAsStateWithLifecycle()
+    val uiScaleAni by animateFloatAsState(
+        targetValue = globalScaleDensity,
+        animationSpec = tween(
+            easing = LinearEasing,
+            durationMillis = 400
+        )
+    )
 
     CompositionLocalProvider(
         LocalNavigator provides navigator,
         LocalSnackBarHostState provides snackbarHostState,
         LocalIndication provides ripple(color = MiuixTheme.colorScheme.onSurface),
+        LocalDensity provides Density(
+            density = density.density * uiScaleAni,
+            fontScale = density.fontScale
+        ),
         content = content,
     )
 }

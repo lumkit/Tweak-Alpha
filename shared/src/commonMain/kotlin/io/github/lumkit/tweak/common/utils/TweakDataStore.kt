@@ -45,6 +45,8 @@ object TweakDataStore {
     private val enableBlur = booleanPreferencesKey("enable_blur")
     // 悬浮导航栏是否启用液态玻璃效果
     private val floatNavBarEnableLiquidGlass = booleanPreferencesKey("float_nav_bar_enable_liquid_glass")
+    // 全局缩放比
+    private val globalScaleDensity = floatPreferencesKey("global_scale_density")
 
     // Shell相关
     private val shellTimeoutKey = longPreferencesKey("shell_timeout")
@@ -106,6 +108,18 @@ object TweakDataStore {
         preferences.updateData {
             it.toMutablePreferences().also { preferences ->
                 preferences[themeModeKey] = themeMode.ordinal
+            }
+        }
+    }
+
+    fun globalScaleDensityFlow(): Flow<Float> = preferences.data.map {
+        it[globalScaleDensity] ?: 1.0f
+    }
+
+    suspend fun setGlobalScaleDensity(density: Float) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[globalScaleDensity] = density
             }
         }
     }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,6 +71,8 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
@@ -78,7 +82,10 @@ import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SnackbarResult
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
@@ -110,6 +117,8 @@ import tweak_alpha.shared.generated.resources.text_battery_record_sample_interva
 import tweak_alpha.shared.generated.resources.text_battery_record_sample_interval_description
 import tweak_alpha.shared.generated.resources.text_battery_unit_calibration
 import tweak_alpha.shared.generated.resources.text_battery_unit_calibration_description
+import tweak_alpha.shared.generated.resources.text_dialog_cancel
+import tweak_alpha.shared.generated.resources.text_dialog_confirm
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar_description
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar_enable_liquidity
@@ -150,6 +159,8 @@ import tweak_alpha.shared.generated.resources.text_theme_monet_dark
 import tweak_alpha.shared.generated.resources.text_theme_monet_light
 import tweak_alpha.shared.generated.resources.text_theme_monet_system
 import tweak_alpha.shared.generated.resources.text_theme_system
+import tweak_alpha.shared.generated.resources.text_ui_scale
+import tweak_alpha.shared.generated.resources.text_ui_scale_description
 
 @Preview
 @Composable
@@ -371,6 +382,89 @@ private fun ThemeContent(viewModel: SettingsViewModel) {
                 )
             }
         }
+
+        // 全局缩放比
+        Block {
+            val uiScale by GlobalViewModel.globalScaleDensityState.collectAsStateWithLifecycle()
+            var scale by remember(uiScale) { mutableFloatStateOf(uiScale) }
+            var inputDialogState by remember { mutableStateOf(false) }
+
+            SliderPreference(
+                value = scale,
+                onValueChange = {
+                    scale = it
+                },
+                onValueChangeFinished = {
+                    GlobalViewModel.setGlobalScaleDensity(scale)
+                },
+                title = stringResource(Res.string.text_ui_scale),
+                summary = stringResource(Res.string.text_ui_scale_description),
+                valueRange = .8f .. 1.1f,
+                showKeyPoints = true,
+                keyPoints = listOf(.8f, .9f, 1.0f, 1.1f),
+                endActions = {
+                    Text(
+                        text = buildString {
+                            append("%d%%".format((scale * 100).toInt()))
+                        }
+                    )
+                },
+                hapticEffect = SliderDefaults.SliderHapticEffect.Step,
+                onClick = {
+                    inputDialogState = true
+                }
+            )
+
+            var scaleText by remember(scale) { mutableStateOf((scale * 100).toInt().toString()) }
+
+            OverlayDialog(
+                title = stringResource(Res.string.text_ui_scale),
+                summary = "80% ~ 110%",
+                show = inputDialogState,
+                onDismissRequest = { inputDialogState = false } // 关闭对话框
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    TextField(
+                        value = scaleText,
+                        onValueChange = {
+                            scaleText = it
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val scale = scaleText.toIntOrNull() ?: (scale * 100).toInt()
+                                val safeScale = (scale / 100f).coerceIn(.8f, 1.1f)
+                                GlobalViewModel.setGlobalScaleDensity(safeScale)
+                                inputDialogState = false
+                            },
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(text = stringResource(Res.string.text_dialog_confirm))
+                        }
+
+                        Button(
+                            onClick = {
+                                inputDialogState = false
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(text = stringResource(Res.string.text_dialog_cancel))
+                        }
+                    }
+                }
+            }
+        }
+
     }
 }
 
