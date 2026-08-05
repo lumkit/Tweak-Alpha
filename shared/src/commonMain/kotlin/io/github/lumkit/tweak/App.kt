@@ -109,7 +109,7 @@ private fun GlobalCompositionProvider(
         targetValue = globalScaleDensity,
         animationSpec = tween(
             easing = LinearEasing,
-            durationMillis = 400
+            durationMillis = 210
         )
     )
 
