@@ -200,12 +200,22 @@ fun ChargeStatisticsScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.ensureNativeDaemonOnEnter()
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.ensureNativeDaemonOnEnter()
+                    viewModel.onResume()
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    viewModel.release()
+                }
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onDispose {
+            viewModel.release()
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     AlertDialog(

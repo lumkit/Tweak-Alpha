@@ -117,11 +117,17 @@ class ChargeStatisticsViewModel : BaseViewModel() {
 
     init {
         chartState.bindScope(viewModelScope)
-        observeChargingSessionCharts()
-        observeLiveActiveSession()
         observeBatteryFullCapacity()
         refreshBatterySnapshotOnce()
+    }
+
+    fun onResume() {
+        observeChargingSessionCharts()
+        observeLiveActiveSession()
         startBatteryLogWatcher()
+        if (_chargeHistoryUiState.value.items.isNotEmpty() || _chargeHistoryUiState.value.isLoading) {
+            observeChargeHistory()
+        }
     }
 
     private fun observeBatteryFullCapacity() {
@@ -154,7 +160,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         }
     }
 
-    private fun startBatteryLogWatcher() {
+    fun startBatteryLogWatcher() {
         batteryLogWatcher?.close()
         batteryLogWatcher = BatteryRecordLogWatcher.start(
             onCreated = { path -> BatteryRecordLogSync.syncOnLogCreated(path) },
@@ -166,9 +172,19 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         }
     }
 
-    override fun onCleared() {
+    fun release() {
         batteryLogWatcher?.close()
         batteryLogWatcher = null
+        chargingChartsJob?.cancel()
+        chargingChartsJob = null
+        liveSessionJob?.cancel()
+        liveSessionJob = null
+        historyObserveJob?.cancel()
+        historyObserveJob = null
+    }
+
+    override fun onCleared() {
+        release()
         chargingChartsJob?.cancel()
         liveSessionJob?.cancel()
         historyObserveJob?.cancel()

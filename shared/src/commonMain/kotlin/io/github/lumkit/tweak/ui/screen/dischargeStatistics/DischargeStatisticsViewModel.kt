@@ -18,6 +18,7 @@ import io.github.lumkit.tweak.common.database.battery.table.BatteryUidPowerEntit
 import io.github.lumkit.tweak.common.utils.AppsHelper
 import io.github.lumkit.tweak.common.utils.BatteryUtils
 import io.github.lumkit.tweak.common.utils.TweakDataStore
+import io.github.lumkit.tweak.common.utils.logD
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -40,6 +41,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
 
     companion object {
         const val NATIVE_DAEMON_ENABLE_LOAD_ID = "dischargeStatisticsNativeDaemon"
+        private const val TAG = "DischargeStatisticsViewModel"
     }
 
     private val repository = BatteryRecordRepository()
@@ -158,12 +160,8 @@ class DischargeStatisticsViewModel : BaseViewModel() {
 
     private var rawAppRows: List<AppUsageRow> = emptyList()
 
-    init {
-        observeDischargingSessionCharts()
-        startBatteryLogWatcher()
-    }
-
-    private fun startBatteryLogWatcher() {
+    fun startBatteryLogWatcher() {
+        logD("监听文件变化", TAG)
         batteryLogWatcher?.close()
         batteryLogWatcher = BatteryRecordLogWatcher.start(
             onCreated = { path -> BatteryRecordLogSync.syncOnLogCreated(path) },
@@ -175,11 +173,16 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         }
     }
 
-    override fun onCleared() {
+    fun release() {
+        logD("释放监听", TAG)
         batteryLogWatcher?.close()
         batteryLogWatcher = null
         chartsJob?.cancel()
         historyObserveJob?.cancel()
+    }
+
+    override fun onCleared() {
+        release()
         super.onCleared()
     }
 
@@ -189,9 +192,10 @@ class DischargeStatisticsViewModel : BaseViewModel() {
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeDischargingSessionCharts() {
+    fun observeDischargingSessionCharts() {
         chartsJob?.cancel()
         chartsJob = viewModelScope.launch(Dispatchers.IO) {
+            logD("订阅耗电记录", TAG)
             combine(
                 _chartsSessionOverrideId,
                 repository.observeDischargingSessionForCharts(),
