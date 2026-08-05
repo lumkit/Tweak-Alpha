@@ -85,12 +85,9 @@ object BatteryRecordLogImporter {
      */
     suspend fun syncActiveSessionLogs() = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val active = repository.queryActiveSession() ?: return@withLock
-            val prefix = "${active.startedAt}_${active.state}."
             val paths = DaemonPaths.resolve()
             ensureLogsDir(paths)
-            val targets = listLogFiles(paths)
-                .filter { it.substringAfterLast('/').startsWith(prefix) }
+            val targets = resolveActiveSessionLogTargets(paths)
             if (targets.isEmpty()) return@withLock
             val mutableOffsets = loadState().offsets.toMutableMap()
             for (path in targets) {
@@ -103,10 +100,34 @@ object BatteryRecordLogImporter {
             }
             saveState(ImportState(mutableOffsets))
             logD(
-                "active sync session=${active.id} files=${targets.size} prefix=$prefix",
+                "active sync files=${targets.size} first=${targets.firstOrNull()}",
                 TAG,
             )
         }
+    }
+
+    private suspend fun resolveActiveSessionLogTargets(paths: DaemonPaths.Resolved): List<String> {
+        val files = listLogFiles(paths)
+        if (files.isEmpty()) return emptyList()
+
+        var activeFromHeader: ActiveSessionKey? = null
+        for (path in files) {
+            if (!isBrlogPath(path)) continue
+            val headerBytes = readBytes(path, 0, BRLOG_HEADER) ?: continue
+            if (headerBytes.size < BRLOG_HEADER || !isTwb2(headerBytes)) continue
+            val header = parseBrlogHeaderSummary(headerBytes) ?: continue
+            if (header.deleted || header.endedAt != null) continue
+            if (activeFromHeader == null || header.startedAt > activeFromHeader.startedAt) {
+                activeFromHeader = header
+            }
+        }
+
+        val active = activeFromHeader ?: repository.queryActiveSession()?.let {
+            ActiveSessionKey(startedAt = it.startedAt, state = it.state, endedAt = it.endedAt, deleted = it.deleted)
+        } ?: return emptyList()
+
+        val prefix = "${active.startedAt}_${active.state}."
+        return files.filter { it.substringAfterLast('/').startsWith(prefix) }
     }
 
     suspend fun syncOnLogAppended(path: String) = withContext(Dispatchers.IO) {
@@ -444,6 +465,38 @@ object BatteryRecordLogImporter {
         val headerBytes = readBytes(path, 0, BRLOG_HEADER) ?: return null
         if (headerBytes.size < BRLOG_HEADER || !isTwb2(headerBytes)) return null
         return applyBrlogHeader(headerBytes)
+    }
+
+    private data class ActiveSessionKey(
+        val startedAt: Long,
+        val state: Int,
+        val endedAt: Long?,
+        val deleted: Boolean,
+    )
+
+    private fun parseBrlogHeaderSummary(header: ByteArray): ActiveSessionKey? {
+        val buf = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
+        buf.position(4)
+        val version = buf.short.toInt() and 0xFFFF
+        if (version != 2) return null
+        buf.short
+        buf.short
+        buf.short
+        buf.int
+        val state = buf.int
+        buf.int
+        val startedAt = buf.long
+        buf.long
+        buf.get()
+        val deleted = buf.get().toInt() == 1
+        buf.short
+        val endedAt = buf.long.takeIf { it > 0L }
+        return ActiveSessionKey(
+            startedAt = startedAt,
+            state = state,
+            endedAt = endedAt,
+            deleted = deleted,
+        )
     }
 
     private suspend fun importBrlog(

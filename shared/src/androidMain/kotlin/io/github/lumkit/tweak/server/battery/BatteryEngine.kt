@@ -37,6 +37,7 @@ class BatteryEngine(
     fun start() {
         if (!running.compareAndSet(false, true)) return
         logsDir.mkdirs()
+        ensureLogVersionCompatible()
         thread = Thread({
             runCatching { loop() }
                 .onFailure { logE("battery engine fatal: ${it.message}", it, TAG) }
@@ -49,6 +50,46 @@ class BatteryEngine(
             it.start()
         }
         logD("battery engine started", TAG)
+    }
+
+    private fun ensureLogVersionCompatible() {
+        runCatching {
+            val versionFile = File(logsDir.parentFile ?: logsDir, BATTERY_ENGINE_VERSION_FILE_NAME)
+            val storedVersion = versionFile.takeIf { it.isFile }
+                ?.readText()
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+            if (storedVersion != BATTERY_ENGINE_VERSION) {
+                clearBatteryLogs()
+                versionFile.parentFile?.mkdirs()
+                versionFile.writeText(BATTERY_ENGINE_VERSION)
+                logD(
+                    "battery logs cleared for engine version change old=${storedVersion ?: "<none>"} new=$BATTERY_ENGINE_VERSION",
+                    TAG,
+                )
+            }
+        }.onFailure {
+            logE("ensure log version failed: ${it.message}", it, TAG)
+        }
+    }
+
+    private fun clearBatteryLogs() {
+        logsDir.mkdirs()
+        logsDir.listFiles()
+            ?.filter { file ->
+                file.isFile && (
+                    file.name.contains(".brlog") ||
+                        file.name.contains(".applog") ||
+                        file.name.contains(".uidpow") ||
+                        file.name.endsWith(".log") ||
+                        file.name.contains(".log.")
+                    )
+            }
+            ?.forEach { file ->
+                if (!file.delete()) {
+                    runCatching { file.setWritable(true); file.delete() }
+                }
+            }
     }
 
     fun stop() {
@@ -362,6 +403,8 @@ class BatteryEngine(
 
     companion object {
         private const val TAG = "BatteryEngine"
+        private const val BATTERY_ENGINE_VERSION = "battery-engine-v3"
+        private const val BATTERY_ENGINE_VERSION_FILE_NAME = "battery_engine.version"
         /** 放电中 batterystats 中间帧间隔（避免与 brlog 同频）。 */
         private const val UidpowPeriodicIntervalMs = 10L * 60L * 1000L
 
