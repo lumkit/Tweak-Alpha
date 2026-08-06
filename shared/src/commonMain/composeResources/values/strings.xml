@@ -171,7 +171,9 @@
     <string name="text_reboot_to_rec">重启到Recovery</string>
     <string name="text_reboot_to_edl">重启到9008模式（EDL）</string>
     <string name="text_overlay_load">负载监视器</string>
+    <string name="text_overlay_load_description">显示CPU、GPU、FPS和电池信息</string>
     <string name="text_overlay_thread">线程监视器</string>
+    <string name="text_overlay_thread_description">显示前台应用的线程信息</string>
     <string name="text_overlay_watcher">监视器</string>
     <string name="text_overlay_watcher_description">可用于打开各种悬浮窗监视器</string>
     <string name="text_app_manager">应用管理</string>
@@ -441,4 +443,8 @@
     <string name="text_discharge_link_charge_control">充电控制</string>
     <string name="text_ui_scale">界面缩放</string>
     <string name="text_ui_scale_description">调整界面显示缩放比例</string>
+    <string name="text_mini_load_overlay">迷你负载监视器</string>
+    <string name="text_mini_load_overlay_description">显示CPU、GPU、FPS和电池信息</string>
+    <string name="text_fps_record_overlay">帧率记录悬浮窗</string>
+    <string name="text_fps_record_overlay_description">显示帧率记录录制悬浮窗</string>
 </resources>

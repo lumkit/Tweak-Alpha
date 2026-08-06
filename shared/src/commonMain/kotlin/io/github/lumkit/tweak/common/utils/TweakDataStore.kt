@@ -95,6 +95,8 @@ object TweakDataStore {
     private val loadWatcherOverlayYKey = intPreferencesKey("load_watcher_overlay_y")
     private val threadWatcherOverlayXKey = intPreferencesKey("thread_watcher_overlay_x")
     private val threadWatcherOverlayYKey = intPreferencesKey("thread_watcher_overlay_y")
+    private val miniLoadWatcherOverlayXKey = intPreferencesKey("mini_load_watcher_overlay_x")
+    private val miniLoadWatcherOverlayYKey = intPreferencesKey("mini_load_watcher_overlay_y")
 
 
     private val fpsSourcePathKey = stringPreferencesKey("fps_source_path")
@@ -498,6 +500,25 @@ object TweakDataStore {
         }
     }
 
+    fun miniLoadWatcherOverlayPositionFlow(): Flow<Pair<Int, Int>?> = preferences.data.map {
+        val x = it[miniLoadWatcherOverlayXKey]
+        val y = it[miniLoadWatcherOverlayYKey]
+        if (x != null && y != null) x to y else null
+    }
+
+    val miniLoadWatcherOverlayPosition: Pair<Int, Int>?
+        get() = runBlocking {
+            miniLoadWatcherOverlayPositionFlow().firstOrNull()
+        }
+
+    suspend fun setMiniLoadWatcherOverlayPosition(x: Int, y: Int) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[miniLoadWatcherOverlayXKey] = x
+                preferences[miniLoadWatcherOverlayYKey] = y
+            }
+        }
+    }
 
     fun fpsSourceFlow(): Flow<FpsSourceConfig?> = preferences.data.map {
         val path = it[fpsSourcePathKey]?.takeIf(String::isNotBlank) ?: return@map null

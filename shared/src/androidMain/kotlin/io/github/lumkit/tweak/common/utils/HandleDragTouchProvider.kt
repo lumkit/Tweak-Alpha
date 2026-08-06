@@ -11,6 +11,7 @@ class HandleDragTouchProvider(
     private val context: Context = application,
     private val handleHeightPx: Int,
     private val touchSlop: Int = 10,
+    private val restrictedArea: Boolean = true,
 ) : OverlayTouchProvider {
 
     var onPositionSettled: ((x: Int, y: Int) -> Unit)? = null
@@ -86,7 +87,7 @@ class HandleDragTouchProvider(
                 val newY = initialY + (event.rawY - initialTouchY).toInt()
                 val viewWidth = view.measuredWidth.takeIf { it > 0 } ?: view.width
                 val viewHeight = view.measuredHeight.takeIf { it > 0 } ?: view.height
-                val (clampedX, clampedY) = OverlayScreenBounds.clamp(
+                val (clampedX, clampedY) = clampPosition(
                     windowManager = windowManager,
                     context = context,
                     x = newX,
@@ -131,5 +132,36 @@ class HandleDragTouchProvider(
         }
         isTouching = false
         onInteractionEnd?.invoke()
+    }
+
+    override fun clampPosition(
+        windowManager: WindowManager,
+        context: Context,
+        x: Int,
+        y: Int,
+        viewWidth: Int,
+        viewHeight: Int,
+        edgePadding: Int,
+    ): Pair<Int, Int> {
+        return if (restrictedArea) {
+            super.clampPosition(
+                windowManager = windowManager,
+                context = context,
+                x = x,
+                y = y,
+                viewWidth = viewWidth,
+                viewHeight = viewHeight,
+                edgePadding = edgePadding,
+            )
+        } else {
+            OverlayScreenBounds.clampFullScreen(
+                windowManager = windowManager,
+                x = x,
+                y = y,
+                viewWidth = viewWidth,
+                viewHeight = viewHeight,
+                edgePadding = edgePadding,
+            )
+        }
     }
 }

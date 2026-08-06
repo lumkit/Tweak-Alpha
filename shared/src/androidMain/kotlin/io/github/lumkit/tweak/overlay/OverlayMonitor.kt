@@ -11,9 +11,11 @@ actual object OverlayMonitor {
 
     internal val _loadWatcherIsShowing = MutableStateFlow(false)
     internal val _threadWatcherIsShowing = MutableStateFlow(false)
+    internal val _miniLoadWatcherIsShowing = MutableStateFlow(false)
 
     actual val loadWatcherIsShowing: StateFlow<Boolean> = _loadWatcherIsShowing.asStateFlow()
     actual val threadWatcherIsShowing: StateFlow<Boolean> = _threadWatcherIsShowing.asStateFlow()
+    actual val miniLoadWatcherIsShowing: StateFlow<Boolean> = _miniLoadWatcherIsShowing.asStateFlow()
 
     actual fun showLoadWatcherOverlay() {
         val intent = Intent(application, OverlayService::class.java).apply {
@@ -43,4 +45,17 @@ actual object OverlayMonitor {
         application.startService(intent)
     }
 
+    actual fun showMiniLoadWatcherOverlay() {
+        val intent = Intent(application, OverlayService::class.java).apply {
+            action = OverlayService.ACTION_SHOW_MINI_LOAD_WATCHER_OVERLAY
+        }
+        application.startService(intent)
+    }
+
+    actual fun hideMiniLoadWatcherOverlay() {
+        val intent = Intent(application, OverlayService::class.java).apply {
+            action = OverlayService.ACTION_HIDE_MINI_LOAD_WATCHER_OVERLAY
+        }
+        application.startService(intent)
+    }
 }

@@ -66,6 +66,38 @@ interface OverlayTouchProvider {
         windowManager: WindowManager,
         view: View,
     ): Boolean
+
+    fun clampPosition(
+        windowManager: WindowManager,
+        context: Context,
+        x: Int,
+        y: Int,
+        viewWidth: Int,
+        viewHeight: Int,
+        edgePadding: Int = 0,
+    ): Pair<Int, Int> = OverlayScreenBounds.clamp(
+        windowManager = windowManager,
+        context = context,
+        x = x,
+        y = y,
+        viewWidth = viewWidth,
+        viewHeight = viewHeight,
+        edgePadding = edgePadding,
+    )
+
+    fun createBounds(
+        windowManager: WindowManager,
+        context: Context,
+        viewWidth: Int,
+        viewHeight: Int,
+        edgePadding: Int = 0,
+    ): OverlayDragBounds = OverlayScreenBounds.of(
+        windowManager = windowManager,
+        context = context,
+        viewWidth = viewWidth,
+        viewHeight = viewHeight,
+        edgePadding = edgePadding,
+    )
 }
 
 /**
@@ -77,6 +109,7 @@ interface OverlayTouchProvider {
  */
 class ComposeOverlayHelper(
     private val context: Context = application,
+    private val restrictedArea: Boolean = true,
 ) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -244,9 +277,7 @@ class ComposeOverlayHelper(
         val viewWidth = view.measuredWidth.takeIf { it > 0 } ?: view.width
         val viewHeight = view.measuredHeight.takeIf { it > 0 } ?: view.height
         val (clampedX, clampedY) = if (viewWidth > 0 && viewHeight > 0) {
-            OverlayScreenBounds.clamp(
-                windowManager = windowManager,
-                context = context,
+            coercePosition(
                 x = x,
                 y = y,
                 viewWidth = viewWidth,
@@ -265,6 +296,7 @@ class ComposeOverlayHelper(
      * 尺寸尚未 layout 完成时会 [post] 重试。
      */
     fun clampToSafeBounds(postIfNeeded: Boolean = true) {
+        if (!restrictedArea) return
         val view = rootView ?: return
         val params = view.layoutParams as? WindowManager.LayoutParams ?: return
         val viewWidth = view.measuredWidth.takeIf { it > 0 } ?: view.width
@@ -275,9 +307,7 @@ class ComposeOverlayHelper(
             }
             return
         }
-        val (clampedX, clampedY) = OverlayScreenBounds.clamp(
-            windowManager = windowManager,
-            context = context,
+        val (clampedX, clampedY) = coercePosition(
             x = params.x,
             y = params.y,
             viewWidth = viewWidth,
@@ -330,7 +360,11 @@ class ComposeOverlayHelper(
 
     private fun currentScreenFingerprint(): String {
         val size = OverlayScreenBounds.screenSize(windowManager)
-        val insets = OverlayScreenBounds.systemBarInsets(windowManager, context)
+        val insets = if (restrictedArea) {
+            OverlayScreenBounds.systemBarInsets(windowManager, context)
+        } else {
+            android.graphics.Rect()
+        }
         val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             displayManager?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: 0
         } else {
@@ -338,6 +372,58 @@ class ComposeOverlayHelper(
             windowManager.defaultDisplay.rotation
         }
         return "${size.x}x${size.y}:$rotation:${insets.left},${insets.top},${insets.right},${insets.bottom}"
+    }
+
+    private fun coercePosition(
+        x: Int,
+        y: Int,
+        viewWidth: Int,
+        viewHeight: Int,
+        edgePadding: Int = 0,
+    ): Pair<Int, Int> {
+        return if (restrictedArea) {
+            OverlayScreenBounds.clamp(
+                windowManager = windowManager,
+                context = context,
+                x = x,
+                y = y,
+                viewWidth = viewWidth,
+                viewHeight = viewHeight,
+                edgePadding = edgePadding,
+            )
+        } else {
+            OverlayScreenBounds.clampFullScreen(
+                windowManager = windowManager,
+                x = x,
+                y = y,
+                viewWidth = viewWidth,
+                viewHeight = viewHeight,
+                edgePadding = edgePadding,
+            )
+        }
+    }
+
+    private fun createBounds(
+        viewWidth: Int,
+        viewHeight: Int,
+        edgePadding: Int = 0,
+    ): OverlayDragBounds {
+        return if (restrictedArea) {
+            OverlayScreenBounds.of(
+                windowManager = windowManager,
+                context = context,
+                viewWidth = viewWidth,
+                viewHeight = viewHeight,
+                edgePadding = edgePadding,
+            )
+        } else {
+            OverlayScreenBounds.ofFullScreen(
+                windowManager = windowManager,
+                viewWidth = viewWidth,
+                viewHeight = viewHeight,
+                edgePadding = edgePadding,
+            )
+        }
     }
 
     private fun createLayoutParams(
@@ -369,6 +455,10 @@ class ComposeOverlayHelper(
             this.gravity = gravity
             this.x = x
             this.y = y
+            if (!restrictedArea && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
         }
     }
 
@@ -393,9 +483,7 @@ class ComposeOverlayHelper(
                     val newY = initialY + (event.rawY - initialTouchY).toInt()
                     val viewWidth = view.measuredWidth.takeIf { it > 0 } ?: view.width
                     val viewHeight = view.measuredHeight.takeIf { it > 0 } ?: view.height
-                    val (clampedX, clampedY) = OverlayScreenBounds.clamp(
-                        windowManager = windowManager,
-                        context = context,
+                    val (clampedX, clampedY) = coercePosition(
                         x = newX,
                         y = newY,
                         viewWidth = viewWidth,

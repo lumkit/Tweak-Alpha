@@ -73,6 +73,31 @@ object OverlayScreenBounds {
         )
     }
 
+    fun ofFullScreen(
+        windowManager: WindowManager,
+        viewWidth: Int,
+        viewHeight: Int,
+        edgePadding: Int = 0,
+    ): OverlayDragBounds {
+        val screen = screenSize(windowManager)
+        val minX = edgePadding
+        val minY = edgePadding
+        val maxX = (screen.x - viewWidth - edgePadding).coerceAtLeast(minX)
+        val maxY = (screen.y - viewHeight - edgePadding).coerceAtLeast(minY)
+        return OverlayDragBounds(
+            minX = minX,
+            maxX = maxX,
+            minY = minY,
+            maxY = maxY,
+            screenWidth = screen.x,
+            screenHeight = screen.y,
+            insetLeft = 0,
+            insetTop = 0,
+            insetRight = 0,
+            insetBottom = 0,
+        )
+    }
+
     fun clamp(
         windowManager: WindowManager,
         context: Context,
@@ -85,6 +110,19 @@ object OverlayScreenBounds {
         val vw = viewWidth.coerceAtLeast(0)
         val vh = viewHeight.coerceAtLeast(0)
         return of(windowManager, context, vw, vh, edgePadding).clamp(x, y)
+    }
+
+    fun clampFullScreen(
+        windowManager: WindowManager,
+        x: Int,
+        y: Int,
+        viewWidth: Int,
+        viewHeight: Int,
+        edgePadding: Int = 0,
+    ): Pair<Int, Int> {
+        val vw = viewWidth.coerceAtLeast(0)
+        val vh = viewHeight.coerceAtLeast(0)
+        return ofFullScreen(windowManager, vw, vh, edgePadding).clamp(x, y)
     }
 
     /**

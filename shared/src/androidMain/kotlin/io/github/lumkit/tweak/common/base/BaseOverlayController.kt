@@ -2,6 +2,8 @@ package io.github.lumkit.tweak.common.base
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
+import android.view.Gravity
+import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
 import io.github.lumkit.tweak.common.utils.logD
@@ -24,7 +26,14 @@ abstract class BaseOverlayController(
     val isShowing: Boolean
         get() = overlayHelper?.isShowing == true
 
-    fun show() {
+    fun show(
+        width: Int = WindowManager.LayoutParams.WRAP_CONTENT,
+        height: Int = WindowManager.LayoutParams.WRAP_CONTENT,
+        gravity: Int = Gravity.START or Gravity.TOP,
+        x: Int = startX,
+        y: Int = startY,
+        draggable: Boolean = true,
+    ) {
         val context = resolveOverlayContext()
         val helper = ensureOverlayHelper(context)
         if (helper.isShowing) {
@@ -34,8 +43,11 @@ abstract class BaseOverlayController(
 
         runCatching {
             helper.show(
-                x = startX,
-                y = startY,
+                width = width,
+                height = height,
+                gravity = gravity,
+                x = x,
+                y = y,
                 draggable = draggable,
             ) {
                 Content()

@@ -74,6 +74,7 @@ import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.overlay.OverlayMonitor
+import io.github.lumkit.tweak.ui.screen.fpsRecord.showRecordOverlay
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -101,6 +102,7 @@ import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.Close2
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -111,11 +113,17 @@ import tweak_alpha.shared.generated.resources.nav_home
 import tweak_alpha.shared.generated.resources.text_battery
 import tweak_alpha.shared.generated.resources.text_cpu_state
 import tweak_alpha.shared.generated.resources.text_cpu_state_description
+import tweak_alpha.shared.generated.resources.text_fps_record_overlay
+import tweak_alpha.shared.generated.resources.text_fps_record_overlay_description
 import tweak_alpha.shared.generated.resources.text_gpu_state
 import tweak_alpha.shared.generated.resources.text_memory_physical
 import tweak_alpha.shared.generated.resources.text_memory_state
+import tweak_alpha.shared.generated.resources.text_mini_load_overlay
+import tweak_alpha.shared.generated.resources.text_mini_load_overlay_description
 import tweak_alpha.shared.generated.resources.text_overlay_load
+import tweak_alpha.shared.generated.resources.text_overlay_load_description
 import tweak_alpha.shared.generated.resources.text_overlay_thread
+import tweak_alpha.shared.generated.resources.text_overlay_thread_description
 import tweak_alpha.shared.generated.resources.text_overlay_watcher
 import tweak_alpha.shared.generated.resources.text_overlay_watcher_description
 import tweak_alpha.shared.generated.resources.text_reboot
@@ -997,6 +1005,7 @@ private fun RowScope.Actions() {
 
         val loadWatcherShowState by OverlayMonitor.loadWatcherIsShowing.collectAsStateWithLifecycle()
         val threadWatcherShowState by OverlayMonitor.threadWatcherIsShowing.collectAsStateWithLifecycle()
+        val miniLoadOverlayShowState by OverlayMonitor.miniLoadWatcherIsShowing.collectAsStateWithLifecycle()
 
         OverlayDialog(
             title = stringResource(Res.string.text_overlay_watcher),
@@ -1007,6 +1016,7 @@ private fun RowScope.Actions() {
             Column {
                 SwitchPreference(
                     title = stringResource(Res.string.text_overlay_load),
+                    summary = stringResource(Res.string.text_overlay_load_description),
                     checked = loadWatcherShowState,
                     onCheckedChange = {
                         if (!it) {
@@ -1019,6 +1029,7 @@ private fun RowScope.Actions() {
 
                 SwitchPreference(
                     title = stringResource(Res.string.text_overlay_thread),
+                    summary = stringResource(Res.string.text_overlay_thread_description),
                     checked = threadWatcherShowState,
                     onCheckedChange = {
                         if (!it) {
@@ -1026,6 +1037,27 @@ private fun RowScope.Actions() {
                         } else {
                             OverlayMonitor.showThreadWatcherOverlay()
                         }
+                    }
+                )
+
+                SwitchPreference(
+                    title = stringResource(Res.string.text_mini_load_overlay),
+                    summary = stringResource(Res.string.text_mini_load_overlay_description),
+                    checked = miniLoadOverlayShowState,
+                    onCheckedChange = {
+                        if (!it) {
+                            OverlayMonitor.hideMiniLoadWatcherOverlay()
+                        } else {
+                            OverlayMonitor.showMiniLoadWatcherOverlay()
+                        }
+                    }
+                )
+
+                ArrowPreference(
+                    title = stringResource(Res.string.text_fps_record_overlay),
+                    summary = stringResource(Res.string.text_fps_record_overlay_description),
+                    onClick = {
+                        showRecordOverlay()
                     }
                 )
             }
