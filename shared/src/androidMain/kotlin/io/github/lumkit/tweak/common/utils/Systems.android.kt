@@ -14,8 +14,6 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
@@ -33,10 +31,14 @@ import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.service.KeepAliveService
 import io.github.lumkit.tweak.shared.R
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlin.system.exitProcess
+
+private val mainScop = CoroutineScope(Dispatchers.Main)
 
 actual fun isDebugBuild(): Boolean {
     // app_process / TweakServer 没有 Application，不能碰 lateinit application
@@ -296,9 +298,9 @@ actual fun startKeepAliveService(isForegroundService: Boolean) {
 }
 
 actual fun toastText(msg: String) {
-    Handler(Looper.getMainLooper()).post {
+    mainScop.launch {
         if (isProcessInForeground()) {
-            Toast.makeText(application, msg, Toast.LENGTH_SHORT).show()
+            Toast.makeText(application.applicationContext, msg, Toast.LENGTH_SHORT).show()
         } else {
             notifyFromBackground(msg)
         }
