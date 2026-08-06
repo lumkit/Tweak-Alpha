@@ -73,7 +73,7 @@ import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
-import io.github.lumkit.tweak.service.OverlayMonitor
+import io.github.lumkit.tweak.overlay.OverlayMonitor
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -115,6 +115,7 @@ import tweak_alpha.shared.generated.resources.text_gpu_state
 import tweak_alpha.shared.generated.resources.text_memory_physical
 import tweak_alpha.shared.generated.resources.text_memory_state
 import tweak_alpha.shared.generated.resources.text_overlay_load
+import tweak_alpha.shared.generated.resources.text_overlay_thread
 import tweak_alpha.shared.generated.resources.text_overlay_watcher
 import tweak_alpha.shared.generated.resources.text_overlay_watcher_description
 import tweak_alpha.shared.generated.resources.text_reboot
@@ -995,6 +996,7 @@ private fun RowScope.Actions() {
         }
 
         val loadWatcherShowState by OverlayMonitor.loadWatcherIsShowing.collectAsStateWithLifecycle()
+        val threadWatcherShowState by OverlayMonitor.threadWatcherIsShowing.collectAsStateWithLifecycle()
 
         OverlayDialog(
             title = stringResource(Res.string.text_overlay_watcher),
@@ -1011,6 +1013,18 @@ private fun RowScope.Actions() {
                             OverlayMonitor.hideLoadWatcherOverlay()
                         } else {
                             OverlayMonitor.showLoadWatcherOverlay()
+                        }
+                    }
+                )
+
+                SwitchPreference(
+                    title = stringResource(Res.string.text_overlay_thread),
+                    checked = threadWatcherShowState,
+                    onCheckedChange = {
+                        if (!it) {
+                            OverlayMonitor.hideThreadWatcherOverlay()
+                        } else {
+                            OverlayMonitor.showThreadWatcherOverlay()
                         }
                     }
                 )

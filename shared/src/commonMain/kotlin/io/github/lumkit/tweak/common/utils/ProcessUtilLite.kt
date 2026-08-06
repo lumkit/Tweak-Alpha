@@ -1,6 +1,7 @@
 package io.github.lumkit.tweak.common.utils
 
 import io.github.lumkit.tweak.common.shell.ReusableShells
+import io.github.lumkit.tweak.common.utils.ProcessUtilLite.staticExcludes
 import io.github.lumkit.tweak.model.ProcessInfo
 import io.github.lumkit.tweak.model.ThreadInfo
 import io.github.lumkit.tweak.model.withAppMeta
@@ -82,15 +83,19 @@ object ProcessUtilLite {
                 continue
             }
             try {
+                val tid = cols[0].toInt()
                 val cpuToken = cols[1]
                 val name = rowStr
                     .substring(rowStr.indexOf(cpuToken) + cpuToken.length)
                     .trim()
+                val processor = readThreadProcessor(pid = pid, tid = tid)
                 threadData.add(
                     ThreadInfo(
-                        tid = cols[0].toInt(),
+                        tid = tid,
                         cpuLoad = cpuToken.toDouble(),
                         name = name,
+                        processor = processor,
+                        cpusAllowedList = readThreadCpusAllowedList(pid = pid, tid = tid),
                     ),
                 )
             } catch (_: Exception) {
@@ -99,6 +104,23 @@ object ProcessUtilLite {
         }
         threadData.sortByDescending { it.cpuLoad }
         return threadData.take(15)
+    }
+
+    private suspend fun readThreadProcessor(pid: Int, tid: Int): Int? {
+        val stat = Files.readText("/proc/$pid/task/$tid/stat").getOrNull().orEmpty()
+        val endIndex = stat.lastIndexOf(") ")
+        if (endIndex < 0) {
+            return null
+        }
+        val fields = stat.substring(endIndex + 2)
+            .trim()
+            .split(whitespaceRegex)
+        return fields.getOrNull(36)?.toIntOrNull()
+    }
+
+    private suspend fun readThreadCpusAllowedList(pid: Int, tid: Int): String {
+        val status = Files.readText("/proc/$pid/task/$tid/status").getOrNull().orEmpty()
+        return parseProcStatusField(status, "Cpus_allowed_list")
     }
 
     suspend fun killProcess(pid: Int) {
@@ -119,6 +141,14 @@ object ProcessUtilLite {
     suspend fun reset() = mutex.withLock {
         psCommand = null
         probed = false
+    }
+
+    private fun parseProcStatusField(status: String, key: String): String {
+        return status.lineSequence()
+            .firstOrNull { it.startsWith("$key:") }
+            ?.substringAfter(':')
+            ?.trim()
+            .orEmpty()
     }
 
     private suspend fun ensureProbed() {

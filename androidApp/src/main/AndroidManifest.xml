@@ -118,17 +118,32 @@
         <service android:name=".service.UpdateEngineService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync"/>
+            android:foregroundServiceType="specialUse"
+            tools:ignore="ForegroundServicePermission">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="fileWatcher" />
+        </service>
 
         <service android:name=".service.LineFlashService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync"/>
+            android:foregroundServiceType="specialUse"
+            tools:ignore="ForegroundServicePermission">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="fileWatcher" />
+        </service>
 
         <service android:name=".service.ExtractApkService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync"/>
+            android:foregroundServiceType="specialUse"
+            tools:ignore="ForegroundServicePermission">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="fileWatcher" />
+        </service>
 
         <service android:name=".service.FpsRecordService"
             android:enabled="true"
@@ -144,9 +159,12 @@
             android:enabled="true"
             android:exported="false"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:label="@string/accessibility_service"
             tools:ignore="AccessibilityPolicy">
 
             <intent-filter>
+                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
 

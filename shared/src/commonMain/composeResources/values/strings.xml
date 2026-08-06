@@ -171,6 +171,7 @@
     <string name="text_reboot_to_rec">重启到Recovery</string>
     <string name="text_reboot_to_edl">重启到9008模式（EDL）</string>
     <string name="text_overlay_load">负载监视器</string>
+    <string name="text_overlay_thread">线程监视器</string>
     <string name="text_overlay_watcher">监视器</string>
     <string name="text_overlay_watcher_description">可用于打开各种悬浮窗监视器</string>
     <string name="text_app_manager">应用管理</string>

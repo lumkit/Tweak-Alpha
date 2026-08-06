@@ -182,6 +182,8 @@ data class ThreadInfo(
     val tid: Int = -1,
     val cpuLoad: Double = 0.0,
     val name: String = "",
+    val processor: Int? = null,
+    val cpusAllowedList: String = "",
 )
 
 /** 批量填充友好名与图标路径，避免逐条扫 apps 列表 */

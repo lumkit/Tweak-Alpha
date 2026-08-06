@@ -10,6 +10,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
+import android.widget.FrameLayout
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
 import io.github.lumkit.tweak.common.utils.logD
@@ -74,7 +75,7 @@ class TweakAccessibilityService : AccessibilityService() {
         }
 
         addKeepAliveOverlay()
-        startDaemon()
+//        startDaemon()
         // 广播/系统拉活无障碍后：若用户启用了 Native Daemon，检测一次并按需启动 TweakServer
         serviceScope.launch {
             val started = NativeDaemonController.ensureRunningIfEnabled()
@@ -109,17 +110,17 @@ class TweakAccessibilityService : AccessibilityService() {
         if (keepAliveView?.isAttachedToWindow == true) return
         removeKeepAliveOverlay()
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        val view = View(this).apply {
-            alpha = 0f
-        }
+        val view = FrameLayout(this)
         val params = WindowManager.LayoutParams(
-            1, 1,
+            10, 10,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         )
+        params.x = -10
+        params.y = -10
         try {
             wm.addView(view, params)
             keepAliveView = view

@@ -90,8 +90,13 @@ object TweakDataStore {
     // FPS 悬浮窗位置
     private val fpsOverlayXKey = intPreferencesKey("fps_overlay_x")
     private val fpsOverlayYKey = intPreferencesKey("fps_overlay_y")
+
     private val loadWatcherOverlayXKey = intPreferencesKey("load_watcher_overlay_x")
     private val loadWatcherOverlayYKey = intPreferencesKey("load_watcher_overlay_y")
+    private val threadWatcherOverlayXKey = intPreferencesKey("thread_watcher_overlay_x")
+    private val threadWatcherOverlayYKey = intPreferencesKey("thread_watcher_overlay_y")
+
+
     private val fpsSourcePathKey = stringPreferencesKey("fps_source_path")
     private val fpsSourceTokenIndexKey = intPreferencesKey("fps_source_token_index")
     private val fpsSourceDividerKey = floatPreferencesKey("fps_source_divider")
@@ -472,6 +477,27 @@ object TweakDataStore {
             }
         }
     }
+
+    fun threadWatcherOverlayPositionFlow(): Flow<Pair<Int, Int>?> = preferences.data.map {
+        val x = it[threadWatcherOverlayXKey]
+        val y = it[threadWatcherOverlayYKey]
+        if (x != null && y != null) x to y else null
+    }
+
+    val threadWatcherOverlayPosition: Pair<Int, Int>?
+        get() = runBlocking {
+            threadWatcherOverlayPositionFlow().firstOrNull()
+        }
+
+    suspend fun setThreadWatcherOverlayPosition(x: Int, y: Int) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[threadWatcherOverlayXKey] = x
+                preferences[threadWatcherOverlayYKey] = y
+            }
+        }
+    }
+
 
     fun fpsSourceFlow(): Flow<FpsSourceConfig?> = preferences.data.map {
         val path = it[fpsSourcePathKey]?.takeIf(String::isNotBlank) ?: return@map null

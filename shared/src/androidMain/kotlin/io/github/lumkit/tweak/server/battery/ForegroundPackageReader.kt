@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.server.battery
 
+import android.os.Build
 import android.os.SystemClock
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -57,14 +58,57 @@ class ForegroundPackageReader(
         }
 
         private fun defaultDumpsysWindowFocus(): String {
-            val process = ProcessBuilder(
-                "sh", "-c",
-                "dumpsys window 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp' | head -n 4",
-            ).redirectErrorStream(true).start()
-            val output = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText() }
-            process.waitFor(2, TimeUnit.SECONDS)
-            runCatching { process.destroyForcibly() }
-            return output
+            val keywords = arrayOf("mCurrentFocus", "mFocusedApp", "mFocusedWindow")
+            return try {
+                val process = ProcessBuilder("dumpsys", "window")
+                    .redirectErrorStream(true)
+                    .start()
+
+                val result = StringBuilder()
+                BufferedReader(InputStreamReader(process.inputStream)).useLines { lines ->
+                    lines.forEach { line ->
+                        if (keywords.any { line.contains(it) }) {
+                            result.appendLine(line)
+                            // 防止部分ROM输出太多
+                            if (result.length > 4096) {
+                                return@useLines
+                            }
+                        }
+                    }
+                }
+
+                waitProcess(process, 2000)
+                runCatching {
+                    process.destroy()
+                }
+                result.toString()
+            } catch (e: Exception) {
+                ""
+            }
+        }
+
+        private fun waitProcess(
+            process: Process,
+            timeoutMs: Long
+        ): Boolean {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                return process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+            }
+
+            val start = System.currentTimeMillis()
+            while (true) {
+                try {
+                    process.exitValue()
+                    return true
+                } catch (_: IllegalThreadStateException) {
+                    // 还在运行
+                }
+
+                if (System.currentTimeMillis() - start >= timeoutMs) {
+                    return false
+                }
+                Thread.sleep(10)
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-package io.github.lumkit.tweak.service
+package io.github.lumkit.tweak.overlay
 
 import android.content.Context
 import android.content.Intent
@@ -51,6 +51,7 @@ import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.getDeviceScreenRefreshRate
 import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.service.OverlayService
 import io.github.lumkit.tweak.ui.screen.info.DeviceInfoViewModel
 import io.github.lumkit.tweak.ui.theme.getJetBrainsMonoRegularFontFamily
 import kotlinx.coroutines.CoroutineScope
@@ -124,7 +125,9 @@ class LoadWatcherOverlayController(
         val bundle by viewModel.bundle.collectAsStateWithLifecycle()
         val expanded by expanded.collectAsStateWithLifecycle()
 
-        ContextContent {
+        ContextContent(
+            fontFamily = getJetBrainsMonoRegularFontFamily(),
+        ) {
             Box(
                 modifier = Modifier.clip(Rectangle.copy(cornerRadius = 5.dp))
                     .background(color = Color(0x55000000))
@@ -401,7 +404,6 @@ private fun ExpandedContent(bundle: LoadWatcherViewModel.Bundle) {
             style = MiuixTheme.textStyles.footnote2.copy(
                 fontSize = 7.sp,
                 lineHeight = 10.2.sp,
-                fontFamily = getJetBrainsMonoRegularFontFamily(),
             ),
             color = Color(0xbbffffff),
             modifier = Modifier.width(68.dp)
@@ -436,7 +438,6 @@ private fun ChartsContent(bundle: LoadWatcherViewModel.Bundle) {
                 style = MiuixTheme.textStyles.footnote2.copy(
                     fontSize = 7.sp,
                     lineHeight = 7.sp,
-                    fontFamily = getJetBrainsMonoRegularFontFamily(),
                     fontWeight = FontWeight.Bold,
                 ),
                 color = Color.White,
@@ -448,7 +449,6 @@ private fun ChartsContent(bundle: LoadWatcherViewModel.Bundle) {
             style = MiuixTheme.textStyles.footnote2.copy(
                 fontSize = 5.6.sp,
                 lineHeight = 5.6.sp,
-                fontFamily = getJetBrainsMonoRegularFontFamily(),
                 fontWeight = FontWeight.Bold,
             ),
             color = Color.White,
@@ -480,7 +480,6 @@ private fun ChartsContent(bundle: LoadWatcherViewModel.Bundle) {
                 style = MiuixTheme.textStyles.footnote2.copy(
                     fontSize = 7.sp,
                     lineHeight = 7.sp,
-                    fontFamily = getJetBrainsMonoRegularFontFamily(),
                     fontWeight = FontWeight.Bold,
                 ),
                 color = Color.White,
@@ -492,7 +491,6 @@ private fun ChartsContent(bundle: LoadWatcherViewModel.Bundle) {
             style = MiuixTheme.textStyles.footnote2.copy(
                 fontSize = 5.6.sp,
                 lineHeight = 5.6.sp,
-                fontFamily = getJetBrainsMonoRegularFontFamily(),
                 fontWeight = FontWeight.Bold,
             ),
             color = Color.White,
@@ -530,7 +528,6 @@ private fun ChartsContent(bundle: LoadWatcherViewModel.Bundle) {
                 style = MiuixTheme.textStyles.footnote2.copy(
                     fontSize = 7.sp,
                     lineHeight = 7.sp,
-                    fontFamily = getJetBrainsMonoRegularFontFamily(),
                     fontWeight = FontWeight.Bold,
                 ),
                 color = Color.White,
@@ -542,7 +539,6 @@ private fun ChartsContent(bundle: LoadWatcherViewModel.Bundle) {
             style = MiuixTheme.textStyles.footnote2.copy(
                 fontSize = 5.6.sp,
                 lineHeight = 5.6.sp,
-                fontFamily = getJetBrainsMonoRegularFontFamily(),
                 fontWeight = FontWeight.Bold,
             ),
             color = Color.White,
@@ -575,7 +571,6 @@ private fun ChartsContent(bundle: LoadWatcherViewModel.Bundle) {
                     style = MiuixTheme.textStyles.footnote2.copy(
                         fontSize = 7.sp,
                         lineHeight = 7.sp,
-                        fontFamily = getJetBrainsMonoRegularFontFamily(),
                         fontWeight = FontWeight.Bold,
                     ),
                     color = Color.White,
@@ -587,7 +582,6 @@ private fun ChartsContent(bundle: LoadWatcherViewModel.Bundle) {
                 style = MiuixTheme.textStyles.footnote2.copy(
                     fontSize = 5.6.sp,
                     lineHeight = 5.6.sp,
-                    fontFamily = getJetBrainsMonoRegularFontFamily(),
                     fontWeight = FontWeight.Bold,
                 ),
                 color = Color.White,
