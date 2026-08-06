@@ -118,32 +118,17 @@
         <service android:name=".service.UpdateEngineService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse"
-            tools:ignore="ForegroundServicePermission">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="fileWatcher" />
-        </service>
+            android:foregroundServiceType="dataSync"/>
 
         <service android:name=".service.LineFlashService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse"
-            tools:ignore="ForegroundServicePermission">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="fileWatcher" />
-        </service>
+            android:foregroundServiceType="dataSync"/>
 
         <service android:name=".service.ExtractApkService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse"
-            tools:ignore="ForegroundServicePermission">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="fileWatcher" />
-        </service>
+            android:foregroundServiceType="dataSync"/>
 
         <service android:name=".service.FpsRecordService"
             android:enabled="true"
