@@ -46,10 +46,10 @@ import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.common.base.BaseService
 import io.github.lumkit.tweak.common.component.rememberTextWidth
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
-import io.github.lumkit.tweak.common.utils.FpsUtils
 import io.github.lumkit.tweak.common.utils.OverlayScreenBounds
 import io.github.lumkit.tweak.common.utils.SnapToEdgeTouchProvider
 import io.github.lumkit.tweak.common.utils.TweakDataStore
+import io.github.lumkit.tweak.common.utils.fps.FpsUtils
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.model.NavigationIntent
 import io.github.lumkit.tweak.navigation.Screen

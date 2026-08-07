@@ -14,12 +14,12 @@ import io.github.lumkit.tweak.common.utils.CpuLoadUtils
 import io.github.lumkit.tweak.common.utils.DeviceMemoryInfoUtils
 import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
-import io.github.lumkit.tweak.common.utils.FpsUtils
 import io.github.lumkit.tweak.common.utils.GpuUtils
 import io.github.lumkit.tweak.common.utils.SDK_INT
 import io.github.lumkit.tweak.common.utils.SDK_RELEASE
 import io.github.lumkit.tweak.common.utils.displayNameResource
 import io.github.lumkit.tweak.common.utils.formatElapsedTimeInternal
+import io.github.lumkit.tweak.common.utils.fps.FpsUtils
 import io.github.lumkit.tweak.common.utils.getDeviceModel
 import io.github.lumkit.tweak.common.utils.getDeviceScreenHeight
 import io.github.lumkit.tweak.common.utils.getDeviceScreenWidth

@@ -43,12 +43,12 @@ import io.github.lumkit.tweak.common.utils.DeviceMemoryInfoModel
 import io.github.lumkit.tweak.common.utils.DeviceMemoryInfoUtils
 import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.common.utils.DragTouchProvider
-import io.github.lumkit.tweak.common.utils.FpsUtils
 import io.github.lumkit.tweak.common.utils.GpuUtils
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.formatPower
+import io.github.lumkit.tweak.common.utils.fps.FpsUtils
 import io.github.lumkit.tweak.common.utils.getDeviceScreenRefreshRate
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.service.OverlayService
@@ -209,7 +209,7 @@ class LoadWatcherViewModel : BaseViewModel() {
         val cpuTemperature = DeviceTemperatureUtils.getAverageCpuTemperature()
         val gpuMemoryUsage = GpuUtils.getMemoryUsage()
         val fps = FpsUtils.getCurrentFps()
-        val fpsText = fps.takeIf { it > 0f }?.let { "%.1f".format(it) }
+        val fpsText = "%.1f".format(fps)
         val moreInfo = buildMoreInfo(
             memoryInfo = memoryInfo,
             memoryFreq = memoryFreq,

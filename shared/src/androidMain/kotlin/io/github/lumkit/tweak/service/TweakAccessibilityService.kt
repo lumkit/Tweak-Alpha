@@ -46,10 +46,6 @@ class TweakAccessibilityService : AccessibilityService() {
 
         val overlayContextOrNull: TweakAccessibilityService?
             get() = serviceReference?.get()
-
-        /** 无障碍 Daemon 是否正在运行 */
-        val isDaemonRunning: Boolean
-            get() = serviceReference?.get()?.daemon?.isRunning == true
     }
 
     private var keepAliveView: View? = null
@@ -57,7 +53,6 @@ class TweakAccessibilityService : AccessibilityService() {
     private val serviceScope = CoroutineScope(serviceJob + Dispatchers.IO)
     private var resolveForegroundJob: Job? = null
     private val windowPackageCache = LruCache<Int, String>(16)
-    private var daemon: AccessibilityDaemon? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -75,27 +70,12 @@ class TweakAccessibilityService : AccessibilityService() {
         }
 
         addKeepAliveOverlay()
-//        startDaemon()
         // 广播/系统拉活无障碍后：若用户启用了 Native Daemon，检测一次并按需启动 TweakServer
         serviceScope.launch {
             val started = NativeDaemonController.ensureRunningIfEnabled()
             logD("native daemon ensure on a11y connected => $started", TAG)
         }
         logD("TweakAccessibilityService is connected.", TAG)
-    }
-
-    private fun startDaemon() {
-        if (daemon?.isRunning == true) return
-        daemon = AccessibilityDaemon(
-            context = this,
-            ensureOverlay = { ensureKeepAliveOverlay() },
-        ).also { it.start() }
-        logD("AccessibilityDaemon started", TAG)
-    }
-
-    private fun stopDaemon() {
-        daemon?.stop()
-        daemon = null
     }
 
     /**
@@ -260,7 +240,6 @@ class TweakAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        stopDaemon()
         if (serviceReference?.get() === this) {
             serviceReference = null
         }

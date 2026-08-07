@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,15 +35,17 @@ import io.github.lumkit.tweak.common.utils.BatteryUtils
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
 import io.github.lumkit.tweak.common.utils.CpuFrequencyUtil
 import io.github.lumkit.tweak.common.utils.CpuLoadUtils
-import io.github.lumkit.tweak.common.utils.FpsUtils
 import io.github.lumkit.tweak.common.utils.GpuUtils
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.formatPower
+import io.github.lumkit.tweak.common.utils.fps.FpsUtils
+import io.github.lumkit.tweak.common.utils.fps.SurfaceFlingerFpsUtil
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.service.OverlayService
 import io.github.lumkit.tweak.shared.R
 import io.github.lumkit.tweak.ui.screen.info.DeviceInfoViewModel
 import io.github.lumkit.tweak.ui.theme.getJetBrainsMonoRegularFontFamily
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -128,6 +131,9 @@ private class MiniLoadContentViewModel : BaseViewModel() {
     init {
         viewModelScope.launch {
             while (isActive) {
+                launch(Dispatchers.Default) {
+                    SurfaceFlingerFpsUtil.getCurrentFps()
+                }
                 updateDetail()
                 tick++
                 delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
@@ -156,7 +162,7 @@ private class MiniLoadContentViewModel : BaseViewModel() {
         val batteryPower = batteryUtils.getPower()
         val temperatureCelsius = batterySnapshot.temperatureCelsius
         val fps = FpsUtils.getCurrentFps()
-        val fpsText = fps.takeIf { it > 0f }?.let { "%.1f".format(it) }
+        val fpsText = "%.1f".format(fps)
         _miniLoadDetail.value = MiniLoadDetail(
             cpuFreq = DeviceInfoViewModel.formatFreq(maxFrequency.toString(), ""),
             cpuLoad = cpuLoad / 100f,
@@ -211,8 +217,9 @@ private fun MiniLoadContent(
                 Text(
                     text = detail.cpuFreq,
                     style = MiuixTheme.textStyles.footnote2.copy(
-                        fontSize = 7.sp,
-                        lineHeight = 7.sp,
+                        fontSize = 7.8.sp,
+                        lineHeight = 7.8.sp,
+                        fontWeight = FontWeight.Bold,
                     ),
                     color = Color.White,
                     softWrap = false,
@@ -251,8 +258,9 @@ private fun MiniLoadContent(
                 Text(
                     text = detail.gpuFreq,
                     style = MiuixTheme.textStyles.footnote2.copy(
-                        fontSize = 7.sp,
-                        lineHeight = 7.sp,
+                        fontSize = 7.8.sp,
+                        lineHeight = 7.8.sp,
+                        fontWeight = FontWeight.Bold,
                     ),
                     color = Color.White,
                     softWrap = false,
@@ -279,8 +287,9 @@ private fun MiniLoadContent(
                 Text(
                     text = detail.fps,
                     style = MiuixTheme.textStyles.footnote2.copy(
-                        fontSize = 7.sp,
-                        lineHeight = 7.sp,
+                        fontSize = 7.8.sp,
+                        lineHeight = 7.8.sp,
+                        fontWeight = FontWeight.Bold,
                     ),
                     color = Color.White,
                     softWrap = false,
@@ -307,8 +316,9 @@ private fun MiniLoadContent(
                 Text(
                     text = detail.batteryInfo,
                     style = MiuixTheme.textStyles.footnote2.copy(
-                        fontSize = 7.sp,
-                        lineHeight = 7.sp,
+                        fontSize = 7.8.sp,
+                        lineHeight = 7.8.sp,
+                        fontWeight = FontWeight.Bold,
                     ),
                     color = Color.White,
                     softWrap = false,
