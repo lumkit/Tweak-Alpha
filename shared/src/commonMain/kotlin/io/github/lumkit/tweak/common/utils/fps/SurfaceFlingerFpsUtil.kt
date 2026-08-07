@@ -2,12 +2,18 @@ package io.github.lumkit.tweak.common.utils.fps
 
 import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.logD
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 
 object SurfaceFlingerFpsUtil {
     private val mutex = Mutex()
+    private val bgScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private const val TAG = "SurfaceFlingerFpsUtil"
 
@@ -21,6 +27,8 @@ object SurfaceFlingerFpsUtil {
     private var LASTED_FRAME_LAYER = ""
     private var LASTED_FPS = -0f
     private var LASTED_FPS_TIMESTAMP = 0L
+    private var LASTED_FOCUS = ""
+    private var layerDetectJob: Job? = null
 
     /**
      * 获取当前窗口焦点
@@ -125,6 +133,41 @@ object SurfaceFlingerFpsUtil {
         return fps
     }
 
+    private suspend fun resolveActiveLayer(): String? {
+        val focus = getCurrentFocus()
+        if (focus == null) {
+            logD("focus is null", TAG)
+            return null
+        }
+
+        val layerList = layerList(focus)
+        val activeLayer = getActiveLayer(layerList)
+        if (activeLayer == null) {
+            logD("activeLayer is null", TAG)
+            return null
+        }
+
+        if (focus != LASTED_FOCUS || activeLayer != LASTED_FRAME_LAYER) {
+            LASTED_FRAME_TIME = 0L
+        }
+        LASTED_FOCUS = focus
+        LASTED_FRAME_LAYER = activeLayer
+        return activeLayer
+    }
+
+    private fun ensureLayerDetector() {
+        if (layerDetectJob?.isActive == true) {
+            return
+        }
+        layerDetectJob = bgScope.launch {
+            runCatching {
+                mutex.withLock {
+                    resolveActiveLayer()
+                }
+            }
+        }
+    }
+
     private fun calculateFps(
         latencyOutput: String
     ): Float {
@@ -165,29 +208,19 @@ object SurfaceFlingerFpsUtil {
     }
 
     suspend fun getCurrentFps(): Float = mutex.withLock {
+        ensureLayerDetector()
         val tick = Clock.System.now().toEpochMilliseconds()
         if (tick - LASTED_FPS_TIMESTAMP in 0..FPS_CACHE_WINDOW_MS) {
             return LASTED_FPS
         }
 
-        val focus = getCurrentFocus()
-        if (focus == null) {
-            logD("focus is null", TAG)
-            return LASTED_FPS
-        }
-
-        val layerList = layerList(focus)
-        val activeLayer = getActiveLayer(layerList)
+        val activeLayer = LASTED_FRAME_LAYER.takeIf { it.isNotBlank() }
         if (activeLayer == null) {
-            logD("activeLayer is null", TAG)
             return LASTED_FPS
         }
-        if (activeLayer != LASTED_FRAME_LAYER) {
-            LASTED_FRAME_TIME = 0L
-        }
-        LASTED_FRAME_LAYER = activeLayer
 
         val fps = latency(activeLayer)
+
         val time = Clock.System.now().toEpochMilliseconds() - tick
         logD("total time: ${time}ms, fps: $fps", TAG)
         LASTED_FPS = fps
