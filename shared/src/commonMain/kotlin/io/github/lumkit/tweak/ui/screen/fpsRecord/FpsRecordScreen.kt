@@ -122,7 +122,7 @@ internal val FpsRecordingProvider = object : FeatureProvider {
             icon = Res.drawable.ic_record_chart,
             description = Res.string.text_fps_recording_description,
             capabilities = setOf(
-                Capability.ROOT_ONLY,
+                Capability.SHIZUKU_OR_ROOT,
             ),
             route = Screen.FpsRecord,
             defaultState = FeatureState.ENABLED,
