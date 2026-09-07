@@ -1,5 +1,7 @@
 package io.github.lumkit.tweak.ui.screen.dischargeStatistics
 
+import io.github.lumkit.tweak.common.database.battery.table.BatteryRecordSampleEntity
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -8,89 +10,117 @@ import kotlin.test.assertTrue
 class DischargeEtaTest {
 
     @Test
-    fun slopePreferredWhenDropAndDurationEnough() {
-        // 1h 掉 10% → 每 % 需 6min；剩余 50% → 5h
+    fun recentWindowBeatsWholeSessionAverage() {
+        // 前 1h 高负载掉 20%，后 20min 待机只掉 1%。
+        // 旧算法用整段 21%/80min，剩余 59% 只有约 3.7h；近期窗口应接近待机续航。
+        val heavy = buildSamples(
+            startMs = 0L,
+            durationMs = 60 * 60_000L,
+            startLevel = 80,
+            endLevel = 60,
+            currentMa = -2500,
+        )
+        val idle = buildSamples(
+            startMs = 60 * 60_000L,
+            durationMs = 20 * 60_000L,
+            startLevel = 60,
+            endLevel = 59,
+            currentMa = -180,
+            idOffset = heavy.size.toLong(),
+        )
+        val samples = heavy + idle
         val ms = estimateDischargeEtaMs(
             DischargeEtaInput(
+                samples = samples,
                 capacityMah = 5000,
-                avgPowerUw = 1_000_000L,
-                avgVoltageMv = 3700,
-                durationMs = 3_600_000L,
-                startLevel = 60,
-                endLevel = 50,
+                remainingLevel = 59,
+                isLiveSession = true,
+            ),
+        )
+        val eta = requireNotNull(ms)
+        val wholeSessionEta = (80 * 60_000L).toDouble() / 21.0 * 59.0
+        assertTrue(
+            eta > wholeSessionEta.toLong() + 2 * 60 * 60_000L,
+            "ETA should follow recent idle drain, got $eta vs whole-session $wholeSessionEta",
+        )
+    }
+
+    @Test
+    fun socSlopeUsedWhenDropIsEnough() {
+        val samples = buildSamples(
+            startMs = 0L,
+            durationMs = 60 * 60_000L,
+            startLevel = 60,
+            endLevel = 50,
+            currentMa = -800,
+        )
+        val ms = estimateDischargeEtaMs(
+            DischargeEtaInput(
+                samples = samples,
+                capacityMah = 5000,
                 remainingLevel = 50,
+                isLiveSession = true,
             ),
         )
-        assertEquals(18_000_000L, ms)
+        // 1h 掉 10%，剩余 50% → 5h
+        val eta = requireNotNull(ms)
+        assertTrue(
+            abs(eta - 18_000_000L) < 20 * 60_000L,
+            "expected ~5h, got $eta",
+        )
     }
 
     @Test
-    fun energyFallbackWhenDropBelowThreshold() {
-        // 掉 1% < 2 → E: remainingWh/avgW
-        val capacity = 5000
-        val remaining = 50
-        val avgW = 2.0
-        val v = 3.7
-        val remainingWh = capacity / 1000.0 * v * remaining / 100.0
-        val expected = (remainingWh / avgW * 3_600_000.0).toLong()
-        val ms = estimateDischargeEtaMs(
-            DischargeEtaInput(
-                capacityMah = capacity,
-                avgPowerUw = 2_000_000L,
-                avgVoltageMv = 3700,
-                durationMs = 3_600_000L,
-                startLevel = 51,
-                endLevel = 50,
-                remainingLevel = remaining,
-            ),
+    fun currentFallbackWhenSocHasNotMoved() {
+        val samples = buildSamples(
+            startMs = 0L,
+            durationMs = 12 * 60_000L,
+            startLevel = 80,
+            endLevel = 80,
+            currentMa = -500,
         )
-        assertEquals(expected, ms)
-    }
-
-    @Test
-    fun energyFallbackWhenDurationTooShort() {
         val ms = estimateDischargeEtaMs(
             DischargeEtaInput(
+                samples = samples,
                 capacityMah = 4000,
-                avgPowerUw = 2_000_000L,
-                avgVoltageMv = 3700,
-                durationMs = 60_000L, // < 3min
-                startLevel = 60,
-                endLevel = 50,
-                remainingLevel = 50,
+                remainingLevel = 80,
+                isLiveSession = true,
             ),
         )
-        assertTrue(ms != null && ms > 0L)
-        // 不得等于斜率 1min/10%*50 = 5min
-        assertTrue(ms != 300_000L)
+        // 4000*0.8 / 500mA = 6.4h
+        val expected = (4000 * 80 / 100.0 / 500.0 * 3_600_000.0).toLong()
+        val eta = requireNotNull(ms)
+        assertTrue(abs(eta - expected) < 15 * 60_000L, "expected ~$expected got $eta")
     }
 
     @Test
-    fun returnsNullWhenNoInputs() {
-        assertNull(
-            estimateDischargeEtaMs(
-                DischargeEtaInput(
-                    capacityMah = null,
-                    avgPowerUw = 0L,
-                    avgVoltageMv = null,
-                    durationMs = 0L,
-                    startLevel = 50,
-                    endLevel = 50,
-                    remainingLevel = 50,
-                ),
+    fun ignoresInstantSocJump() {
+        val stable = buildSamples(
+            startMs = 0L,
+            durationMs = 10 * 60_000L,
+            startLevel = 50,
+            endLevel = 50,
+            currentMa = -400,
+        )
+        val jump = listOf(
+            sample(
+                id = 999,
+                timestamp = 10 * 60_000L + 1_000L,
+                level = 48,
+                currentMa = -400,
             ),
         )
-    }
-
-    @Test
-    fun energyUsesProvidedVoltageNotHardcoded() {
-        val a = estimateDischargeEtaMs(
-            DischargeEtaInput(4000, 2_000_000L, 4000, 0L, 50, 50, 50),
+        val ms = estimateDischargeEtaMs(
+            DischargeEtaInput(
+                samples = stable + jump,
+                capacityMah = 4000,
+                remainingLevel = 48,
+                isLiveSession = true,
+            ),
         )
-        val b = estimateDischargeEtaMs(
-            DischargeEtaInput(4000, 2_000_000L, 3400, 0L, 50, 50, 50),
-        )
-        assertTrue(a != null && b != null && a != b)
+        val eta = requireNotNull(ms)
+        // 末尾 2%/1s 跳变不走 SoC，改电流法
+        assertTrue(eta > 30 * 60_000L, "SoC jump must not collapse ETA, got $eta")
     }
 
     @Test
@@ -98,15 +128,105 @@ class DischargeEtaTest {
         assertNull(
             estimateDischargeEtaMs(
                 DischargeEtaInput(
+                    samples = buildSamples(0L, 10 * 60_000L, 10, 0, -500),
                     capacityMah = 4000,
-                    avgPowerUw = 2_000_000L,
-                    avgVoltageMv = 3700,
-                    durationMs = 3_600_000L,
-                    startLevel = 10,
-                    endLevel = 0,
                     remainingLevel = 0,
+                    isLiveSession = true,
                 ),
             ),
         )
     }
+
+    @Test
+    fun returnsNullWhenNoInputs() {
+        assertNull(
+            estimateDischargeEtaMs(
+                DischargeEtaInput(
+                    samples = emptyList(),
+                    capacityMah = null,
+                    remainingLevel = 50,
+                    isLiveSession = true,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun smoothingDoesNotSnapOnSingleUpdate() {
+        val samples = buildSamples(0L, 30 * 60_000L, 40, 34, -600)
+        val raw = estimateDischargeEtaMs(
+            DischargeEtaInput(
+                samples = samples,
+                capacityMah = 4000,
+                remainingLevel = 34,
+                isLiveSession = true,
+                previousEtaMs = null,
+            ),
+        )
+        val baseline = requireNotNull(raw)
+        val smoothed = requireNotNull(
+            estimateDischargeEtaMs(
+                DischargeEtaInput(
+                    samples = samples,
+                    capacityMah = 4000,
+                    remainingLevel = 34,
+                    isLiveSession = true,
+                    previousEtaMs = baseline * 3,
+                ),
+            ),
+        )
+        assertTrue(smoothed > baseline, "should ease from previous 3x value")
+        assertTrue(smoothed < baseline * 3, "should move toward new estimate")
+    }
+
+    @Test
+    fun timeWeightedCurrentIgnoresChargeSpikes() {
+        val window = listOf(
+            sample(1, 0L, 50, -400),
+            sample(2, 10_000L, 50, 2000),
+            sample(3, 20_000L, 50, -400),
+            sample(4, 30_000L, 50, -400),
+        )
+        val drain = requireNotNull(timeWeightedDischargeMa(window))
+        assertTrue(abs(drain - 400.0) < 1.0, "charge sample must not inflate drain, got $drain")
+    }
+
+    private fun buildSamples(
+        startMs: Long,
+        durationMs: Long,
+        startLevel: Int,
+        endLevel: Int,
+        currentMa: Int,
+        intervalMs: Long = 10_000L,
+        idOffset: Long = 0L,
+    ): List<BatteryRecordSampleEntity> {
+        val count = (durationMs / intervalMs).toInt().coerceAtLeast(1) + 1
+        return List(count) { index ->
+            val t = startMs + index * intervalMs
+            val progress = if (count == 1) 1.0 else index.toDouble() / (count - 1)
+            val level = (startLevel + (endLevel - startLevel) * progress).toInt()
+            sample(
+                id = idOffset + index + 1,
+                timestamp = t,
+                level = level,
+                currentMa = currentMa,
+            )
+        }
+    }
+
+    private fun sample(
+        id: Long,
+        timestamp: Long,
+        level: Int,
+        currentMa: Int,
+    ) = BatteryRecordSampleEntity(
+        id = id,
+        sessionId = 1L,
+        timestamp = timestamp,
+        level = level,
+        voltageMv = 3800,
+        temperatureC = 32f,
+        screenOn = true,
+        currentMa = currentMa,
+    )
 }

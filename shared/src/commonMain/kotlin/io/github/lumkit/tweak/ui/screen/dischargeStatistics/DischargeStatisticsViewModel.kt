@@ -159,6 +159,8 @@ class DischargeStatisticsViewModel : BaseViewModel() {
     private var batteryLogWatcher: Closeable? = null
 
     private var rawAppRows: List<AppUsageRow> = emptyList()
+    private var lastEtaMs: Long? = null
+    private var lastEtaSessionId: Long? = null
 
     fun startBatteryLogWatcher() {
         logD("监听文件变化", TAG)
@@ -308,30 +310,34 @@ class DischargeStatisticsViewModel : BaseViewModel() {
                 session.id == liveActiveSessionId -> AppPowerListStatus.Collecting
             else -> AppPowerListStatus.Empty
         }
-        val avgVoltageMv = samples.mapNotNull { it.voltageMv }
-            .takeIf { it.isNotEmpty() }
-            ?.average()
-            ?.toInt()
         val infoRow = summary?.let {
             DischargeSessionMapper.buildBatteryInfoRow(samples, it.energyUw)
         }
-        val capacity = BatteryUtils.getCurrentFullCapacity()
+        val estimatedCapacity = TweakDataStore.estimatedBatteryFullCapacityMahFlow()
+            .first()
+            ?.takeIf { it > 0 }
+        val capacity = estimatedCapacity
+            ?: BatteryUtils.getCurrentFullCapacity()
             ?: BatteryUtils.getDesignCapacity()
-        val etaMs = if (summary != null) {
+        val sessionId = session?.id
+        if (sessionId != lastEtaSessionId) {
+            lastEtaMs = null
+            lastEtaSessionId = sessionId
+        }
+        val etaMs = if (summary != null && samples.size >= 2) {
             estimateDischargeEtaMs(
                 DischargeEtaInput(
+                    samples = samples,
                     capacityMah = capacity,
-                    avgPowerUw = summary.averagePowerUw,
-                    avgVoltageMv = avgVoltageMv,
-                    durationMs = sessionDurationMs,
-                    startLevel = summary.startLevel,
-                    endLevel = summary.endLevel,
                     remainingLevel = summary.endLevel,
+                    isLiveSession = summary.isCurrentDischargingSession,
+                    previousEtaMs = lastEtaMs,
                 ),
             )
         } else {
             null
         }
+        lastEtaMs = etaMs
 
         withContext(Dispatchers.Main.immediate) {
             if (_chartsSessionOverrideId.value != null && session == null) {
