@@ -39,7 +39,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * 充电采样中 ──检测到放电──▶ 结束充电 session，新建放电 session
  * ```
  *
- * 由 [TweakAccessibilityService] 连接后 [start]，销毁时 [stop]。
+ * 电池采样现由 Native Daemon 负责；本类为 App 侧遗留实现。
  */
 class BatteryRecordSampler(
     private val context: Context,

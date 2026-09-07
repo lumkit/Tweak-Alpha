@@ -60,11 +60,9 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 class ThreadWatcherOverlayController(
-    fallbackContextProvider: () -> Context,
-    accessibilityContextProvider: () -> Context?,
+    contextProvider: () -> Context,
 ) : BaseOverlayController(
-    fallbackContextProvider = fallbackContextProvider,
-    accessibilityContextProvider = accessibilityContextProvider,
+    contextProvider = contextProvider,
     tag = OverlayService.TAG,
 ) {
 
@@ -157,7 +155,7 @@ private class ThreadOverlayViewModel : BaseViewModel() {
         if (!ForegroundAppMonitor.isRunning.value) {
             _topPackage.value = ""
             _threads.value = emptyList()
-            _message.value = "请打开无障碍服务后再试"
+            _message.value = "前台应用监听未就绪"
             _loading.value = false
             return
         }

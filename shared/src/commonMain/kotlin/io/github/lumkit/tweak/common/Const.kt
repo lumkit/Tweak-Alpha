@@ -36,8 +36,4 @@ object ConstCommon {
 
         fun lineFlashSession(sessionId: String): String = "$LINE_FLASH_DIR/$sessionId"
     }
-
-    object Accessibility {
-        const val SERVICE_CLASS = "io.github.lumkit.tweak.service.TweakAccessibilityService"
-    }
 }

@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged"
-    android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
-    android:canRetrieveWindowContent="true"
-    android:notificationTimeout="0"
-    android:description="@string/accessibility_service_description"
-    android:settingsActivity="io.github.lumkit.tweak.MainActivity" />

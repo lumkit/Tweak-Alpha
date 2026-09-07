@@ -3,7 +3,7 @@ package io.github.lumkit.tweak.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import io.github.lumkit.tweak.common.utils.AccessibilityBootstrap
+import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.model.RuntimeMode
@@ -14,8 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * 开机广播：自启开启且运行模式特权可用、用户开启了无障碍选项时，
- * 若服务未存活则通过 [AccessibilityBootstrap] 拉起。
+ * 开机广播：自启开启且运行模式特权可用时，按需拉起 Native Daemon。
  */
 class BootBroadcastReceiver : BroadcastReceiver() {
 
@@ -38,12 +37,12 @@ class BootBroadcastReceiver : BroadcastReceiver() {
 
                         val mode = TweakDataStore.runtimeModeFlow().first()
                         if (mode == RuntimeMode.Unknow) {
-                            logD("runtime mode unknown, skip boot accessibility", TAG)
+                            logD("runtime mode unknown, skip boot daemon", TAG)
                             return@launch
                         }
 
-                        val ensured = AccessibilityBootstrap.ensureRunningIfUserEnabled()
-                        logD("ensure accessibility if user enabled => $ensured", TAG)
+                        val started = NativeDaemonController.ensureRunningIfEnabled()
+                        logD("ensure native daemon if enabled => $started", TAG)
                     } finally {
                         pendingResult.finish()
                     }

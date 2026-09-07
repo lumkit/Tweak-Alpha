@@ -5,7 +5,6 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.daemon.TweakDaemon
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
-import io.github.lumkit.tweak.common.utils.AccessibilityBootstrap
 import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.RuntimeMode
@@ -64,14 +63,6 @@ class SettingsViewModel : BaseViewModel() {
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = false,
-        )
-
-    val a11yDaemonEnabled = TweakDataStore.a11yDaemonEnabledFlow()
-        .distinctUntilChanged()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
             initialValue = false,
         )
 
@@ -250,17 +241,6 @@ class SettingsViewModel : BaseViewModel() {
         NativeDaemonController.setEnabled(enable)
         refreshNativeDaemonStatus()
         success()
-    }
-
-    fun setA11yDaemonEnabled(enable: Boolean) {
-        viewModelScope.launch {
-            TweakDataStore.setA11yDaemonEnabled(enable)
-            if (enable) {
-                AccessibilityBootstrap.enableIfPrivileged(requireUserPreference = false)
-            } else {
-                AccessibilityBootstrap.stopAccessibilityService()
-            }
-        }
     }
 
     fun setAutoStartApp(enable: Boolean) {

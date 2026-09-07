@@ -48,6 +48,7 @@ import io.github.lumkit.tweak.common.component.rememberTextWidth
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
 import io.github.lumkit.tweak.common.utils.OverlayScreenBounds
 import io.github.lumkit.tweak.common.utils.SnapToEdgeTouchProvider
+import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.fps.FpsUtils
 import io.github.lumkit.tweak.common.utils.logD
@@ -146,6 +147,7 @@ class FpsRecordService : BaseService() {
 
     override fun onCreate() {
         super.onCreate()
+        ForegroundAppMonitor.start()
         lastScreenState = currentScreenState()
         displayManager?.registerDisplayListener(displayListener, mainHandler)
     }

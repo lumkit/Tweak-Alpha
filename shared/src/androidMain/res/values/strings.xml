@@ -44,8 +44,6 @@
     <string name="update_error_unknown">更新失败：错误码 %d</string>
 
     <string name="text_running_success">执行成功</string>
-    <string name="accessibility_service">Tweak Alpha辅助服务</string>
-    <string name="accessibility_service_description">用于帧率记录等高级功能</string>
     <!-- LineFlashService -->
     <string name="channel_line_flash">线刷服务</string>
     <string name="channel_line_flash_description">显示线刷解压、校验与刷写进度</string>

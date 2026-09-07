@@ -10,7 +10,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * 特权常驻进程（TweakServer）启停统一入口。
- * 受 [TweakDataStore.nativeDaemonEnabledFlow] 控制；无障碍 connected / 特权就绪时仅在启用时拉活。
+ * 受 [TweakDataStore.nativeDaemonEnabledFlow] 控制；特权就绪 / 开机自启时仅在启用时拉活。
  */
 object NativeDaemonController {
 

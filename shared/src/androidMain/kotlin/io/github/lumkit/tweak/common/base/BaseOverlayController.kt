@@ -1,6 +1,5 @@
 package io.github.lumkit.tweak.common.base
 
-import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.view.Gravity
 import android.view.WindowManager
@@ -9,8 +8,7 @@ import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
 import io.github.lumkit.tweak.common.utils.logD
 
 abstract class BaseOverlayController(
-    private val fallbackContextProvider: () -> Context,
-    private val accessibilityContextProvider: () -> Context?,
+    private val contextProvider: () -> Context,
     private val tag: String,
 ) {
 
@@ -53,13 +51,8 @@ abstract class BaseOverlayController(
                 Content()
             }
         }.onSuccess {
-            val overlayType = if (context is AccessibilityService) {
-                "accessibility"
-            } else {
-                "application"
-            }
             onShowingChanged(true)
-            logD("show $overlayName success, overlayType=$overlayType", tag)
+            logD("show $overlayName success", tag)
         }.onFailure { throwable ->
             onShowingChanged(false)
             logD("show $overlayName failed: ${throwable.message}", tag)
@@ -81,9 +74,7 @@ abstract class BaseOverlayController(
         return ComposeOverlayHelper(context)
     }
 
-    private fun resolveOverlayContext(): Context {
-        return accessibilityContextProvider() ?: fallbackContextProvider()
-    }
+    private fun resolveOverlayContext(): Context = contextProvider()
 
     private fun ensureOverlayHelper(context: Context): ComposeOverlayHelper {
         val helper = overlayHelper

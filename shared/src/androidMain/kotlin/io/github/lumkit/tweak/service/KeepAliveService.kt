@@ -15,7 +15,7 @@ import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.shared.R
 
 /**
- * 保活前台服务。由无障碍服务上下文拉起，仅负责常驻通知保活。
+ * 保活前台服务。仅负责常驻通知保活。
  */
 class KeepAliveService : Service() {
 

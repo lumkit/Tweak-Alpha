@@ -1,6 +1,5 @@
 package io.github.lumkit.tweak.common.utils
 
-import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.PixelFormat
@@ -433,13 +432,11 @@ class ComposeOverlayHelper(
         x: Int,
         y: Int,
     ): WindowManager.LayoutParams {
-        val type = when {
-            context is AccessibilityService -> WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else -> {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            }
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
         }
 
         return WindowManager.LayoutParams(

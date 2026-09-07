@@ -99,6 +99,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
             success()
             return@suspendLaunch
         }
+        ForegroundAppMonitor.refresh()
         // 创建session
         val currentForegroundPackage = ForegroundAppMonitor.currentForegroundPackage
         logD("currentForegroundPackage=$currentForegroundPackage", TAG)

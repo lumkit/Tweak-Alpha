@@ -4,6 +4,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.view.Gravity
+import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
 import io.github.lumkit.tweak.overlay.LoadWatcherOverlayController
 import io.github.lumkit.tweak.overlay.MiniLoadWatcherOverlayController
 import io.github.lumkit.tweak.overlay.ThreadWatcherOverlayController
@@ -29,24 +30,20 @@ class OverlayService : Service() {
     }
 
     private val loadWatcherOverlayController by lazy {
-        LoadWatcherOverlayController(
-            fallbackContextProvider = { this },
-            accessibilityContextProvider = { TweakAccessibilityService.overlayContextOrNull },
-        )
+        LoadWatcherOverlayController(contextProvider = { this })
     }
 
     private val threadWatcherOverlayController by lazy {
-        ThreadWatcherOverlayController(
-            fallbackContextProvider = { this },
-            accessibilityContextProvider = { TweakAccessibilityService.overlayContextOrNull },
-        )
+        ThreadWatcherOverlayController(contextProvider = { this })
     }
 
     private val miniLoadWatcherOverlayController by lazy {
-        MiniLoadWatcherOverlayController(
-            fallbackContextProvider = { this },
-            accessibilityContextProvider = { TweakAccessibilityService.overlayContextOrNull },
-        )
+        MiniLoadWatcherOverlayController(contextProvider = { this })
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        ForegroundAppMonitor.start()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

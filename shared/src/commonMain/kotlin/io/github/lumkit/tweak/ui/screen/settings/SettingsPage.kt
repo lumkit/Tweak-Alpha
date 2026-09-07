@@ -96,8 +96,6 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.window.WindowDialog
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.ic_logo_qq
-import tweak_alpha.shared.generated.resources.text_a11y_daemon
-import tweak_alpha.shared.generated.resources.text_a11y_daemon_description
 import tweak_alpha.shared.generated.resources.text_about
 import tweak_alpha.shared.generated.resources.text_apk_export_dir
 import tweak_alpha.shared.generated.resources.text_apk_export_dir_description
@@ -606,8 +604,6 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
             val autoStart by viewModel.autoStartApp.collectAsStateWithLifecycle()
             val isIgnoringBatteryOptimizations by viewModel.isIgnoringBatteryOptimizations.collectAsStateWithLifecycle()
             val nativeDaemonRunning by viewModel.nativeDaemonRunning.collectAsStateWithLifecycle()
-            val a11yDaemonEnabled by viewModel.a11yDaemonEnabled.collectAsStateWithLifecycle()
-
             SwitchPreference(
                 title = stringResource(Res.string.text_auto_start),
                 summary = stringResource(Res.string.text_auto_start_description),
@@ -634,12 +630,6 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                         summary = stringResource(Res.string.text_native_daemon_description),
                         checked = nativeDaemonRunning,
                         onCheckedChange = viewModel::setNativeDaemonEnabled,
-                    )
-                    SwitchPreference(
-                        title = stringResource(Res.string.text_a11y_daemon),
-                        summary = stringResource(Res.string.text_a11y_daemon_description),
-                        checked = a11yDaemonEnabled,
-                        onCheckedChange = viewModel::setA11yDaemonEnabled,
                     )
                 }
             }

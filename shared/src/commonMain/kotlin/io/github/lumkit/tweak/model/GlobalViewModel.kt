@@ -50,7 +50,7 @@ object GlobalViewModel: BaseViewModel() {
             initialValue = (TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_LEVEL * TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_RANGE).toLong()
         )
 
-    /** 电池记录采样间隔（ms），Eagerly：无障碍采样循环可随时读 .value */
+    /** 电池记录采样间隔（ms），Eagerly：Daemon 采样循环可随时读 .value */
     val batteryRecordSampleIntervalMsState = TweakDataStore.batteryRecordSampleIntervalMsFlow()
         .distinctUntilChanged()
         .stateIn(

@@ -31,6 +31,8 @@ class ForegroundPackageReader(
     }
 
     companion object {
+        val FOCUS_DUMP_KEYWORDS = arrayOf("mCurrentFocus", "mFocusedApp", "mFocusedWindow")
+
         // Android ICU 对未转义 `}` / 部分 `]` 语法敏感，结尾只用 `/` 或空白截断包名
         private val focusPackageRegex = Regex(
             """(?:mCurrentFocus|mFocusedApp|mFocusedWindow).*?([A-Za-z][\w]*(?:\.[A-Za-z][\w]*)+)(?:/|\s)""",
@@ -58,7 +60,7 @@ class ForegroundPackageReader(
         }
 
         private fun defaultDumpsysWindowFocus(): String {
-            val keywords = arrayOf("mCurrentFocus", "mFocusedApp", "mFocusedWindow")
+            val keywords = FOCUS_DUMP_KEYWORDS
             return try {
                 val process = ProcessBuilder("dumpsys", "window")
                     .redirectErrorStream(true)

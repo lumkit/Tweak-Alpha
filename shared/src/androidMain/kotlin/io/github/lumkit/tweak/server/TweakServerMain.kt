@@ -21,9 +21,6 @@ import kotlin.system.exitProcess
  *
  * - [main]：独立 `app_process`（Root / adb shell 启动）
  * - [startEmbedded]：嵌入已常驻的 Shizuku `file_service` 进程（避免嵌套 app_process 秒退）
- *
- * 无障碍启停由 App 端 [io.github.lumkit.tweak.common.utils.AccessibilityBootstrap] 负责，
- * Server 不再巡检 / settings put 拉起无障碍。
  */
 @Keep
 object TweakServerMain {

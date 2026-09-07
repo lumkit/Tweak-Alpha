@@ -40,7 +40,7 @@ actual suspend fun ensureUpdateEngineService() {
 }
 
 /**
- * 使用指定 [Context] 启动更新服务（无障碍上下文优先）。
+ * 使用指定 [Context] 启动更新服务。
  */
 suspend fun startUpdateEngineService(context: Context) {
     val runtimeMode = TweakDataStore.runtimeModeFlow().first()

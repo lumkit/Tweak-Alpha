@@ -106,7 +106,7 @@ class SplashViewModel : BaseViewModel() {
 
     /**
      * 特权校验通过后调用（Splash 自动检测与手动选模式共用）。
-     * [PrivilegedAppInitializer] 仅同步完成轻量 init；Daemon / toolkit / 无障碍在后台跑，
+     * [PrivilegedAppInitializer] 仅同步完成轻量 init；Daemon / toolkit / 前台监听在后台跑，
      * 避免卡住进首页；后台任务使用 NonCancellable，跳转 Main 时不会被掐断。
      */
     suspend fun onPrivilegeReady() = withContext(NonCancellable + Dispatchers.IO) {

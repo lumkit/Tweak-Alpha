@@ -70,11 +70,9 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 class LoadWatcherOverlayController(
-    fallbackContextProvider: () -> Context,
-    accessibilityContextProvider: () -> Context?,
+    contextProvider: () -> Context,
 ) : BaseOverlayController(
-    fallbackContextProvider = fallbackContextProvider,
-    accessibilityContextProvider = accessibilityContextProvider,
+    contextProvider = contextProvider,
     tag = OverlayService.TAG,
 ) {
 

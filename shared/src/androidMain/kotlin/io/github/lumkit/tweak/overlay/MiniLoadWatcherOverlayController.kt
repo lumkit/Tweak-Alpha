@@ -57,11 +57,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.time.Duration.Companion.milliseconds
 
 class MiniLoadWatcherOverlayController(
-    fallbackContextProvider: () -> Context,
-    accessibilityContextProvider: () -> Context?,
+    contextProvider: () -> Context,
 ) : BaseOverlayController(
-    fallbackContextProvider = fallbackContextProvider,
-    accessibilityContextProvider = accessibilityContextProvider,
+    contextProvider = contextProvider,
     tag = OverlayService.TAG,
 ) {
     override val overlayName: String = "miniLoadWatcherOverlay"

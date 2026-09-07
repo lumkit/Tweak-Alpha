@@ -66,8 +66,6 @@ object TweakDataStore {
     private val estimatedBatteryFullCapacityMah = intPreferencesKey("estimated_battery_full_capacity_mah")
     // Native Daemon（TweakServer）开关
     private val nativeDaemonEnabled = booleanPreferencesKey("native_daemon_enabled")
-    // 无障碍服务开关（设置页）
-    private val a11yDaemonEnabled = booleanPreferencesKey("a11y_daemon_enabled")
     // 自动启动应用开关
     private val autoStartAppSwitch = booleanPreferencesKey("auto_start_app_switch")
     // 后台隐藏：开启后不在最近任务列表显示
@@ -321,21 +319,6 @@ object TweakDataStore {
                 scale = scale,
             ),
         )
-    }
-
-    /**
-     * 无障碍服务用户开关（设置页）；不再写入 daemon a11y_watch.conf。
-     */
-    fun a11yDaemonEnabledFlow(): Flow<Boolean> = preferences.data.map {
-        it[a11yDaemonEnabled] ?: false
-    }
-
-    suspend fun setA11yDaemonEnabled(enable: Boolean) {
-        preferences.updateData {
-            it.toMutablePreferences().also { preferences ->
-                preferences[a11yDaemonEnabled] = enable
-            }
-        }
     }
 
     fun nativeDaemonEnabledFlow(): Flow<Boolean> = preferences.data.map {

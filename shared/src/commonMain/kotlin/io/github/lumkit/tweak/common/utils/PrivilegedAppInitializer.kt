@@ -21,7 +21,7 @@ import kotlin.time.Duration.Companion.seconds
  * 特权（Root / Shizuku）校验通过后的统一初始化入口。
  * 后续依赖特权的初始化逻辑都放在这里。
  *
- * Splash 只等待轻量步骤（AppsHelper.init）；Daemon / toolkit / 无障碍启用
+ * Splash 只等待轻量步骤（AppsHelper.init）；Daemon / toolkit / 前台监听
  * 在独立 [bgScope] + [NonCancellable] 中执行，避免 shell 卡住或重装 server.apk
  * 时阻塞进首页。跳转 Main 后 composition 取消也不会掐断后台安装。
  */
@@ -29,7 +29,7 @@ object PrivilegedAppInitializer {
 
     private const val TAG = "PrivilegedAppInitializer"
 
-    /** Daemon / toolkit 安装在极端机型上可能很慢；超时后交由无障碍 connected 等路径重试 */
+    /** Daemon / toolkit 安装在极端机型上可能很慢 */
     private val heavyBootstrapTimeout = 90.seconds
 
     private val mutex = Mutex()
@@ -64,10 +64,9 @@ object PrivilegedAppInitializer {
                 coroutineScope {
                     val toolkitJob = async { bootstrapToolkit() }
                     val daemonJob = async { bootstrapDaemon() }
-                    val a11yJob = async { bootstrapAccessibility() }
                     toolkitJob.await()
+                    ForegroundAppMonitor.start()
                     daemonJob.await()
-                    a11yJob.await()
                 }
             }
         } catch (e: TimeoutCancellationException) {
@@ -121,19 +120,6 @@ object PrivilegedAppInitializer {
             throw e
         } catch (e: Exception) {
             logE("daemon bootstrap failed: ${e.message}", e, TAG)
-            false
-        }
-    }
-
-    private suspend fun bootstrapAccessibility(): Boolean {
-        return try {
-            val ok = AccessibilityBootstrap.ensureRunningIfUserEnabled()
-            logD("AccessibilityBootstrap.ensureRunningIfUserEnabled => $ok", TAG)
-            ok
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            logE("accessibility bootstrap failed: ${e.message}", e, TAG)
             false
         }
     }
