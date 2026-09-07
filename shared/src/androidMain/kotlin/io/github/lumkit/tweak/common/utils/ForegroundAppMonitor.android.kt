@@ -77,11 +77,20 @@ private fun registerUidImportanceListener() {
         val listener = Proxy.newProxyInstance(
             listenerClass.classLoader,
             arrayOf(listenerClass),
-        ) { _, method, _ ->
-            if (method.name == "onUidImportance") {
-                scheduleRefresh()
+        ) { proxy, method, args ->
+            when {
+                method.declaringClass == Any::class.java -> when (method.name) {
+                    "hashCode" -> System.identityHashCode(proxy)
+                    "equals" -> proxy === args?.getOrNull(0)
+                    "toString" -> "OnUidImportanceListener@${Integer.toHexString(System.identityHashCode(proxy))}"
+                    else -> null
+                }
+                method.name == "onUidImportance" -> {
+                    scheduleRefresh()
+                    null
+                }
+                else -> null
             }
-            null
         }
         am.javaClass.getMethod(
             "addOnUidImportanceListener",
