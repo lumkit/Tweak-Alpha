@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.common.feature
 import io.github.lumkit.tweak.common.Const
 import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.Files
+import io.github.lumkit.tweak.common.utils.KernelProps
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.joinPath
 import io.github.lumkit.tweak.common.utils.logD
@@ -16,12 +17,53 @@ class UpdateEngineClient {
 
         private const val TAG = "UpdateEngineClient"
 
+        private val updateEngineClientPaths = listOf(
+            "/system/bin/update_engine_client",
+            "/system_ext/bin/update_engine_client",
+            "/vendor/bin/update_engine_client",
+        )
+
         /**
-         * 是否支持OTA更新
+         * 是否支持 payload.bin OTA（A/B + update_engine_client）。
+         *
+         * 不依赖 Native 文件服务，也不只扫高通的 bootdevice 分区目录。
          */
         suspend fun support(): Boolean {
-            val result = ReusableShells.execSync("ls /dev/block/bootdevice/by-name")
-            return result.contains("_a|_b".toRegex()) && Files.exists("/system/bin/update_engine_client").getOrNull() ?: false
+            return isAbUpdateDevice() && hasUpdateEngineClient()
+        }
+
+        private suspend fun isAbUpdateDevice(): Boolean {
+            if (KernelProps.getSystemProp("ro.build.ab_update").equals("true", ignoreCase = true)) {
+                return true
+            }
+            val slotSuffix = KernelProps.getSystemProp("ro.boot.slot_suffix").trim()
+            if (slotSuffix.contains("_a", ignoreCase = true) ||
+                slotSuffix.contains("_b", ignoreCase = true) ||
+                slotSuffix.equals("a", ignoreCase = true) ||
+                slotSuffix.equals("b", ignoreCase = true)
+            ) {
+                return true
+            }
+            val slot = KernelProps.getSystemProp("ro.boot.slot").trim()
+            if (slot.equals("a", ignoreCase = true) || slot.equals("b", ignoreCase = true)) {
+                return true
+            }
+            val byName = ReusableShells.execSync(
+                "ls /dev/block/by-name /dev/block/bootdevice/by-name 2>/dev/null"
+            )
+            return byName.contains("_a") || byName.contains("_b")
+        }
+
+        private suspend fun hasUpdateEngineClient(): Boolean {
+            val output = ReusableShells.execSync(
+                buildString {
+                    append("command -v update_engine_client 2>/dev/null; ")
+                    append("ls ")
+                    append(updateEngineClientPaths.joinToString(" "))
+                    append(" 2>/dev/null")
+                }
+            )
+            return output.contains("update_engine_client")
         }
 
         suspend fun unzipRom(romPath: String): String {
@@ -94,8 +136,6 @@ class UpdateEngineClient {
         redirectErrorStream = true,
     )
 
-    private val updateEnginClientFilePath = "/system/bin/update_engine_client"
-
     fun interface OnReadLineListener {
         fun line(line: String)
     }
@@ -128,7 +168,7 @@ class UpdateEngineClient {
      */
     suspend fun follow() = withContext(Dispatchers.IO) {
         while (isActive) {
-            if (Files.exists(updateEnginClientFilePath).getOrNull() ?: false) {
+            if (hasUpdateEngineClient()) {
                 reusableShell.commitCmdSync("update_engine_client --follow")
             }
         }
