@@ -81,6 +81,9 @@
     <string name="text_auto_listen_system_update_description">开启后自动推送系统更新状态通知</string>
     <string name="text_panel_refresh_tick">面板刷新间隔</string>
     <string name="text_panel_refresh_tick_description">当前：%d ms</string>
+    <string name="text_sf_latency_source">FPS数据来源</string>
+    <string name="text_sf_latency_source_1">来源 1</string>
+    <string name="text_sf_latency_source_2">来源 2</string>
     <string name="text_battery_record_sample_interval">电池记录采样间隔</string>
     <string name="text_battery_record_sample_interval_description">当前：%d ms</string>
     <string name="text_battery_unit_calibration">电池单位校准</string>

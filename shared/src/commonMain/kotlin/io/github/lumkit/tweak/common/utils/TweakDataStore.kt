@@ -100,6 +100,7 @@ object TweakDataStore {
     private val fpsSourcePathKey = stringPreferencesKey("fps_source_path")
     private val fpsSourceTokenIndexKey = intPreferencesKey("fps_source_token_index")
     private val fpsSourceDividerKey = floatPreferencesKey("fps_source_divider")
+    private val sfLatencySourceKey = intPreferencesKey("sf_latency_source")
 
     fun themeModeFlow(): Flow<ColorSchemeMode> = preferences.data.map {
         it[themeModeKey] ?: 0
@@ -215,6 +216,8 @@ object TweakDataStore {
     const val DEFAULT_INFO_UPDATE_TIME_SP_LEVEL = 2
     const val DEFAULT_INFO_UPDATE_TIME_SP_RANGE = 500f
     const val DEFAULT_PROCESS_INFO_UPDATE_TIME = 3000L
+    /** SurfaceFlinger latency 来源：1=第二列，2=第三列（默认） */
+    const val DEFAULT_SF_LATENCY_SOURCE = 2
 
     fun infoUpdateTimeSpanFlow(): Flow<Int> = preferences.data.map {
         it[infoUpdateTimeSpan] ?: DEFAULT_INFO_UPDATE_TIME_SP_LEVEL
@@ -533,6 +536,22 @@ object TweakDataStore {
                 preferences.remove(fpsSourcePathKey)
                 preferences.remove(fpsSourceTokenIndexKey)
                 preferences.remove(fpsSourceDividerKey)
+            }
+        }
+    }
+
+    fun sfLatencySourceFlow(): Flow<Int> = preferences.data.map {
+        when (it[sfLatencySourceKey]) {
+            1 -> 1
+            else -> DEFAULT_SF_LATENCY_SOURCE
+        }
+    }
+
+    suspend fun setSfLatencySource(source: Int) {
+        val normalized = if (source == 1) 1 else DEFAULT_SF_LATENCY_SOURCE
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[sfLatencySourceKey] = normalized
             }
         }
     }

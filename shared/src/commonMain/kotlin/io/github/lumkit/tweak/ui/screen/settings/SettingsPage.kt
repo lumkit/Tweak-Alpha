@@ -142,6 +142,9 @@ import tweak_alpha.shared.generated.resources.text_notification_permission_denie
 import tweak_alpha.shared.generated.resources.text_open_sources
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick_description
+import tweak_alpha.shared.generated.resources.text_sf_latency_source
+import tweak_alpha.shared.generated.resources.text_sf_latency_source_1
+import tweak_alpha.shared.generated.resources.text_sf_latency_source_2
 import tweak_alpha.shared.generated.resources.text_process_info_overview
 import tweak_alpha.shared.generated.resources.text_process_info_overview_description
 import tweak_alpha.shared.generated.resources.text_qq_url
@@ -549,6 +552,25 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
                 valueRange = 1f..10f,
                 steps = 10,
                 hapticEffect = SliderDefaults.SliderHapticEffect.Step
+            )
+        }
+
+        // SurfaceFlinger latency 列
+        Block {
+            val source by viewModel.sfLatencySource.collectAsStateWithLifecycle()
+            val items = listOf(
+                stringResource(Res.string.text_sf_latency_source_1),
+                stringResource(Res.string.text_sf_latency_source_2),
+            )
+            val selectedIndex = if (source == 1) 0 else 1
+
+            OverlayDropdownPreference(
+                title = stringResource(Res.string.text_sf_latency_source),
+                items = items,
+                selectedIndex = selectedIndex,
+                onSelectedIndexChange = { index ->
+                    viewModel.setSfLatencySource(if (index == 0) 1 else 2)
+                },
             )
         }
 

@@ -90,6 +90,14 @@ class SettingsViewModel : BaseViewModel() {
             initialValue = TweakDataStore.DEFAULT_INFO_UPDATE_TIME_SP_LEVEL,
         )
 
+    val sfLatencySource = TweakDataStore.sfLatencySourceFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TweakDataStore.DEFAULT_SF_LATENCY_SOURCE,
+        )
+
     val autoStartApp = TweakDataStore.autoStartAppSwitchFlow()
         .distinctUntilChanged()
         .stateIn(
@@ -212,6 +220,12 @@ class SettingsViewModel : BaseViewModel() {
     fun setInfoUpdateTimeSpan(level: Float) {
         viewModelScope.launch {
             TweakDataStore.setInfoUpdateTimeSpan(level.roundToInt())
+        }
+    }
+
+    fun setSfLatencySource(source: Int) {
+        viewModelScope.launch {
+            TweakDataStore.setSfLatencySource(source)
         }
     }
 

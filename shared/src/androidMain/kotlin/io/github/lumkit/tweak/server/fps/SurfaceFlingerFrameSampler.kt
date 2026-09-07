@@ -13,7 +13,7 @@ import java.io.IOException
 
 /**
  * 对齐 Frame.kt：Hidden API + dumpAsync，按墙钟间隔统计新帧算 FPS。
- * latency 数据只取第三列（actual present），不使用第二列 desired present。
+ * latency 来源 1 = 第二列 desired present，来源 2 = 第三列 actual present。
  * [shellExec] 仅用于 dumpAsync 失败时的 dumpsys 回退。
  */
 @SuppressLint("PrivateApi")
@@ -87,6 +87,7 @@ class SurfaceFlingerFrameSampler(
     private var lastTimeNanos = 0L
     private var lastLatency = 0L
     private var lastFps = 0f
+    private var lastLatencySource = 2
     private var idlePolls = 0
     private var binderDumpUsable = true
 
@@ -97,7 +98,15 @@ class SurfaceFlingerFrameSampler(
     private val ioBuffer = ByteArray(64 * 1024)
 
     @Synchronized
-    fun currentFps(): Float {
+    fun currentFps(latencySource: Int = 2): Float {
+        val source = if (latencySource == 1) 1 else 2
+        if (source != lastLatencySource) {
+            lastLatencySource = source
+            lastLatency = 0L
+            lastTimeNanos = 0L
+            idlePolls = 0
+            lastFps = 0f
+        }
         val focus = resolveFocus()
         if (focus.isEmpty()) {
             lastFocus = ""
@@ -114,7 +123,7 @@ class SurfaceFlingerFrameSampler(
             lastFps = 0f
         }
         if (lastLayer.isNotEmpty()) {
-            val fps = scanLatencyFps(lastLayer)
+            val fps = scanLatencyFps(lastLayer, source)
             if (fps != null) {
                 lastFps = fps
                 return fps
@@ -122,7 +131,7 @@ class SurfaceFlingerFrameSampler(
             lastLayer = ""
         }
         val layer = currentLayer(focus).firstOrNull() ?: return 0f
-        val fps = scanLatencyFps(layer)
+        val fps = scanLatencyFps(layer, source)
         if (fps != null) {
             lastLayer = layer
             lastFps = fps
@@ -203,11 +212,11 @@ class SurfaceFlingerFrameSampler(
         return hash + at
     }
 
-    private fun scanLatencyFps(layer: String): Float? {
+    private fun scanLatencyFps(layer: String, latencySource: Int): Float? {
         if (binderDumpUsable) {
             val result = runCatching {
                 val total = fillIoBuffer(arrayOf("--latency", layer))
-                parseLatencyFps(ioBuffer, total)
+                parseLatencyFps(ioBuffer, total, latencySource)
             }.onFailure {
                 binderDumpUsable = false
             }
@@ -216,14 +225,15 @@ class SurfaceFlingerFrameSampler(
         val text = sh("dumpsys SurfaceFlinger --latency ${shellQuote(layer)}")
         if (text.isBlank()) return null
         val bytes = text.toByteArray()
-        return parseLatencyFps(bytes, bytes.size)
+        return parseLatencyFps(bytes, bytes.size, latencySource)
     }
 
     /**
-     * 与 Frame.kt 的 scanLatencyFpsRaw 相同：跳过首行 refresh period，
-     * 按 tab 切三列，只解析第三列 actual present；新帧数 / 墙钟间隔 = FPS。
+     * 跳过首行 refresh period，按 tab 切列。
+     * [latencySource] 1=第二列 desired present，2=第三列 actual present。
+     * 新帧数 / 墙钟间隔 = FPS。
      */
-    private fun parseLatencyFps(buf: ByteArray, total: Int): Float? {
+    private fun parseLatencyFps(buf: ByteArray, total: Int, latencySource: Int): Float? {
         val timeNanos = SystemClock.elapsedRealtimeNanos()
         var newFrame = 0
         var maxTs = 0L
@@ -238,19 +248,28 @@ class SurfaceFlingerFrameSampler(
             var t2 = t1 + 1
             while (t2 < total && buf[t2] != tab) t2++
             if (t2 >= total) break
-            var t3 = t2 + 1
-            while (t3 < total && buf[t3] != lf && buf[t3] != tab) t3++
+            val colStart: Int
+            val colEnd: Int
+            if (latencySource == 1) {
+                colStart = t1 + 1
+                colEnd = t2
+            } else {
+                var t3 = t2 + 1
+                while (t3 < total && buf[t3] != lf && buf[t3] != tab) t3++
+                colStart = t2 + 1
+                colEnd = t3
+            }
             var ts = 0L
-            var p = t2 + 1
-            while (p < t3 && buf[p] in digit0..digit9) {
+            var p = colStart
+            while (p < colEnd && buf[p] in digit0..digit9) {
                 ts = ts * 10 + (buf[p] - digit0)
                 p++
             }
-            if (p == t3 && ts > 0L && ts < Long.MAX_VALUE && ts > maxTs) {
+            if (p == colEnd && ts > 0L && ts < Long.MAX_VALUE && ts > maxTs) {
                 maxTs = ts
                 if (ts > lastLatency) newFrame++
             }
-            var nl = t3
+            var nl = colEnd
             while (nl < total && buf[nl] != lf) nl++
             if (nl >= total) break
             i = nl + 1

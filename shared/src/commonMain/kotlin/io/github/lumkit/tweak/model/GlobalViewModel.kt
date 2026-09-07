@@ -36,6 +36,14 @@ object GlobalViewModel: BaseViewModel() {
             initialValue = null
         )
 
+    val sfLatencySourceState = TweakDataStore.sfLatencySourceFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = TweakDataStore.DEFAULT_SF_LATENCY_SOURCE,
+        )
+
     /**
      * 解析当前运行模式。DataStore 在 Direct Boot / 文件锁异常时可能一直不发出值，
      * 调用方（Files、开机广播、Daemon）不能无限 [first]。

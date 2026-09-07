@@ -5,6 +5,6 @@ interface ITweakServer {
     String status();
     void stop();
     void reloadConfig();
-    /** SurfaceFlinger latency FPS；在特权进程内 dumpAsync，避免 App 侧 dumpsys。 */
-    float currentFps();
+    /** SurfaceFlinger latency FPS；在特权进程内 dumpAsync。@param latencySource 1=第二列 2=第三列 */
+    float currentFps(int latencySource);
 }

@@ -70,9 +70,9 @@ class TweakServerBinder(
         onReload()
     }
 
-    override fun currentFps(): Float {
+    override fun currentFps(latencySource: Int): Float {
         check(!stopRequested) { "tweak_server stopping" }
-        return frameSampler.currentFps()
+        return frameSampler.currentFps(latencySource)
     }
 
     companion object {
