@@ -97,8 +97,6 @@ expect fun getDeviceScreenRefreshRate(): Float
 
 expect val packageName: String
 
-expect fun startKeepAliveService(isForegroundService: Boolean)
-
 expect fun toastText(msg: String)
 
 /**

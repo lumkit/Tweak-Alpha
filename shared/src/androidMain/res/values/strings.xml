@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">Tweak Alpha</string>
-    <string name="text_keep_alive">Keep Alive</string>
     <string name="channel_update_engine">系统更新服务</string>
     <string name="channel_update_engine_description">显示OTA系统更新的进度与状态通知</string>
 

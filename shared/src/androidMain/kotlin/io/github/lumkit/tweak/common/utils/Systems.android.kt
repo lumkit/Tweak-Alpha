@@ -29,7 +29,6 @@ import androidx.core.net.toUri
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.shell.ReusableShells
-import io.github.lumkit.tweak.service.KeepAliveService
 import io.github.lumkit.tweak.shared.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -291,11 +290,6 @@ private fun getDeviceScreenMetrics(): DisplayMetrics {
 
 actual val packageName: String
     get() = application.packageName
-
-actual fun startKeepAliveService(isForegroundService: Boolean) {
-    val intent = Intent(application, KeepAliveService::class.java)
-    application.startService(intent)
-}
 
 actual fun toastText(msg: String) {
     mainScop.launch {
