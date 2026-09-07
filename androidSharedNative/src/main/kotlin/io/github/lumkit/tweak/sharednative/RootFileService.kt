@@ -107,6 +107,7 @@ class RootFileService : RootService() {
     }
 
     override fun onBind(intent: Intent): IBinder {
+        FileServiceDelegate.ensureHostWatch()
         return binder
     }
 }

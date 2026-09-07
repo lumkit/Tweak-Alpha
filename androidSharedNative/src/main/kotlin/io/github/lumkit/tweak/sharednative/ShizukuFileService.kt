@@ -9,6 +9,10 @@ import android.os.ParcelFileDescriptor
  */
 class ShizukuFileService : IRootFileService.Stub() {
 
+    init {
+        FileServiceDelegate.ensureHostWatch()
+    }
+
     override fun exists(path: String): Bundle {
         return FileServiceDelegate.exists(path)
     }

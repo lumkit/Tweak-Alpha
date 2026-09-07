@@ -5,17 +5,27 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import java.io.File
 import java.io.FileNotFoundException
 import java.nio.charset.StandardCharsets
 import java.util.zip.ZipInputStream
+import kotlin.system.exitProcess
 
 /**
  * 文件服务委托，封装所有文件操作的公共逻辑。
  * 由 RootFileService 和 ShizukuFileService 共享调用。
  */
 internal object FileServiceDelegate {
+
+    private const val TAG = "FileServiceDelegate"
+    private const val WORK_ROOT = "/data/local/tmp/tweak-alpha"
+
+    @Volatile
+    private var hostWatch: HostPresenceWatch? = null
 
     @JvmStatic
     fun exists(path: String): Bundle = try {
@@ -304,6 +314,7 @@ internal object FileServiceDelegate {
 
     @JvmStatic
     fun startTweakServerEmbedded(packageName: String): Bundle = try {
+        ensureHostWatch(packageName)
         val clazz = Class.forName("io.github.lumkit.tweak.server.TweakServerMain")
         val method = clazz.getMethod("startEmbedded", String::class.java)
         val ok = method.invoke(null, packageName) as Boolean
@@ -323,6 +334,42 @@ internal object FileServiceDelegate {
         NativeFileBundles.successUnit()
     } catch (throwable: Throwable) {
         NativeFileBundles.failure(throwable)
+    }
+
+    @JvmStatic
+    fun ensureHostWatch(packageName: String = PrivilegedContextProvider.hostPackageName()) {
+        val pkg = packageName.trim().ifBlank { PrivilegedContextProvider.hostPackageName() }
+        if (hostWatch != null) return
+        synchronized(this) {
+            if (hostWatch != null) return
+            val looper = Looper.getMainLooper() ?: run {
+                Log.w(TAG, "host watch skipped: MainLooper missing")
+                return
+            }
+            val context = runCatching {
+                PrivilegedContextProvider.requirePackageManagerContext()
+            }.getOrElse {
+                Log.w(TAG, "host watch skipped: ${it.message}")
+                return
+            }
+            val watch = HostPresenceWatch(
+                packageName = pkg,
+                context = context,
+                mainHandler = Handler(looper),
+                onHostGone = { onHostUninstalled(pkg) },
+            )
+            hostWatch = watch
+            watch.start()
+            Log.i(TAG, "host watch started pkg=$pkg")
+        }
+    }
+
+    private fun onHostUninstalled(packageName: String) {
+        Log.w(TAG, "host uninstalled pkg=$packageName, stop daemon and cleanup workspace")
+        runCatching { stopTweakServerEmbedded() }
+        val deleted = runCatching { File(WORK_ROOT).deleteRecursively() }.getOrDefault(false)
+        Log.w(TAG, "workspace cleanup path=$WORK_ROOT deleted=$deleted")
+        exitProcess(0)
     }
 
     private fun buildWriteMode(truncate: Boolean): Int {

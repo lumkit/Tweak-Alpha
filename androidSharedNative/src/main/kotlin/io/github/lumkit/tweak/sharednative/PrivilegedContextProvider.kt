@@ -15,6 +15,14 @@ internal object PrivilegedContextProvider {
         return requireContext()
     }
 
+    fun hostPackageName(fallback: String = "io.github.lumkit.tweak"): String {
+        val fromApp = resolveCurrentApplication()?.packageName?.trim().orEmpty()
+        if (fromApp.isNotEmpty() && fromApp != "android") return fromApp
+        val fromCtx = runCatching { requireContext().packageName.trim() }.getOrDefault("")
+        if (fromCtx.isNotEmpty() && fromCtx != "android") return fromCtx
+        return fallback
+    }
+
     private fun resolveCurrentApplication(): Application? {
         return runCatching {
             val clazz = Class.forName("android.app.ActivityThread")

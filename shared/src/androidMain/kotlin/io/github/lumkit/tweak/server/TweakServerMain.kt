@@ -13,6 +13,7 @@ import io.github.lumkit.tweak.server.fakecontext.FakeContext
 import io.github.lumkit.tweak.sharednative.BatteryBridge
 import io.github.lumkit.tweak.server.ipc.BinderDelivery
 import io.github.lumkit.tweak.server.ipc.TweakServerBinder
+import io.github.lumkit.tweak.sharednative.HostPresenceWatch
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -36,6 +37,9 @@ object TweakServerMain {
         val binder: TweakServerBinder,
         val serverBinder: android.os.IBinder,
         val embedded: Boolean,
+        val hostWatch: HostPresenceWatch?,
+        val mainHandler: Handler,
+        val binderRedeliver: Runnable,
     )
 
     @Volatile
@@ -106,12 +110,8 @@ object TweakServerMain {
     fun stopEmbedded(): Boolean {
         val current = session ?: return true
         if (!current.embedded) return false
-        return runCatching {
-            current.batteryEngine.stop()
-            runCatching { current.pidFile.delete() }
-            session = null
-            true
-        }.getOrDefault(false)
+        teardown(cleanupWorkspace = false, reason = "stopEmbedded")
+        return true
     }
 
     @Synchronized
@@ -154,19 +154,26 @@ object TweakServerMain {
         val batteryEngine = BatteryEngine.createDefault(daemonDir)
         batteryEngine.start()
 
+        val hostWatch = if (embedded) {
+            null
+        } else {
+            HostPresenceWatch(
+                packageName = packageName,
+                context = FakeContext.systemContext,
+                mainHandler = mainHandler,
+                onHostGone = {
+                    teardown(cleanupWorkspace = true, reason = "host uninstalled")
+                },
+            )
+        }
+
         val binder = TweakServerBinder(
             version = VERSION,
             packageName = packageName,
             mainHandler = mainHandler,
             statusExtra = { batteryEngine.lastStatusLine },
             onStop = {
-                logE("self-stop begin embedded=$embedded pid=${Process.myPid()}", null, TAG)
-                batteryEngine.stop()
-                runCatching { pidFile.delete() }
-                session = null
-                if (!embedded) {
-                    exitProcess(0)
-                }
+                teardown(cleanupWorkspace = false, reason = "binder stop")
             },
             onReload = {
                 batteryEngine.reloadConfig()
@@ -181,6 +188,13 @@ object TweakServerMain {
             TAG,
         )
 
+        val binderRedeliver = object : Runnable {
+            override fun run() {
+                val current = session ?: return
+                BinderDelivery.sendToApp(current.packageName, current.serverBinder)
+                current.mainHandler.postDelayed(this, BINDER_REDELIVER_MS)
+            }
+        }
         session = Session(
             packageName = packageName,
             pidFile = pidFile,
@@ -188,22 +202,46 @@ object TweakServerMain {
             binder = binder,
             serverBinder = serverBinder,
             embedded = embedded,
+            hostWatch = hostWatch,
+            mainHandler = mainHandler,
+            binderRedeliver = binderRedeliver,
         )
+        runCatching { hostWatch?.start() }
+            .onFailure { logE("host watch start failed: ${it.message}", it, TAG) }
 
-        fun redeliverOnce() {
-            val current = session ?: return
+        mainHandler.postDelayed({
+            val current = session ?: return@postDelayed
             BinderDelivery.sendToApp(current.packageName, current.serverBinder)
-        }
+        }, 350L)
+        mainHandler.postDelayed({
+            val current = session ?: return@postDelayed
+            BinderDelivery.sendToApp(current.packageName, current.serverBinder)
+        }, 1_000L)
+        mainHandler.postDelayed(binderRedeliver, 2_000L)
+    }
 
-        val periodicRedeliver = object : Runnable {
-            override fun run() {
-                redeliverOnce()
-                mainHandler.postDelayed(this, BINDER_REDELIVER_MS)
-            }
+    @Synchronized
+    private fun teardown(cleanupWorkspace: Boolean, reason: String) {
+        val current = session ?: return
+        logE(
+            "self-stop begin reason=$reason embedded=${current.embedded} " +
+                "pid=${Process.myPid()} cleanupWorkspace=$cleanupWorkspace",
+            null,
+            TAG,
+        )
+        runCatching { current.hostWatch?.stop() }
+        current.mainHandler.removeCallbacks(current.binderRedeliver)
+        current.batteryEngine.stop()
+        runCatching { current.pidFile.delete() }
+        session = null
+        if (cleanupWorkspace) {
+            val workRoot = File(DaemonPaths.WORK_ROOT)
+            val deleted = runCatching { workRoot.deleteRecursively() }.getOrDefault(false)
+            logE("workspace cleanup path=${workRoot.absolutePath} deleted=$deleted", null, TAG)
         }
-        mainHandler.postDelayed({ redeliverOnce() }, 350L)
-        mainHandler.postDelayed({ redeliverOnce() }, 1_000L)
-        mainHandler.postDelayed(periodicRedeliver, 2_000L)
+        if (cleanupWorkspace || !current.embedded) {
+            exitProcess(0)
+        }
     }
 
     private fun resolveAppPackageName(args: Array<String>): String {
