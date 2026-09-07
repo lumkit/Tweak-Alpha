@@ -8,9 +8,14 @@ import io.github.lumkit.tweak.common.utils.TweakDataStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 object GlobalViewModel: BaseViewModel() {
 
@@ -30,6 +35,19 @@ object GlobalViewModel: BaseViewModel() {
             started = SharingStarted.Eagerly,
             initialValue = null
         )
+
+    /**
+     * 解析当前运行模式。DataStore 在 Direct Boot / 文件锁异常时可能一直不发出值，
+     * 调用方（Files、开机广播、Daemon）不能无限 [first]。
+     */
+    suspend fun currentRuntimeMode(timeout: Duration = 2.seconds): RuntimeMode {
+        runtimeModeState.value?.let { return it }
+        return withTimeoutOrNull(timeout) {
+            runtimeModeState.filterNotNull().first()
+        } ?: withTimeoutOrNull(timeout) {
+            TweakDataStore.runtimeModeFlow().first()
+        } ?: RuntimeMode.Unknow
+    }
 
     val infoUpdateTimeSpanState = TweakDataStore.infoUpdateTimeSpanFlow()
         .distinctUntilChanged()

@@ -20,14 +20,18 @@ import io.github.lumkit.tweak.common.utils.formatMemorySize
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.formatVoltage
 import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.model.AndroidSoc
 import io.github.lumkit.tweak.model.GlobalViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +47,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * 判断应用是否处于前台
@@ -251,8 +256,11 @@ object DeviceInfoViewModel : BaseViewModel() {
         }
         viewModelScope.launch(Dispatchers.Default) {
             _loadingState.value = false
-            // 初始化GPU是否支持
-            _gpuSupported.value = GpuUtils.canReadGpuInfo()
+            runCatching {
+                withTimeout(5.seconds) {
+                    _gpuSupported.value = GpuUtils.canReadGpuInfo()
+                }
+            }
 
             while (isActive) {
                 // 后台时跳过采样，仅等待
@@ -262,11 +270,21 @@ object DeviceInfoViewModel : BaseViewModel() {
                 }
 
                 val tag = Clock.System.now().toEpochMilliseconds()
-                coroutineScope {
-                    launch { updateCpuInfo() }
-                    launch { updateMemoryInfo() }
-                    launch { updateGpuInfo() }
-                    launch { updateMoreInfo() }
+                try {
+                    withTimeout(8.seconds) {
+                        coroutineScope {
+                            launch { updateCpuInfo() }
+                            launch { updateMemoryInfo() }
+                            launch { updateGpuInfo() }
+                            launch { updateMoreInfo() }
+                        }
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    logE("device info sample timeout: ${e.message}", e, TAG)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logE("device info sample failed: ${e.message}", e, TAG)
                 }
 
                 val loadingTime = Clock.System.now().toEpochMilliseconds() - tag

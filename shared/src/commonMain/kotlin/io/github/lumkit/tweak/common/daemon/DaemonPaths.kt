@@ -1,13 +1,8 @@
 package io.github.lumkit.tweak.common.daemon
 
 import io.github.lumkit.tweak.common.ConstCommon
-import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * TweakServer 工作路径：统一使用 [ConstCommon.Path.TWEAK_ALPHA_ROOT]。
@@ -43,12 +38,7 @@ object DaemonPaths {
     }
 
     suspend fun resolve(): Resolved {
-        val mode = GlobalViewModel.runtimeModeState.value
-            ?: withTimeoutOrNull(5.seconds) {
-                GlobalViewModel.runtimeModeState.filterNotNull().first()
-            }
-            ?: TweakDataStore.runtimeModeFlow().first()
-        return resolve(mode)
+        return resolve(GlobalViewModel.currentRuntimeMode())
     }
 
     fun resolve(mode: RuntimeMode): Resolved {

@@ -17,26 +17,148 @@ import io.github.lumkit.tweak.sharednative.IRootFileService
 import io.github.lumkit.tweak.sharednative.NativeFileBundles
 import io.github.lumkit.tweak.sharednative.RootFileService
 import io.github.lumkit.tweak.sharednative.ShizukuFileService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import rikka.shizuku.Shizuku
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.time.Duration.Companion.seconds
 
 actual object PlatformNativeFileServices : NativeFileServiceProvider {
     private val rootService = RootNativeFileService
     private val shizukuService = ShizukuNativeFileService
+    private val userService = UserNativeFileService
 
     override fun getOrNull(backend: NativeFileBackend): NativeFileService? {
         return when (backend) {
             NativeFileBackend.ROOT -> rootService
             NativeFileBackend.SHIZUKU -> shizukuService
-            NativeFileBackend.User -> null
+            NativeFileBackend.User -> userService
         }
     }
+}
+
+/**
+ * 普通进程可读的文件访问（如 /sys 下 world-readable 节点）。
+ * 特权路径失败或运行模式尚未加载时，面板 CPU 频率仍可走这里，避免一直卡在加载。
+ */
+private object UserNativeFileService : NativeFileService {
+    override val backend: NativeFileBackend = NativeFileBackend.User
+
+    private fun file(path: String) = java.io.File(path)
+
+    private fun <T> runFile(
+        operation: String,
+        path: String,
+        secondaryPath: String? = null,
+        block: () -> T,
+    ): NativeFileResult<T> {
+        return try {
+            NativeFileResult.Success(block())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (throwable: Throwable) {
+            NativeFileResult.Failure(
+                NativeFileError(
+                    backend = backend,
+                    operation = operation,
+                    primaryPath = path,
+                    secondaryPath = secondaryPath,
+                    message = throwable.message ?: throwable.toString(),
+                )
+            )
+        }
+    }
+
+    private fun unsupported(
+        operation: String,
+        path: String? = null,
+        secondaryPath: String? = null,
+    ): NativeFileResult.Failure {
+        return NativeFileResult.Failure(
+            NativeFileError(
+                backend = backend,
+                operation = operation,
+                primaryPath = path,
+                secondaryPath = secondaryPath,
+                message = "User backend does not support $operation",
+            )
+        )
+    }
+
+    override suspend fun exists(path: String): NativeFileResult<Boolean> {
+        return runFile("exists", path) { file(path).exists() }
+    }
+
+    override suspend fun list(path: String): NativeFileResult<List<String>> {
+        return runFile("list", path) {
+            file(path).listFiles()?.map { it.absolutePath }.orEmpty()
+        }
+    }
+
+    override suspend fun listEntries(path: String): NativeFileResult<List<FileEntry>> {
+        return runFile("listEntries", path) {
+            file(path).listFiles()?.map {
+                FileEntry(
+                    path = it.absolutePath,
+                    name = it.name,
+                    isDirectory = it.isDirectory,
+                )
+            }.orEmpty()
+        }
+    }
+
+    override suspend fun zipEntries(path: String) = unsupported("zipEntries", path)
+
+    override suspend fun readBytes(path: String): NativeFileResult<ByteArray> {
+        return runFile("readBytes", path) { file(path).readBytes() }
+    }
+
+    override suspend fun readText(path: String): NativeFileResult<String> {
+        return runFile("readText", path) { file(path).readText() }
+    }
+
+    override suspend fun writeBytes(path: String, bytes: ByteArray) =
+        unsupported("writeBytes", path)
+
+    override suspend fun writeText(path: String, text: String) = unsupported("writeText", path)
+
+    override suspend fun delete(path: String, recursive: Boolean) = unsupported("delete", path)
+
+    override suspend fun mkdirs(path: String) = unsupported("mkdirs", path)
+
+    override suspend fun copy(sourcePath: String, targetPath: String, overwrite: Boolean) =
+        unsupported("copy", sourcePath, targetPath)
+
+    override suspend fun move(sourcePath: String, targetPath: String, overwrite: Boolean) =
+        unsupported("move", sourcePath, targetPath)
+
+    override suspend fun chmod(path: String, mode: String) = unsupported("chmod", path)
+
+    override suspend fun length(path: String): NativeFileResult<Long> {
+        return runFile("length", path) { file(path).length() }
+    }
+
+    override suspend fun readCpuCycles(coreIndex: Int) = unsupported("readCpuCycles")
+
+    override suspend fun unzipFromUri(uriString: String, targetDir: String) =
+        unsupported("unzipFromUri", uriString, targetDir)
+
+    override suspend fun unzipFromPath(sourcePath: String, targetDir: String) =
+        unsupported("unzipFromPath", sourcePath, targetDir)
+
+    override suspend fun execDetached(command: String) = unsupported("execDetached", command)
+
+    override suspend fun startTweakServerEmbedded(packageName: String) =
+        unsupported("startTweakServerEmbedded", packageName)
+
+    override suspend fun stopTweakServerEmbedded() = unsupported("stopTweakServerEmbedded")
 }
 
 internal object RootFileServiceConnectionManager {
@@ -53,7 +175,9 @@ internal object RootFileServiceConnectionManager {
         service?.let { return it }
         return mutex.withLock {
             service?.let { return it }
-            bindLocked()
+            withTimeout(5.seconds) {
+                bindLocked()
+            }
         }
     }
 
@@ -338,6 +462,18 @@ private object RootNativeFileService : NativeFileService {
                 } else {
                     NativeFileResult.Success(transform(bundle))
                 }
+            } catch (e: TimeoutCancellationException) {
+                NativeFileResult.Failure(
+                    NativeFileError(
+                        backend = backend,
+                        operation = operation,
+                        primaryPath = primaryPath,
+                        secondaryPath = secondaryPath,
+                        message = e.message ?: e.toString(),
+                    )
+                )
+            } catch (e: CancellationException) {
+                throw e
             } catch (throwable: Throwable) {
                 NativeFileResult.Failure(
                     NativeFileError(
@@ -384,7 +520,9 @@ internal object ShizukuFileServiceConnectionManager {
         service?.let { return it }
         return mutex.withLock {
             service?.let { return it }
-            bindLocked()
+            withTimeout(5.seconds) {
+                bindLocked()
+            }
         }
     }
 
@@ -661,6 +799,18 @@ private object ShizukuNativeFileService : NativeFileService {
                 } else {
                     NativeFileResult.Success(transform(bundle))
                 }
+            } catch (e: TimeoutCancellationException) {
+                NativeFileResult.Failure(
+                    NativeFileError(
+                        backend = backend,
+                        operation = operation,
+                        primaryPath = primaryPath,
+                        secondaryPath = secondaryPath,
+                        message = e.message ?: e.toString(),
+                    )
+                )
+            } catch (e: CancellationException) {
+                throw e
             } catch (throwable: Throwable) {
                 NativeFileResult.Failure(
                     NativeFileError(

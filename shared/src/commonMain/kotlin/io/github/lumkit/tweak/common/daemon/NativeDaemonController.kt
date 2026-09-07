@@ -7,6 +7,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * 特权常驻进程（TweakServer）启停统一入口。
@@ -27,7 +29,13 @@ object NativeDaemonController {
 
     /** 若用户已启用，检测存活并在必要时启动 */
     suspend fun ensureRunningIfEnabled(): Boolean = withContext(Dispatchers.IO) {
-        if (!TweakDataStore.nativeDaemonEnabledFlow().first() || !TweakDataStore.autoStartAppSwitchFlow().first()) {
+        val enabled = withTimeoutOrNull(3.seconds) {
+            TweakDataStore.nativeDaemonEnabledFlow().first()
+        } ?: false
+        val autoStart = withTimeoutOrNull(3.seconds) {
+            TweakDataStore.autoStartAppSwitchFlow().first()
+        } ?: false
+        if (!enabled || !autoStart) {
             logD("native daemon disabled or auto start disabled, skip", TAG)
             return@withContext false
         }

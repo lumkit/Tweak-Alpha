@@ -12,7 +12,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 class SplashViewModel : BaseViewModel() {
@@ -37,8 +36,7 @@ class SplashViewModel : BaseViewModel() {
         block: () -> Unit
     ) {
         // StateFlow 可能仍为 null（Eagerly 首次读盘前）；回退 DataStore，避免静默 return 卡在 Splash
-        val mode = runtimeModeState.value
-            ?: withContext(Dispatchers.IO) { TweakDataStore.runtimeModeFlow().first() }
+        val mode = GlobalViewModel.currentRuntimeMode()
         if (mode == RuntimeMode.Unknow) return
 
         withCheckLoading {

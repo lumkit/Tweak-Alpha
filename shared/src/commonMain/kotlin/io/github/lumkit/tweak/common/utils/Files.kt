@@ -3,11 +3,8 @@ package io.github.lumkit.tweak.common.utils
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.model.asNativeFileBackend
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * 统一的 Native 文件访问入口。
@@ -27,11 +24,9 @@ import kotlin.time.Duration.Companion.seconds
 object Files {
 
     private suspend fun resolveBackend(): NativeFileBackend {
-        val mode = GlobalViewModel.runtimeModeState.value
-            ?: withTimeoutOrNull(5.seconds) {
-                GlobalViewModel.runtimeModeState.filterNotNull().first()
-            }
-            ?: TweakDataStore.runtimeModeFlow().first()
+        // 面板采样是热路径：不能在每次 sysfs 读取上阻塞等待 DataStore。
+        // 模式尚未加载时先走 User；StateFlow Eagerly 发出值后下一轮即切到特权 backend。
+        val mode = GlobalViewModel.runtimeModeState.value ?: RuntimeMode.Unknow
         return mode.asNativeFileBackend()
     }
 
