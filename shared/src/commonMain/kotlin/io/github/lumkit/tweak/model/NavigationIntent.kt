@@ -17,6 +17,7 @@ enum class NavigationIntentTargetScreen {
     AppManager,
     ProcessManager,
     OpenSources,
+    SpecialThanks,
 }
 
 @Serializable
@@ -64,6 +65,7 @@ fun Screen.toTargetOrNull(): NavigationIntentTargetScreen? = when (this) {
     is Screen.AppManager -> NavigationIntentTargetScreen.AppManager
     is Screen.ProcessManager -> NavigationIntentTargetScreen.ProcessManager
     is Screen.OpenSources -> NavigationIntentTargetScreen.OpenSources
+    is Screen.SpecialThanks -> NavigationIntentTargetScreen.SpecialThanks
     else -> null
 }
 
@@ -72,7 +74,7 @@ fun Screen.toTargetOrNull(): NavigationIntentTargetScreen? = when (this) {
  *
  * 支持的 route 名（大小写不敏感，支持下划线）：
  * - ProcessManager（可选 scrollToPackage / scrollToPid）
- * - AppManager / UpdateSystem / FpsRecord / FlashRom / OpenSources
+ * - AppManager / UpdateSystem / FpsRecord / FlashRom / OpenSources / SpecialThanks
  * - FpsRecordDetail（需要 id）
  */
 fun parseDeeplinkRoute(
@@ -99,6 +101,7 @@ fun parseDeeplinkRoute(
         }
         "flashrom" -> Screen.FlashRom
         "opensources" -> Screen.OpenSources
+        "specialthanks" -> Screen.SpecialThanks
         else -> null
     }
 }

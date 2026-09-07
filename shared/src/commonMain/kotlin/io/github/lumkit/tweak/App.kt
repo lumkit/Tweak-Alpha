@@ -43,6 +43,7 @@ import io.github.lumkit.tweak.ui.screen.fpsRecord.FpsRecordThreadsScreen
 import io.github.lumkit.tweak.ui.screen.main.MainScreen
 import io.github.lumkit.tweak.ui.screen.processManager.ProcessManagerContent
 import io.github.lumkit.tweak.ui.screen.settings.OpenSourceScreen
+import io.github.lumkit.tweak.ui.screen.settings.SpecialThanksScreen
 import io.github.lumkit.tweak.ui.screen.splash.SplashScreen
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SnackbarHost
@@ -170,6 +171,10 @@ private fun AppRoute(
 
             entry<Screen.OpenSources> {
                 OpenSourceScreen()
+            }
+
+            entry<Screen.SpecialThanks> {
+                SpecialThanksScreen()
             }
 
             entry<Screen.FilePicker> {

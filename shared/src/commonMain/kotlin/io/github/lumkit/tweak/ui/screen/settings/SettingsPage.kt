@@ -147,6 +147,7 @@ import tweak_alpha.shared.generated.resources.text_process_info_overview_descrip
 import tweak_alpha.shared.generated.resources.text_qq_url
 import tweak_alpha.shared.generated.resources.text_runtime_mode_loading
 import tweak_alpha.shared.generated.resources.text_settings
+import tweak_alpha.shared.generated.resources.text_special_thanks
 import tweak_alpha.shared.generated.resources.text_theme
 import tweak_alpha.shared.generated.resources.text_theme_dark
 import tweak_alpha.shared.generated.resources.text_theme_light
@@ -750,6 +751,16 @@ private fun AboutContent() {
                 title = stringResource(Res.string.text_open_sources),
                 onClick = {
                     navigator.navigate(Screen.OpenSources)
+                }
+            )
+        }
+
+        // 特别鸣谢
+        Block {
+            ArrowPreference(
+                title = stringResource(Res.string.text_special_thanks),
+                onClick = {
+                    navigator.navigate(Screen.SpecialThanks)
                 }
             )
         }

@@ -161,6 +161,8 @@
     <string name="text_github">GitHub</string>
     <string name="text_github_web">https://github.com/lumkit/Tweak-Alpha</string>
     <string name="text_open_sources">开源许可</string>
+    <string name="text_special_thanks">特别鸣谢</string>
+    <string name="text_special_thanks_contact">联系方式：%s</string>
     <string name="text_join_qq">讨论组</string>
     <string name="text_qq_url">mqqapi://card/show_pslcard?src_type=internal&amp;version=1&amp;uin=768798964&amp;card_type=group&amp;source=qrcode</string>
     <string name="text_shutdown">关机</string>
