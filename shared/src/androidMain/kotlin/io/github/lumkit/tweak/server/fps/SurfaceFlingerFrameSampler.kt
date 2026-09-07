@@ -6,13 +6,15 @@ import android.content.ComponentName
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.IOException
 
 /**
- * 对齐 Frame.kt：在特权进程内用 Hidden API + SurfaceFlinger dumpAsync 采样 FPS。
- * [shellExec] 仅用于 dumpAsync 失败时的 dumpsys 回退；服务端默认保活 `/system/bin/sh`。
+ * 对齐 Frame.kt：Hidden API + dumpAsync，按墙钟间隔统计新帧算 FPS。
+ * latency 数据只取第三列（actual present），不使用第二列 desired present。
+ * [shellExec] 仅用于 dumpAsync 失败时的 dumpsys 回退。
  */
 @SuppressLint("PrivateApi")
 class SurfaceFlingerFrameSampler(
@@ -82,21 +84,35 @@ class SurfaceFlingerFrameSampler(
 
     private var lastFocus = ""
     private var lastLayer = ""
-    private var lastFrameTime = 0L
+    private var lastTimeNanos = 0L
+    private var lastLatency = 0L
     private var lastFps = 0f
     private var idlePolls = 0
     private var binderDumpUsable = true
 
     private val tab: Byte = 9
-    private val space: Byte = 32
     private val lf: Byte = 10
-    private val cr: Byte = 13
     private val digit0: Byte = 48
     private val digit9: Byte = 57
     private val ioBuffer = ByteArray(64 * 1024)
 
     @Synchronized
     fun currentFps(): Float {
+        val focus = resolveFocus()
+        if (focus.isEmpty()) {
+            lastFocus = ""
+            lastLayer = ""
+            lastFps = 0f
+            return 0f
+        }
+        if (focus != lastFocus) {
+            lastFocus = focus
+            lastLayer = ""
+            lastLatency = 0L
+            lastTimeNanos = 0L
+            idlePolls = 0
+            lastFps = 0f
+        }
         if (lastLayer.isNotEmpty()) {
             val fps = scanLatencyFps(lastLayer)
             if (fps != null) {
@@ -105,29 +121,23 @@ class SurfaceFlingerFrameSampler(
             }
             lastLayer = ""
         }
-        val focus = currentFocus()
-        if (focus.isEmpty()) {
-            lastFocus = ""
-            lastLayer = ""
-            return lastFps
-        }
-        lastFocus = focus
-        val layer = currentLayer(focus).firstOrNull() ?: return lastFps
-        if (layer != lastLayer) {
-            lastFrameTime = 0L
-            idlePolls = 0
-        }
+        val layer = currentLayer(focus).firstOrNull() ?: return 0f
         val fps = scanLatencyFps(layer)
         if (fps != null) {
             lastLayer = layer
             lastFps = fps
             return fps
         }
-        return lastFps
+        return 0f
     }
 
-    private fun currentFocus(): String {
+    private fun resolveFocus(): String {
         binderFocus()?.let { return it }
+        if (lastLayer.isNotEmpty()) return lastFocus
+        return dumpsysFocus()
+    }
+
+    private fun dumpsysFocus(): String {
         val dump = runCatching {
             sh("""dumpsys window | grep -E "mCurrentFocus|mFocusedApp|mFocusedWindow"""")
         }.getOrDefault("")
@@ -210,73 +220,62 @@ class SurfaceFlingerFrameSampler(
     }
 
     /**
-     * 与旧 SurfaceFlingerFpsUtil.calculateFps 一致：
-     * 取 latency 第三列（actual present），用新帧时间跨度算 FPS，而不是墙钟 / 第二列。
+     * 与 Frame.kt 的 scanLatencyFpsRaw 相同：跳过首行 refresh period，
+     * 按 tab 切三列，只解析第三列 actual present；新帧数 / 墙钟间隔 = FPS。
      */
     private fun parseLatencyFps(buf: ByteArray, total: Int): Float? {
-        val timestamps = ArrayList<Long>(128)
+        val timeNanos = SystemClock.elapsedRealtimeNanos()
+        var newFrame = 0
+        var maxTs = 0L
+
         var i = 0
         while (i < total && buf[i] != lf) i++
         i++
         while (i < total) {
-            val lineStart = i
-            val appTs = parseLongField(buf, total, i)
-            val desiredTs = appTs?.let { parseLongField(buf, total, it.second) }
-            val actualTs = desiredTs?.let { parseLongField(buf, total, it.second) }
-            if (actualTs != null) {
-                val actualPresent = actualTs.first
-                if (actualPresent > 0L && actualPresent < Long.MAX_VALUE && actualPresent >= lastFrameTime) {
-                    timestamps += actualPresent
-                }
-                i = skipToNextLine(buf, total, actualTs.second)
-            } else {
-                i = skipToNextLine(buf, total, lineStart)
+            var t1 = i
+            while (t1 < total && buf[t1] != tab) t1++
+            if (t1 >= total) break
+            var t2 = t1 + 1
+            while (t2 < total && buf[t2] != tab) t2++
+            if (t2 >= total) break
+            var t3 = t2 + 1
+            while (t3 < total && buf[t3] != lf && buf[t3] != tab) t3++
+            var ts = 0L
+            var p = t2 + 1
+            while (p < t3 && buf[p] in digit0..digit9) {
+                ts = ts * 10 + (buf[p] - digit0)
+                p++
             }
-            if (i <= lineStart) break
+            if (p == t3 && ts > 0L && ts < Long.MAX_VALUE && ts > maxTs) {
+                maxTs = ts
+                if (ts > lastLatency) newFrame++
+            }
+            var nl = t3
+            while (nl < total && buf[nl] != lf) nl++
+            if (nl >= total) break
+            i = nl + 1
         }
 
-        if (timestamps.isEmpty()) {
-            if (lastFrameTime == 0L) return null
+        if (maxTs == 0L) return null
+
+        if (newFrame == 0) {
             if (++idlePolls >= MAX_IDLE_POLLS) {
                 idlePolls = 0
                 return null
             }
-            return lastFps
-        }
-        idlePolls = 0
-
-        val start = if (timestamps.size == 1) {
-            lastFrameTime.takeIf { it > 0L } ?: timestamps.first()
         } else {
-            timestamps.first()
+            idlePolls = 0
         }
-        val end = timestamps.last()
-        val durationNs = end - start
-        lastFrameTime = end
-        if (durationNs <= 0L) return lastFps
-        return timestamps.size * 1_000_000_000f / durationNs
-    }
 
-    private fun parseLongField(buf: ByteArray, total: Int, start: Int): Pair<Long, Int>? {
-        var i = start
-        while (i < total && isWs(buf[i]) && buf[i] != lf) i++
-        if (i >= total || buf[i] == lf || buf[i] !in digit0..digit9) return null
-        var value = 0L
-        while (i < total && buf[i] in digit0..digit9) {
-            value = value * 10 + (buf[i] - digit0)
-            i++
+        val fps = if (lastTimeNanos in 1L..<timeNanos) {
+            (newFrame / ((timeNanos - lastTimeNanos) / 1_000_000_000.0)).toFloat()
+        } else {
+            0f
         }
-        return value to i
+        lastTimeNanos = timeNanos
+        lastLatency = maxTs
+        return fps
     }
-
-    private fun skipToNextLine(buf: ByteArray, total: Int, start: Int): Int {
-        var i = start
-        while (i < total && buf[i] != lf) i++
-        if (i < total && buf[i] == lf) i++
-        return i
-    }
-
-    private fun isWs(b: Byte): Boolean = b == tab || b == space || b == cr
 
     private fun dumpSurfaceFlinger(args: Array<String>): ParcelFileDescriptor {
         val service = getService("SurfaceFlinger")
