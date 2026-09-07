@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.ui.screen.settings
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -22,6 +23,7 @@ import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.TopBar
+import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.common.utils.openUrl
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
@@ -83,7 +85,7 @@ fun SpecialThanksScreen(
                     bottom = it.calculateBottomPadding() + 16.dp
                 ),
             ) {
-                items(list, key = { bean -> "${bean.nickname}-${bean.contact}" }) { bean ->
+                items(list) { bean ->
                     val contactLine = if (bean.contact.isNotBlank()) {
                         stringResource(Res.string.text_special_thanks_contact, bean.contact)
                     } else {
@@ -102,12 +104,19 @@ fun SpecialThanksScreen(
                         },
                         startAction = {
                             AsyncImage(
-                                model = bean.avatarUrl.takeIf { url -> url.isNotBlank() },
+                                model = bean.avatarUrl,
                                 contentDescription = bean.nickname,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape),
+                                    .clip(CircleShape)
+                                    .border(.75.dp, shape = CircleShape, color = MiuixTheme.colorScheme.dividerLine),
+                                onError = { state ->
+                                    logE(
+                                        "avatar load failed url=${bean.avatarUrl}: ${state.result.throwable.message}",
+                                        state.result.throwable,
+                                    )
+                                },
                             )
                         },
                         onClick = {

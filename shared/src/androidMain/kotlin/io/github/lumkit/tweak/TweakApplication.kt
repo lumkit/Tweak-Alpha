@@ -1,6 +1,10 @@
 package io.github.lumkit.tweak
 
 import android.app.Application
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.request.crossfade
 import com.topjohnwu.superuser.Shell
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.isDebugBuild
@@ -9,7 +13,7 @@ import io.github.lumkit.tweak.sharednative.BatteryBridge
 
 lateinit var application: TweakApplication
 
-class TweakApplication: Application() {
+class TweakApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
@@ -18,6 +22,12 @@ class TweakApplication: Application() {
         CrashReporter.install()
         BatteryBridge.init(this)
         initLibSu()
+    }
+
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        return ImageLoader.Builder(context)
+            .crossfade(true)
+            .build()
     }
 
     private fun initLibSu() {
@@ -29,3 +39,4 @@ class TweakApplication: Application() {
         )
     }
 }
+

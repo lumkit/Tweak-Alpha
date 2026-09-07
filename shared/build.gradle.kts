@@ -38,6 +38,7 @@ kotlin {
             implementation(libs.shizuku.api)
             api(libs.shizuku.provider)
             implementation(projects.adlib)
+            implementation(libs.coil.network.okhttp)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -54,6 +55,7 @@ kotlin {
             implementation(libs.lifecycle.viewmodel.navigation3)
             // kotlin serialization
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.ktor.utils)
             // miuix
             implementation(libs.miuix.ui)
             implementation(libs.miuix.squircle)
@@ -63,7 +65,6 @@ kotlin {
             implementation(libs.androidx.datastore.preferences)
             // coil3
             implementation(libs.coil.compose)
-            implementation(libs.coil.network.ktor3)
             implementation(libs.coil.network.cache.control)
             implementation(libs.coil.gif)
             implementation(libs.coil.svg)

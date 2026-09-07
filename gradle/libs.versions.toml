@@ -15,6 +15,7 @@ kotlinx-serialization = "1.11.0"
 miuix = "0.9.3"
 androidx-datastore = "1.2.1"
 coil3 = "3.5.0"
+ktor = "3.2.3"
 liquid-glass = "2.0.0"
 kyantShapes = "1.2.0"
 annotations = "26.1.0"
@@ -52,10 +53,11 @@ miuix-icons = { module = "top.yukonga.miuix.kmp:miuix-icons", version.ref = "miu
 miuix-preference = { module = "top.yukonga.miuix.kmp:miuix-preference", version.ref = "miuix" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences-core", version.ref = "androidx-datastore" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil3" }
-coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil3" }
+coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil3" }
 coil-network-cache-control = { module = "io.coil-kt.coil3:coil-network-cache-control", version.ref = "coil3" }
 coil-gif = { module = "io.coil-kt.coil3:coil-gif", version.ref = "coil3" }
 coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil3" }
+ktor-utils = { module = "io.ktor:ktor-utils", version.ref = "ktor" }
 liquid-glass = { module = "io.github.kyant0:backdrop", version.ref = "liquid-glass" }
 kyant-shapes = { group = "io.github.kyant0", name = "shapes", version.ref = "kyantShapes" }
 annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
