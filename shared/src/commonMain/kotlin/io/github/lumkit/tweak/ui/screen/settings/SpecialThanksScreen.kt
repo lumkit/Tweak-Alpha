@@ -21,6 +21,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.shapes.Capsule
+import com.kyant.shapes.Rectangle
+import com.kyant.shapes.copy
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.utils.logE
@@ -108,9 +111,9 @@ fun SpecialThanksScreen(
                                 contentDescription = bean.nickname,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .border(.75.dp, shape = CircleShape, color = MiuixTheme.colorScheme.dividerLine),
+                                    .size(52.dp)
+                                    .clip(Rectangle.copy(cornerRadius = 12.dp))
+                                    .border(.75.dp, shape = Rectangle.copy(cornerRadius = 12.dp), color = MiuixTheme.colorScheme.dividerLine),
                                 onError = { state ->
                                     logE(
                                         "avatar load failed url=${bean.avatarUrl}: ${state.result.throwable.message}",
