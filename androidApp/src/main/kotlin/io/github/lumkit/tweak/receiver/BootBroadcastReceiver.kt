@@ -4,12 +4,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
+import io.github.lumkit.tweak.common.feature.UpdateEngineNotificationGate
+import io.github.lumkit.tweak.common.feature.ensureUpdateEngineService
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -34,6 +37,11 @@ class BootBroadcastReceiver : BroadcastReceiver() {
                         val autoStart = TweakDataStore.autoStartAppSwitchFlow().first()
                         logD("autoStart=$autoStart", TAG)
                         if (!autoStart) return@launch
+
+                        // 如果允许，发送更新监听通知
+                        if (UpdateEngineNotificationGate.shouldNotify()) {
+                            ensureUpdateEngineService()
+                        }
 
                         val mode = TweakDataStore.runtimeModeFlow().first()
                         if (mode == RuntimeMode.Unknow) {
