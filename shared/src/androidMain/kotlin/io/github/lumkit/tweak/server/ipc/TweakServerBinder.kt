@@ -6,6 +6,7 @@ import android.system.Os
 import androidx.annotation.Keep
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.server.ITweakServer
+import io.github.lumkit.tweak.server.fps.SurfaceFlingerFrameSampler
 
 /**
  * App ↔ tweak_server Binder。
@@ -24,6 +25,7 @@ class TweakServerBinder(
 
     @Volatile
     private var stopRequested = false
+    private val frameSampler = SurfaceFlingerFrameSampler()
 
     override fun ping(): String {
         check(!stopRequested) { "tweak_server stopping" }
@@ -44,6 +46,7 @@ class TweakServerBinder(
                 append(' ').append(extra)
             }
             append(" binder=1")
+            append(" fps=1")
             append('\n')
         }
     }
@@ -65,6 +68,11 @@ class TweakServerBinder(
     override fun reloadConfig() {
         check(!stopRequested) { "tweak_server stopping" }
         onReload()
+    }
+
+    override fun currentFps(): Float {
+        check(!stopRequested) { "tweak_server stopping" }
+        return frameSampler.currentFps()
     }
 
     companion object {

@@ -27,18 +27,12 @@ object FpsUtils {
         readCurrentFpsTextLocked()
     }
 
-    private var usedSurfaceFlingerFps = false
+    /**
+     * 优先读内核 fps 节点 / SurfaceFlinger 1013；都拿不到再走 SF latency。
+     */
     suspend fun getCurrentFps(): Float = mutex.withLock {
-        if (usedSurfaceFlingerFps) {
-            return SurfaceFlingerFpsUtil.getCurrentFps()
-        }
-
-        readCurrentFpsTextLocked()?.toFloatOrNull()?.also {
-            usedSurfaceFlingerFps = false
-        } ?: run {
-            usedSurfaceFlingerFps = true
-            SurfaceFlingerFpsUtil.getCurrentFps()
-        }
+        readCurrentFpsTextLocked()?.toFloatOrNull()
+            ?: SurfaceFlingerFpsUtil.getCurrentFps()
     }
 
     suspend fun getCurrentFrameTime(): Int {

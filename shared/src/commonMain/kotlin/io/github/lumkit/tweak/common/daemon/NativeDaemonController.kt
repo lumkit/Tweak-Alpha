@@ -55,8 +55,9 @@ object NativeDaemonController {
                 syncDaemonConfFromDataStore()
                 val status = TweakDaemon.status()
                 val needsUpgrade = status != null && (
-                    !status.version.contains("c2") ||
-                        !status.raw.contains("binder=1")
+                    !status.version.contains("c3") ||
+                        !status.raw.contains("binder=1") ||
+                        !status.raw.contains("fps=1")
                 )
                 if (needsUpgrade) {
                     TweakDaemon.stop()

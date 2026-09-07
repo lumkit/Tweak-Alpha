@@ -26,7 +26,7 @@ import kotlin.system.exitProcess
 object TweakServerMain {
 
     private const val TAG = "TweakServerMain"
-    const val VERSION = "2.0.1-c2"
+    const val VERSION = "2.0.2-c3"
     private const val BINDER_REDELIVER_MS = 60_000L
 
     private data class Session(

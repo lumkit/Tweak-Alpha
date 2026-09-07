@@ -39,13 +39,11 @@ import io.github.lumkit.tweak.common.utils.GpuUtils
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.fps.FpsUtils
-import io.github.lumkit.tweak.common.utils.fps.SurfaceFlingerFpsUtil
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.service.OverlayService
 import io.github.lumkit.tweak.shared.R
 import io.github.lumkit.tweak.ui.screen.info.DeviceInfoViewModel
 import io.github.lumkit.tweak.ui.theme.getJetBrainsMonoRegularFontFamily
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -129,9 +127,6 @@ private class MiniLoadContentViewModel : BaseViewModel() {
     init {
         viewModelScope.launch {
             while (isActive) {
-                launch(Dispatchers.Default) {
-                    SurfaceFlingerFpsUtil.getCurrentFps()
-                }
                 updateDetail()
                 tick++
                 delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
