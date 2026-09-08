@@ -263,9 +263,6 @@ class DischargeStatisticsViewModel : BaseViewModel() {
                 liveActiveSessionId = liveActiveSessionId,
             )
         }
-        val samplesByUsageId = usages.associate { usage ->
-            usage.id to repository.querySamplesByUsageId(usage.id)
-        }
         val levelChart = if (session != null) {
             DischargeSessionMapper.buildLevelChart(
                 session = session,
@@ -296,12 +293,12 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         val sessionDurationMs = summary?.let {
             (it.endedAt - it.startedAt).coerceAtLeast(0L)
         } ?: 0L
-        val appRows = DischargeSessionMapper.buildUidPowerRows(
-            uidPowers = uidPowers,
+        val appRows = DischargeSessionMapper.buildAppUsageRows(
             usages = usages,
-            samplesByUsageId = samplesByUsageId,
+            samples = samples,
             sessionStartMs = summary?.startedAt ?: session?.startedAt ?: 0L,
             sessionDurationMs = sessionDurationMs,
+            uidPowers = uidPowers,
         )
         val listStatus = when {
             appRows.isNotEmpty() -> AppPowerListStatus.Ready

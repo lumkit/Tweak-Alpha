@@ -412,9 +412,6 @@ object BatteryRecordLogImporter {
                 continue
             }
             val sampleId = repository.querySampleIdBySessionAndTimestamp(session.id, timestamp)
-            if (sampleId == null) {
-                break
-            }
 
             if (currentUsage == null || currentUsage.packageName != pkg) {
                 if (currentUsage != null) {
@@ -436,9 +433,11 @@ object BatteryRecordLogImporter {
                     endedAt = null,
                 )
             }
-            repository.insertAppUsageSamples(
-                listOf(BatteryAppUsageSampleEntity(usageId = currentUsage.id, sampleId = sampleId)),
-            )
+            if (sampleId != null) {
+                repository.insertAppUsageSamples(
+                    listOf(BatteryAppUsageSampleEntity(usageId = currentUsage.id, sampleId = sampleId)),
+                )
+            }
             offset += recordSize
             bytes += recordSize
             samples++

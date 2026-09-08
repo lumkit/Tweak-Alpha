@@ -291,26 +291,32 @@ internal object DischargeSessionMapper {
             }
     }
 
+    /**
+     * 使用场景按 applog 前台占用聚合。
+     * 时长取 usage 起止；温度 / 回退耗电量按会话采样时间重叠计算；
+     * batterystats UID 功耗仅在包名能对上时补充 usedMah。
+     */
     fun buildAppUsageRows(
         usages: List<BatteryAppUsageEntity>,
-        samplesByUsageId: Map<Long, List<BatteryRecordSampleEntity>>,
+        samples: List<BatteryRecordSampleEntity>,
         sessionStartMs: Long,
         sessionDurationMs: Long,
+        uidPowers: List<BatteryUidPowerEntity> = emptyList(),
     ): List<DischargeStatisticsViewModel.AppUsageRow> {
         if (usages.isEmpty()) return emptyList()
         val sessionEndMs = (sessionStartMs + sessionDurationMs.coerceAtLeast(0L))
             .coerceAtLeast(sessionStartMs)
+        val sortedSamples = samples.sortedBy { it.timestamp }
         data class Acc(
             var durationMs: Long = 0L,
-            var powerSumUw: Double = 0.0,
-            var powerCount: Int = 0,
+            var usedMah: Double = 0.0,
             var tempSum: Double = 0.0,
             var tempCount: Int = 0,
             var maxTemp: Float = Float.NEGATIVE_INFINITY,
         )
         val byPackage = linkedMapOf<String, Acc>()
         for (usage in usages) {
-            val samples = samplesByUsageId[usage.id].orEmpty()
+            if (usage.packageName.isBlank()) continue
             val duration = resolveUsageDurationMs(
                 usage = usage,
                 sessionStartMs = sessionStartMs,
@@ -318,36 +324,50 @@ internal object DischargeSessionMapper {
             )
             val acc = byPackage.getOrPut(usage.packageName) { Acc() }
             acc.durationMs += duration
-            for (sample in samples) {
-                val power = samplePowerUw(sample)
-                if (power != null) {
-                    acc.powerSumUw += power.toDouble()
-                    acc.powerCount += 1
+            val rangeStart = maxOf(usage.startedAt, sessionStartMs)
+            val rangeEnd = minOf(usage.endedAt ?: sessionEndMs, sessionEndMs).coerceAtLeast(rangeStart)
+            var previous: BatteryRecordSampleEntity? = null
+            for (sample in sortedSamples) {
+                if (sample.timestamp < rangeStart) {
+                    previous = sample
+                    continue
                 }
+                if (sample.timestamp >= rangeEnd) break
                 val temp = sample.temperatureC
                 if (temp != null) {
                     acc.tempSum += temp.toDouble()
                     acc.tempCount += 1
                     if (temp > acc.maxTemp) acc.maxTemp = temp
                 }
+                val from = previous?.takeIf { it.timestamp >= rangeStart } ?: sample
+                val to = sample
+                if (from.timestamp < to.timestamp) {
+                    val currentMa = from.currentMa
+                    if (currentMa != null) {
+                        val hours = (to.timestamp - from.timestamp) / 3_600_000.0
+                        acc.usedMah += abs(currentMa.toDouble()) * hours
+                    }
+                }
+                previous = sample
             }
         }
+        val mahByPackage = uidPowers
+            .filter { it.deltaMah > 0.0 && !it.packageName.isNullOrBlank() }
+            .groupBy { it.packageName!! }
+            .mapValues { (_, rows) -> rows.sumOf { it.deltaMah } }
         byPackage.values.forEach { acc ->
             acc.durationMs = acc.durationMs.coerceIn(0L, sessionDurationMs.coerceAtLeast(0L))
         }
         return byPackage.map { (packageName, acc) ->
             val app = AppsHelper.apps.value.find { it.packageName == packageName }
-            val avgPowerUw = if (acc.powerCount > 0) {
-                (acc.powerSumUw / acc.powerCount).toLong()
-            } else {
-                0L
-            }
+            val usedMah = mahByPackage[packageName]?.toFloat() ?: acc.usedMah.toFloat()
+            val iconPath = app?.iconPath?.takeIf { it.isNotBlank() }
+                ?: runCatching { AppsHelper.getIconPath(packageName) }.getOrNull()?.takeIf { it.isNotBlank() }
             DischargeStatisticsViewModel.AppUsageRow(
                 packageName = packageName,
                 appName = app?.appName?.takeIf { it.isNotBlank() } ?: packageName,
-                iconPath = app?.iconPath?.takeIf { it.isNotBlank() }
-                    ?: AppsHelper.getIconPath(packageName).takeIf { it.isNotBlank() },
-                usedMah = 0f,
+                iconPath = iconPath,
+                usedMah = usedMah,
                 avgTemp = if (acc.tempCount > 0) (acc.tempSum / acc.tempCount).toFloat() else 0f,
                 maxTemp = if (acc.maxTemp.isFinite()) acc.maxTemp else 0f,
                 durationMs = acc.durationMs,

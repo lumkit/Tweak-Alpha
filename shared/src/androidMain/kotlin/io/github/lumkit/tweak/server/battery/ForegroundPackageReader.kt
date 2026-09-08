@@ -1,5 +1,8 @@
 package io.github.lumkit.tweak.server.battery
 
+import android.annotation.SuppressLint
+import android.app.ActivityManager
+import android.content.ComponentName
 import android.os.Build
 import android.os.SystemClock
 import java.io.BufferedReader
@@ -7,7 +10,7 @@ import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 
 /**
- * 前台包名读取：短 TTL 缓存，miss 时才 dumpsys，失败返回空串。
+ * 前台包名读取：优先 Hidden API 焦点，失败再 dumpsys；短 TTL 缓存。
  */
 class ForegroundPackageReader(
     private val ttlMs: Long = 1_500L,
@@ -24,7 +27,8 @@ class ForegroundPackageReader(
         if (cached.isNotEmpty() && now - cachedAt <= ttlMs) {
             return cached
         }
-        val pkg = runCatching { parseFocusPackage(dump()) }.getOrDefault("").orEmpty()
+        val pkg = binderFocusPackage()
+            ?: runCatching { parseFocusPackage(dump()) }.getOrDefault("").orEmpty()
         cached = pkg
         cachedAt = now
         return pkg
@@ -58,6 +62,37 @@ class ForegroundPackageReader(
             }
             return ""
         }
+
+        @SuppressLint("PrivateApi")
+        private fun binderFocusPackage(): String? = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val atmInterface = Class.forName("android.app.IActivityTaskManager")
+                val method = runCatching { atmInterface.getMethod("getFocusedRootTaskInfo") }
+                    .getOrElse { atmInterface.getMethod("getFocusedStackInfo") }
+                val atmService = Class.forName("android.app.ActivityTaskManager")
+                    .getMethod("getService")
+                    .invoke(null)
+                val focusInfo = method.invoke(atmService) ?: return@runCatching null
+                (method.returnType.getField("topActivity").get(focusInfo) as? ComponentName)
+                    ?.packageName
+            } else {
+                val amService = runCatching {
+                    Class.forName("android.app.ActivityManager")
+                        .getMethod("getService")
+                        .invoke(null)
+                }.getOrElse {
+                    Class.forName("android.app.ActivityManagerNative")
+                        .getMethod("getDefault")
+                        .invoke(null)
+                }
+                val tasks = Class.forName("android.app.IActivityManager")
+                    .getMethod("getTasks", Int::class.javaPrimitiveType)
+                    .invoke(amService, 1) as? List<*>
+                (tasks?.firstOrNull() as? ActivityManager.RunningTaskInfo)
+                    ?.topActivity
+                    ?.packageName
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
 
         private fun defaultDumpsysWindowFocus(): String {
             val keywords = FOCUS_DUMP_KEYWORDS
