@@ -204,7 +204,7 @@ class LoadWatcherViewModel : BaseViewModel() {
         val batteryStatus = resolveBatteryStatus()
         val memoryInfo = DeviceMemoryInfoUtils.getMemoryInfo()
         val memoryFreq = DeviceMemoryInfoUtils.getMemoryFreq()
-        val cpuTemperature = DeviceTemperatureUtils.getAverageCpuTemperature()
+        val cpuTemperature = DeviceTemperatureUtils.getCpuCoreTemperature()
         val gpuMemoryUsage = GpuUtils.getMemoryUsage()
         val fps = FpsUtils.getCurrentFps()
         val fpsText = "%.1f".format(fps)
@@ -268,8 +268,10 @@ class LoadWatcherViewModel : BaseViewModel() {
                 append('\n')
                 appendInfoLine(" DDR", "${it}Mhz")
             }
-            append('\n')
-            appendInfoLine("#CTMP", cpuTemperature.toDisplayTemperature(), highlighted = true)
+            cpuTemperature?.let {
+                append('\n')
+                appendInfoLine("#CTMP", it.toDisplayTemperature(), highlighted = true)
+            }
             append('\n')
 
             gpuMemoryUsage?.let {

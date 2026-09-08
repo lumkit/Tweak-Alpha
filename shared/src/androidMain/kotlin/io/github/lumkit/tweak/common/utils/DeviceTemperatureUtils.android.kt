@@ -93,11 +93,24 @@ internal actual object PlatformTemperatureSource {
 
         return buildList {
             rawTemperatures.forEachIndexed { index, rawTemperature ->
-                val normalizedValue = normalizeTemperatureValue(rawTemperature) ?: return@forEachIndexed
+                if (rawTemperature == HardwarePropertiesManager.UNDEFINED_TEMPERATURE) {
+                    return@forEachIndexed
+                }
+                if (!rawTemperature.isFinite()) {
+                    return@forEachIndexed
+                }
+                val normalizedValue = if (rawTemperature in -20f..125f) {
+                    rawTemperature
+                } else {
+                    normalizeTemperatureValue(rawTemperature)
+                } ?: return@forEachIndexed
+                if (category == TemperatureCategory.CPU && !isPlausibleDeviceTemperature(normalizedValue)) {
+                    return@forEachIndexed
+                }
                 val displayName = if (rawTemperatures.size == 1) {
                     labelPrefix
                 } else {
-                    "$labelPrefix${index + 1}"
+                    "$labelPrefix$index"
                 }
                 add(
                     PlatformTemperatureEntry(

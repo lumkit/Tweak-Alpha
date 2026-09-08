@@ -112,10 +112,11 @@ import tweak_alpha.shared.generated.resources.ic_process_linux
 import tweak_alpha.shared.generated.resources.nav_home
 import tweak_alpha.shared.generated.resources.text_battery
 import tweak_alpha.shared.generated.resources.text_cpu_state
-import tweak_alpha.shared.generated.resources.text_cpu_state_description
 import tweak_alpha.shared.generated.resources.text_fps_record_overlay
 import tweak_alpha.shared.generated.resources.text_fps_record_overlay_description
 import tweak_alpha.shared.generated.resources.text_gpu_state
+import tweak_alpha.shared.generated.resources.text_info_metric_load
+import tweak_alpha.shared.generated.resources.text_info_metric_temperature
 import tweak_alpha.shared.generated.resources.text_memory_physical
 import tweak_alpha.shared.generated.resources.text_memory_state
 import tweak_alpha.shared.generated.resources.text_mini_load_overlay
@@ -331,11 +332,18 @@ private fun CpuInfoContent(
         }
     }
 
+    val cpuSubtitle = buildList {
+        cpuState?.coreLoadText?.takeIf { it.isNotBlank() }?.let { load ->
+            add(stringResource(Res.string.text_info_metric_load).format(load))
+        }
+        cpuState?.coreTemperatureText?.takeIf { it.isNotBlank() }?.let { temp ->
+            add(stringResource(Res.string.text_info_metric_temperature).format(temp))
+        }
+    }.joinToString("     ")
+
     CategoryCard(
         title = stringResource(Res.string.text_cpu_state),
-        subTitle = stringResource(Res.string.text_cpu_state_description).format(
-            cpuState?.coreLoadText ?: "N/A", cpuState?.coreTemperatureText ?: "N/A"
-        ),
+        subTitle = cpuSubtitle,
         modifier = Modifier.fillMaxWidth(),
         pressFeedbackType = PressFeedbackType.None,
     ) {
@@ -370,16 +378,20 @@ private fun CpuInfoContent(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(
-                        text = cpuState?.socName ?: "N/A",
-                        color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-                        style = MiuixTheme.textStyles.footnote1,
-                    )
-                    Text(
-                        text = "Cores ${cpuState?.coreCluster}",
-                        color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                        style = MiuixTheme.textStyles.body2,
-                    )
+                    cpuState?.socName?.takeIf { it.isNotBlank() }?.let { socName ->
+                        Text(
+                            text = socName,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                            style = MiuixTheme.textStyles.footnote1,
+                        )
+                    }
+                    cpuState?.coreCluster?.takeIf { it.isNotBlank() }?.let { cluster ->
+                        Text(
+                            text = "Cores $cluster",
+                            color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                            style = MiuixTheme.textStyles.body2,
+                        )
+                    }
                 }
             }
         }
@@ -543,23 +555,29 @@ private fun FlowRowScope.CpuCoreItem(core: DeviceInfoViewModel.CoreInfoModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Text(
-            text = core.currentFreq,
-            color = MiuixTheme.colorScheme.onSurface.copy(.7f),
-            style = MiuixTheme.textStyles.body2.copy(
-                fontSize = 10.sp,
-                lineHeight = 10.sp
-            ),
-        )
+        core.currentFreq?.takeIf { it.isNotBlank() }?.let { freq ->
+            Text(
+                text = freq,
+                color = MiuixTheme.colorScheme.onSurface.copy(.7f),
+                style = MiuixTheme.textStyles.body2.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp
+                ),
+            )
+        }
 
-        Text(
-            text = "${core.minFreq}~${core.maxFreq}",
-            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-            style = MiuixTheme.textStyles.footnote2.copy(
-                fontSize = 10.sp,
-                lineHeight = 10.sp
-            ),
-        )
+        val minFreq = core.minFreq?.takeIf { it.isNotBlank() }
+        val maxFreq = core.maxFreq?.takeIf { it.isNotBlank() }
+        if (minFreq != null && maxFreq != null) {
+            Text(
+                text = "$minFreq~$maxFreq",
+                color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                style = MiuixTheme.textStyles.footnote2.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp
+                ),
+            )
+        }
     }
 }
 
@@ -733,8 +751,8 @@ private fun GpuInfoContent() {
         }
     }
     val gpuInfoModel by DeviceInfoViewModel.gpuInfoState.collectAsStateWithLifecycle()
-    val load = gpuInfoModel?.load ?: 0f
-    val loadColor by animatedColorAsUsed(load)
+    val load = gpuInfoModel?.load
+    val loadColor by animatedColorAsUsed(load ?: 0f)
     val gpuSupportedState by DeviceInfoViewModel.gpuSupported.collectAsStateWithLifecycle()
 
     CategoryCard(
@@ -745,81 +763,97 @@ private fun GpuInfoContent() {
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        progress = load,
-                        size = 80.dp,
-                        strokeWidth = 16.dp,
-                        colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                            foregroundColor = loadColor
-                        ),
-                    )
+                if (load != null) {
+                    Box(
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            progress = load,
+                            size = 80.dp,
+                            strokeWidth = 16.dp,
+                            colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                                foregroundColor = loadColor
+                            ),
+                        )
 
-                    Text(
-                        text = stringResource(Res.string.text_used_load),
-                        color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                        style = MiuixTheme.textStyles.body2,
+                        Text(
+                            text = stringResource(Res.string.text_used_load),
+                            color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                            style = MiuixTheme.textStyles.body2,
+                        )
+                    }
+
+                    VerticalDivider(
+                        modifier = Modifier.fillMaxHeight()
+                            .padding(horizontal = 8.dp)
                     )
                 }
-
-                VerticalDivider(
-                    modifier = Modifier.fillMaxHeight()
-                        .padding(horizontal = 8.dp)
-                )
 
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        Text(
-                            text = gpuInfoModel?.currentFreq ?: "N/A",
-                            color = MiuixTheme.colorScheme.onSurface.copy(.7f),
-                            style = MiuixTheme.textStyles.body1,
-                        )
+                    val currentFreq = gpuInfoModel?.currentFreq
+                    val freqRangeText = gpuInfoModel?.freqRangeText
+                    if (!currentFreq.isNullOrBlank() || !freqRangeText.isNullOrBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                        ) {
+                            if (!currentFreq.isNullOrBlank()) {
+                                Text(
+                                    text = currentFreq,
+                                    color = MiuixTheme.colorScheme.onSurface.copy(.7f),
+                                    style = MiuixTheme.textStyles.body1,
+                                )
+                            }
 
+                            if (!freqRangeText.isNullOrBlank()) {
+                                Text(
+                                    text = freqRangeText,
+                                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                                    style = MiuixTheme.textStyles.footnote2,
+                                    modifier = Modifier.padding(start = 4f.dp)
+                                        .graphicsLayer {
+                                            translationY = translateY
+                                        },
+                                )
+                            }
+                        }
+                    }
+
+                    gpuInfoModel?.loadText?.takeIf { it.isNotBlank() }?.let { loadText ->
                         Text(
-                            text = gpuInfoModel?.freqRangeText ?: "N/A",
+                            text = loadText,
                             color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                            style = MiuixTheme.textStyles.footnote2,
-                            modifier = Modifier.padding(start = 4f.dp)
-                                .graphicsLayer {
-                                    translationY = translateY
-                                },
+                            style = MiuixTheme.textStyles.footnote2
+                                .copy(
+                                    fontSize = 10.sp,
+                                    lineHeight = 10.sp,
+                                ),
                         )
                     }
 
-                    Text(
-                        text = gpuInfoModel?.loadText ?: "N/A",
-                        color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                        style = MiuixTheme.textStyles.footnote2
-                            .copy(
-                                fontSize = 10.sp,
-                                lineHeight = 10.sp,
-                            ),
-                    )
-
-                    Text(
-                        text = gpuInfoModel?.displayInfo ?: "N/A",
-                        color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-                        style = MiuixTheme.textStyles.footnote2
-                            .copy(
-                                fontSize = 10.sp,
-                                lineHeight = 10.sp,
-                            ),
-                    )
+                    gpuInfoModel?.displayInfo?.takeIf { it.isNotBlank() }?.let { displayInfo ->
+                        Text(
+                            text = displayInfo,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                            style = MiuixTheme.textStyles.footnote2
+                                .copy(
+                                    fontSize = 10.sp,
+                                    lineHeight = 10.sp,
+                                ),
+                        )
+                    }
                 }
             }
         } else {
-            Text(
-                text = gpuInfoModel?.displayInfo ?: "N/A",
-                color = MiuixTheme.colorScheme.onSurface.copy(.31f),
-                style = MiuixTheme.textStyles.footnote2,
-            )
+            gpuInfoModel?.displayInfo?.takeIf { it.isNotBlank() }?.let { displayInfo ->
+                Text(
+                    text = displayInfo,
+                    color = MiuixTheme.colorScheme.onSurface.copy(.31f),
+                    style = MiuixTheme.textStyles.footnote2,
+                )
+            }
         }
     }
 }
@@ -869,7 +903,7 @@ private fun FlowRowScope.BatteryContent(
                     strokeWidth = 8.dp,
                 )
                 Text(
-                    text = batteryModel?.capacityText ?: "N/A",
+                    text = batteryModel?.capacityText.orEmpty(),
                     style = MiuixTheme.textStyles.footnote2.copy(
                         fontSize = 10.sp,
                         lineHeight = 10.sp
@@ -882,30 +916,38 @@ private fun FlowRowScope.BatteryContent(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row {
-                    Text(
-                        text = batteryModel?.levelText ?: "N/A",
-                        style = MiuixTheme.textStyles.footnote2,
-                        color = MiuixTheme.colorScheme.onSurface.copy(.8f)
-                    )
+                    batteryModel?.levelText?.takeIf { it.isNotBlank() }?.let { text ->
+                        Text(
+                            text = text,
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                        )
+                    }
                     Spacer(modifier = Modifier.weight(1f).defaultMinSize(minWidth = 4.dp))
-                    Text(
-                        text = batteryModel?.currentText ?: "N/A",
-                        style = MiuixTheme.textStyles.footnote2,
-                        color = MiuixTheme.colorScheme.onSurface.copy(.8f)
-                    )
+                    batteryModel?.currentText?.takeIf { it.isNotBlank() }?.let { text ->
+                        Text(
+                            text = text,
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                        )
+                    }
                 }
                 Row {
-                    Text(
-                        text = batteryModel?.temperatureText ?: "N/A",
-                        style = MiuixTheme.textStyles.footnote2,
-                        color = MiuixTheme.colorScheme.onSurface.copy(.8f)
-                    )
+                    batteryModel?.temperatureText?.takeIf { it.isNotBlank() }?.let { text ->
+                        Text(
+                            text = text,
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                        )
+                    }
                     Spacer(modifier = Modifier.weight(1f).defaultMinSize(minWidth = 4.dp))
-                    Text(
-                        text = batteryModel?.powerText ?: "N/A",
-                        style = MiuixTheme.textStyles.footnote2,
-                        color = MiuixTheme.colorScheme.onSurface.copy(.8f)
-                    )
+                    batteryModel?.powerText?.takeIf { it.isNotBlank() }?.let { text ->
+                        Text(
+                            text = text,
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(.8f)
+                        )
+                    }
                 }
             }
         }

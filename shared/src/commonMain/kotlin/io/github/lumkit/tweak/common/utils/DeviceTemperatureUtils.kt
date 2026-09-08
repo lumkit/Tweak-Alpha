@@ -43,17 +43,28 @@ object DeviceTemperatureUtils {
         "prime",
         "big",
         "little",
-        "soc",
-        "ap",
-        "application",
-        "x1",
-        "a53",
-        "a55",
-        "a57",
-        "a73",
-        "a75",
-        "a76",
-        "a78",
+    )
+
+    /** 单核心：cpu0 / cpu-0 / cpu_0 / cpu-0-0-0（高通 tsens） */
+    private val cpuCoreTypeRegex = Regex(
+        """^(?:cpu|cpuss|core)[-_]?(\d+)(?:[-_]\d+)*$""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private val cpuClusterKeywords = listOf(
+        "silver",
+        "gold",
+        "prime",
+        "big",
+        "little",
+        "cluster",
+    )
+
+    private val cpuPackageKeywords = listOf(
+        "mtktscpu",
+        "cpu-thermal",
+        "cpuss",
+        "soc-thermal",
     )
 
     private val gpuKeywords = listOf(
@@ -124,10 +135,19 @@ object DeviceTemperatureUtils {
     }
 
     /**
-     * 获取 CPU 平均温度。
+     * CPU 核心温度：优先官方 HardwarePropertiesManager 与 per-core thermal zone，
+     * 取有效核心中的最高值（热点核心）。没有核心节点时再回落到集群 / SoC 封装传感器。
+     * 与 Scene、AIDA64、CPU-Z 等常见做法一致，不对所有 CPU 关键字节点做平均。
+     */
+    suspend fun getCpuCoreTemperature(): Float? {
+        return selectHottestCpuTemperature()
+    }
+
+    /**
+     * 兼容旧调用，语义改为热点核心温度。
      */
     suspend fun getAverageCpuTemperature(): Float? {
-        return getCpuTemperatures().averageTemperatureOrNull()
+        return getCpuCoreTemperature()
     }
 
     /**
@@ -143,7 +163,67 @@ object DeviceTemperatureUtils {
             getThermalZoneTemperatures(keywords),
             getHwmonTemperatures(category, keywords),
             PlatformTemperatureSource.getTemperatures(category),
-        )
+        ).mapNotNull { (name, value) ->
+            value.takeIf(::isPlausibleDeviceTemperature)?.let { name to it }
+        }
+    }
+
+    private suspend fun selectHottestCpuTemperature(): Float? {
+        val platformCores = PlatformTemperatureSource.getTemperatures(TemperatureCategory.CPU)
+            .mapNotNull { (name, value) ->
+                value.takeIf(::isPlausibleDeviceTemperature)?.let { name to it }
+            }
+        val sysfsZones = getThermalZoneTemperatures(cpuKeywords + cpuPackageKeywords)
+            .mapNotNull { (name, value) ->
+                value.takeIf(::isPlausibleDeviceTemperature)?.let { name to it }
+            }
+        val hwmon = getHwmonTemperatures(TemperatureCategory.CPU, cpuKeywords)
+            .mapNotNull { (name, value) ->
+                value.takeIf(::isPlausibleDeviceTemperature)?.let { name to it }
+            }
+
+        val cores = (platformCores + sysfsZones + hwmon).filter { (name, _) ->
+            isCpuCoreSensorName(name)
+        }
+        if (cores.isNotEmpty()) {
+            return cores.maxOf { it.second }
+        }
+        val clusters = (sysfsZones + hwmon).filter { (name, _) ->
+            isCpuClusterSensorName(name)
+        }
+        if (clusters.isNotEmpty()) {
+            return clusters.maxOf { it.second }
+        }
+        val packages = sysfsZones.filter { (name, _) ->
+            isCpuPackageSensorName(name)
+        }
+        if (packages.isNotEmpty()) {
+            return packages.maxOf { it.second }
+        }
+        val fallback = (platformCores + sysfsZones + hwmon)
+        return fallback.maxOfOrNull { it.second }
+    }
+
+    private fun isCpuCoreSensorName(name: String): Boolean {
+        val normalized = name.trim()
+        if (cpuCoreTypeRegex.matches(normalized)) {
+            return true
+        }
+        // HardwarePropertiesManager：cpu / cpu0 / cpu1
+        return Regex("""^cpu\d*$""", RegexOption.IGNORE_CASE).matches(normalized)
+    }
+
+    private fun isCpuClusterSensorName(name: String): Boolean {
+        val normalized = name.lowercase()
+        if ("gpu" in normalized || "battery" in normalized || "batt" in normalized) {
+            return false
+        }
+        return cpuClusterKeywords.any { it in normalized }
+    }
+
+    private fun isCpuPackageSensorName(name: String): Boolean {
+        val normalized = name.lowercase()
+        return cpuPackageKeywords.any { it in normalized }
     }
 
     private suspend fun getThermalZoneTemperatures(keywords: List<String>): List<Pair<String, Float>> {
@@ -339,6 +419,10 @@ object DeviceTemperatureUtils {
         }
         return nonZeroEntries.sumOf { it.second.toDouble() }.toFloat() / nonZeroEntries.size
     }
+}
+
+internal fun isPlausibleDeviceTemperature(value: Float): Boolean {
+    return value.isFinite() && value in 1f..125f
 }
 
 internal fun normalizeTemperatureValue(value: Float): Float? {

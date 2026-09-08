@@ -34,6 +34,9 @@
     <string name="nav_settings">设置</string>
     <string name="text_cpu_state">CPU与进程</string>
     <string name="text_cpu_state_description">负载：%s     温度：%s</string>
+    <string name="text_info_metric_load">负载：%s</string>
+    <string name="text_info_metric_temperature">温度：%s</string>
+    <string name="text_info_metric_gpu_memory">内存使用：%s</string>
     <string name="text_memory_state">内存状态</string>
     <string name="text_total_memory">总内存</string>
     <string name="text_total_memory_used">总已用</string>

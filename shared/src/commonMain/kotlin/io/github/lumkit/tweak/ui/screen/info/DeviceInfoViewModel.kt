@@ -42,7 +42,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.getString
 import tweak_alpha.shared.generated.resources.Res
-import tweak_alpha.shared.generated.resources.text_gpu_load_format
+import tweak_alpha.shared.generated.resources.text_info_metric_gpu_memory
+import tweak_alpha.shared.generated.resources.text_info_metric_load
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Clock
@@ -63,8 +64,8 @@ object DeviceInfoViewModel : BaseViewModel() {
         val coreCluster: String,
         val coreLoad: Float? = null,
         val coreLoadText: String? = null,
-        val coreTemperature: Float,
-        val coreTemperatureText: String,
+        val coreTemperature: Float? = null,
+        val coreTemperatureText: String? = null,
         val cpuStates: List<CoreInfoModel>,
         val soc: AndroidSoc?,
         val socName: String,
@@ -79,9 +80,9 @@ object DeviceInfoViewModel : BaseViewModel() {
         val number: Int,
         val load: Float,
         val loadText: String,
-        val currentFreq: String,
-        val minFreq: String,
-        val maxFreq: String,
+        val currentFreq: String?,
+        val minFreq: String?,
+        val maxFreq: String?,
         val enabled: Boolean,
         val sampleId: Long = 0L,
     )
@@ -106,13 +107,13 @@ object DeviceInfoViewModel : BaseViewModel() {
     @Immutable
     @Serializable
     data class GpuInfoModel(
-        val load: Float,
-        val loadText: String,
-        val maxFreq: String,
-        val minFreq: String,
-        val freqRangeText: String,
-        val currentFreq: String,
-        val displayInfo: String,
+        val load: Float?,
+        val loadText: String?,
+        val maxFreq: String?,
+        val minFreq: String?,
+        val freqRangeText: String?,
+        val currentFreq: String?,
+        val displayInfo: String?,
         val memoryUsage: String?,
     )
 
@@ -126,12 +127,12 @@ object DeviceInfoViewModel : BaseViewModel() {
     @Immutable
     @Serializable
     data class BatteryInfoModel(
-        val levelText: String,
-        val currentText: String,
-        val temperatureText: String,
-        val powerText: String,
-        val capacity: Float,
-        val capacityText: String,
+        val levelText: String?,
+        val currentText: String?,
+        val temperatureText: String?,
+        val powerText: String?,
+        val capacity: Float?,
+        val capacityText: String?,
     )
 
     @Immutable
@@ -185,7 +186,7 @@ object DeviceInfoViewModel : BaseViewModel() {
     private var cachedSocName: String? = null
     private var cachedClusterText: String? = null
     /** coreIndex -> (minFreqText, maxFreqText) */
-    private val cachedCoreFreqRange = HashMap<Int, Pair<String, String>>()
+    private val cachedCoreFreqRange = HashMap<Int, Pair<String?, String?>>()
     private var coreFreqRangeRefreshCountdown = 0
 
     private val _loadingState = MutableStateFlow(false)
@@ -354,7 +355,7 @@ object DeviceInfoViewModel : BaseViewModel() {
                 .also { cachedSocName = it }
         }
         val cpuTemperatureDeferred =
-            async { DeviceTemperatureUtils.getAverageCpuTemperature() ?: 25f }
+            async { DeviceTemperatureUtils.getCpuCoreTemperature() }
 
         val coreCount = coreCountDeferred.await()
         val cpuLoad = cpuLoadDeferred.await()
@@ -382,8 +383,8 @@ object DeviceInfoViewModel : BaseViewModel() {
                                 async { cpuFrequencyUtil.getCurrentMinFrequency(coreName) }
                             val maxFreqDeferred =
                                 async { cpuFrequencyUtil.getCurrentMaxFrequency(coreName) }
-                            (formatFreq(minFreqDeferred.await(), "") to
-                                formatFreq(maxFreqDeferred.await())).also {
+                            (formatFreqOrNull(minFreqDeferred.await(), "") to
+                                formatFreqOrNull(maxFreqDeferred.await())).also {
                                 cachedCoreFreqRange[coreIndex] = it
                             }
                         }
@@ -391,11 +392,12 @@ object DeviceInfoViewModel : BaseViewModel() {
 
                     val load = cpuLoad[coreIndex]?.toFloat() ?: 0f
                     val freqRange = freqRangeDeferred.await()
+                    val currentFreq = formatFreqOrNull(currentFreqDeferred.await())
                     CoreInfoModel(
                         number = coreIndex,
                         load = load.div(100f),
                         loadText = "%d%%".format(load.toInt()),
-                        currentFreq = formatFreq(currentFreqDeferred.await()),
+                        currentFreq = currentFreq,
                         minFreq = freqRange.first,
                         maxFreq = freqRange.second,
                         enabled = onlineDeferred.await(),
@@ -405,15 +407,15 @@ object DeviceInfoViewModel : BaseViewModel() {
             }
             .awaitAll()
 
-        val coreLoad = cpuLoad[-1]?.toFloat() ?: 0f
+        val coreLoad = cpuLoad[-1]?.toFloat()
         val soc = socDeferred.await()
         val socTemperature = cpuTemperatureDeferred.await()
         val cpuInfoModel = CpuInfoModel(
             coreCluster = clusterTextDeferred.await(),
-            coreLoad = coreLoad.div(100f),
-            coreLoadText = "%d%%".format(coreLoad.toInt()),
+            coreLoad = coreLoad?.div(100f),
+            coreLoadText = coreLoad?.let { "%d%%".format(it.toInt()) },
             coreTemperature = socTemperature,
-            coreTemperatureText = "%.1f°C".format(socTemperature),
+            coreTemperatureText = socTemperature?.let { "%.1f°C".format(it) },
             cpuStates = cpuStates,
             soc = soc,
             socName = socNameDeferred.await(),
@@ -425,7 +427,12 @@ object DeviceInfoViewModel : BaseViewModel() {
     }
 
     fun formatFreq(freq: String, unit: String = "MHz"): String =
-        "%d%s".format((freq.toLongOrNull() ?: 0L) / 1000L, unit)
+        formatFreqOrNull(freq, unit).orEmpty()
+
+    fun formatFreqOrNull(freq: String, unit: String = "MHz"): String? {
+        val khz = freq.toLongOrNull()?.takeIf { it > 0L } ?: return null
+        return "%d%s".format(khz / 1000L, unit)
+    }
 
     private suspend fun updateMemoryInfo() {
         val memoryInfo = DeviceMemoryInfoUtils.getMemoryInfo()
@@ -464,28 +471,40 @@ object DeviceInfoViewModel : BaseViewModel() {
     }
 
     private suspend fun updateGpuInfo() {
-        val currentFreq = GpuUtils.getGpuFreq()
-        val maxFreq = GpuUtils.getMaxFreq()
-        val minFreq = GpuUtils.getMinFreq()
-        val gpuLoad = GpuUtils.getGpuLoad()
+        val currentFreqMhz = GpuUtils.getGpuFreq().toLongOrNull()?.takeIf { it > 0L }
+        val maxFreqMhz = GpuUtils.getMaxFreq().toLongOrNull()
+            ?.let(GpuUtils::normalizeFrequencyToMhz)
+            ?.takeIf { it > 0L }
+        val minFreqMhz = GpuUtils.getMinFreq().toLongOrNull()
+            ?.let(GpuUtils::normalizeFrequencyToMhz)
+            ?.takeIf { it > 0L }
+        val gpuLoad = GpuUtils.getGpuLoad().takeIf { it >= 0 }
         val memoryUsage = GpuUtils.getMemoryUsage()
-        val gpuLoadText = getString(Res.string.text_gpu_load_format).format(
-            "%d%%".format(gpuLoad),
-            memoryUsage,
-        )
-        val display = GpuUtils.gles()
+        val loadPart = gpuLoad?.let {
+            getString(Res.string.text_info_metric_load).format("%d%%".format(it))
+        }
+        val memoryPart = memoryUsage?.let {
+            getString(Res.string.text_info_metric_gpu_memory).format(it)
+        }
+        val gpuLoadText = listOfNotNull(loadPart, memoryPart)
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("     ")
+        val display = GpuUtils.gles().takeIf { it.isNotBlank() }
+        val freqRangeText = if (minFreqMhz != null && maxFreqMhz != null) {
+            "(${minFreqMhz}~${maxFreqMhz}MHz)"
+        } else {
+            null
+        }
 
-        val maxFreqFormat = GpuUtils.normalizeFrequencyToMhz(maxFreq.toLongOrNull() ?: 0)
-        val minFreqFormat = GpuUtils.normalizeFrequencyToMhz(minFreq.toLongOrNull() ?: 0)
         _gpuInfoState.value = GpuInfoModel(
-            load = gpuLoad.toFloat() / 100f,
+            load = gpuLoad?.toFloat()?.div(100f),
             loadText = gpuLoadText,
-            maxFreq = "${maxFreqFormat}MHz",
-            minFreq = "${minFreqFormat}MHz",
-            currentFreq = "${currentFreq}MHz",
+            maxFreq = maxFreqMhz?.let { "${it}MHz" },
+            minFreq = minFreqMhz?.let { "${it}MHz" },
+            currentFreq = currentFreqMhz?.let { "${it}MHz" },
             displayInfo = display,
             memoryUsage = memoryUsage,
-            freqRangeText = "(${minFreqFormat}~${maxFreqFormat}MHz)"
+            freqRangeText = freqRangeText,
         )
     }
 
@@ -493,19 +512,19 @@ object DeviceInfoViewModel : BaseViewModel() {
     private var totalSize: Long = 0L
     private suspend fun updateMoreInfo() {
         val batteryModel = run {
-            val level = BatteryUtils.getVoltage() ?: 0
-            val current = BatteryUtils.getCurrent() ?: 0
+            val voltage = BatteryUtils.getVoltage()
+            val current = BatteryUtils.getCurrent()
             val temperature = BatteryUtils.getTemperature()
-            val power = BatteryUtils.getPower() ?: 0
-            val capacity = BatteryUtils.getCapacityPercent() ?: 0
+            val power = BatteryUtils.getPower()
+            val capacity = BatteryUtils.getCapacityPercent()
 
             BatteryInfoModel(
-                levelText = level.formatVoltage(),
-                temperatureText = "%.1f°C".format(temperature),
-                powerText = power.formatPower(),
-                capacity = capacity.toFloat() / 100f,
-                capacityText = "%d%%".format(capacity),
-                currentText = current.formatCurrent(),
+                levelText = voltage?.formatVoltage(),
+                temperatureText = temperature?.let { "%.1f°C".format(it) },
+                powerText = power?.formatPower(),
+                capacity = capacity?.let { it.toFloat() / 100f },
+                capacityText = capacity?.let { "%d%%".format(it) },
+                currentText = current?.formatCurrent(),
             )
         }
 
