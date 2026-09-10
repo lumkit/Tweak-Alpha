@@ -6,6 +6,7 @@ import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.daemon.TweakDaemon
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
 import io.github.lumkit.tweak.common.utils.BatteryReadingNormalize
+import io.github.lumkit.tweak.common.utils.DEFAULT_INFO_PAGE_CARD_KEYS
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -162,6 +163,14 @@ class SettingsViewModel : BaseViewModel() {
             initialValue = true,
         )
 
+    val infoPageEnabledCards = TweakDataStore.infoPageEnabledCardsFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_INFO_PAGE_CARD_KEYS.toSet(),
+        )
+
     val batteryRecordSampleIntervalLevel = TweakDataStore.batteryRecordSampleIntervalLevelFlow()
         .distinctUntilChanged()
         .stateIn(
@@ -308,6 +317,25 @@ class SettingsViewModel : BaseViewModel() {
     fun setEnableProcessInfoOverview(enable: Boolean) {
         viewModelScope.launch {
             TweakDataStore.setInfoPageEnabledProcessInfo(enable)
+        }
+    }
+
+    fun setInfoPageCardEnabled(key: String, enabled: Boolean) {
+        if (key !in DEFAULT_INFO_PAGE_CARD_KEYS) {
+            return
+        }
+        viewModelScope.launch {
+            val current = TweakDataStore.infoPageEnabledCardsFlow().first()
+            val next = current.toMutableSet()
+            if (enabled) {
+                next.add(key)
+            } else {
+                if (current.size <= 1 && key in current) {
+                    return@launch
+                }
+                next.remove(key)
+            }
+            TweakDataStore.setInfoPageEnabledCards(next)
         }
     }
 

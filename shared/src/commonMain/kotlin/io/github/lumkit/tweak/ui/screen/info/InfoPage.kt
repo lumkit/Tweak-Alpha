@@ -66,6 +66,7 @@ import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
 import io.github.lumkit.tweak.common.shell.ReusableShells
+import io.github.lumkit.tweak.common.utils.isInfoPageSectionVisible
 import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
@@ -170,6 +171,10 @@ private enum class InfoPageSection(val key: String) {
 fun InfoPage() {
     val loadState by DeviceInfoViewModel.loadingState.collectAsStateWithLifecycle()
     val sectionOrder by DeviceInfoViewModel.sectionOrder.collectAsStateWithLifecycle()
+    val enabledCards by DeviceInfoViewModel.enabledCards.collectAsStateWithLifecycle()
+    val visibleSections = remember(sectionOrder, enabledCards) {
+        sectionOrder.filter { isInfoPageSectionVisible(it, enabledCards) }
+    }
     val direction = LocalLayoutDirection.current
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
@@ -243,7 +248,7 @@ fun InfoPage() {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(
-                    items = sectionOrder,
+                    items = visibleSections,
                     key = { it },
                 ) { sectionKey ->
                     ReorderableItem(
@@ -981,6 +986,9 @@ private fun GpuInfoContent() {
 @Composable
 private fun MoreInfoContent() {
     val moreInfoModel by DeviceInfoViewModel.moreInfoState.collectAsStateWithLifecycle()
+    val enabledCards by DeviceInfoViewModel.enabledCards.collectAsStateWithLifecycle()
+    val showBattery = "battery" in enabledCards
+    val showStorage = "storage" in enabledCards
 
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -988,9 +996,12 @@ private fun MoreInfoContent() {
         verticalArrangement = Arrangement.spacedBy(8.dp),
         maxItemsInEachRow = 2,
     ) {
-        BatteryContent(moreInfoModel?.battery)
-        StorageContent(moreInfoModel?.storage)
-
+        if (showBattery) {
+            BatteryContent(moreInfoModel?.battery)
+        }
+        if (showStorage) {
+            StorageContent(moreInfoModel?.storage)
+        }
     }
 }
 

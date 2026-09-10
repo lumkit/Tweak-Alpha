@@ -78,6 +78,7 @@ object TweakDataStore {
     private val hasAcceptedUserAgreement = booleanPreferencesKey("has_accepted_user_agreement")
     private val infoPageEnabledProcessInfo = booleanPreferencesKey("info_page_enabled_process_info")
     private val infoPageItemOrderKey = stringPreferencesKey("info_page_item_order")
+    private val infoPageEnabledCardsKey = stringPreferencesKey("info_page_enabled_cards")
     private val processManagerFilterModeKey = intPreferencesKey("process_manager_filter_mode")
 
     /**
@@ -604,6 +605,23 @@ object TweakDataStore {
         }
     }
 
+    fun infoPageEnabledCardsFlow(): Flow<Set<String>> = preferences.data.map {
+        normalizeInfoPageEnabledCards(it[infoPageEnabledCardsKey])
+    }
+
+    suspend fun setInfoPageEnabledCards(enabled: Set<String>) {
+        val known = DEFAULT_INFO_PAGE_CARD_KEYS.toSet()
+        var normalized = DEFAULT_INFO_PAGE_CARD_KEYS.filter { it in enabled && it in known }
+        if (normalized.isEmpty()) {
+            normalized = DEFAULT_INFO_PAGE_CARD_KEYS
+        }
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[infoPageEnabledCardsKey] = normalized.joinToString(",")
+            }
+        }
+    }
+
     fun processManagerFilterModeOrdinalFlow(): Flow<Int> = preferences.data.map {
         it[processManagerFilterModeKey] ?: 0
     }
@@ -621,6 +639,28 @@ object TweakDataStore {
  * 信息页卡片顺序：保留已知 key 的相对顺序，并补齐缺失项。
  */
 val DEFAULT_INFO_PAGE_ITEM_ORDER = listOf("cpu", "memory", "gpu", "more")
+
+/** 信息页可单独开关的卡片（电池/存储同属 more 分区）。 */
+val DEFAULT_INFO_PAGE_CARD_KEYS = listOf("cpu", "memory", "gpu", "battery", "storage")
+
+fun normalizeInfoPageEnabledCards(raw: String?): Set<String> {
+    val known = DEFAULT_INFO_PAGE_CARD_KEYS.toSet()
+    if (raw == null) {
+        return known
+    }
+    return raw.split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && it in known }
+        .toSet()
+        .ifEmpty { known }
+}
+
+fun isInfoPageSectionVisible(sectionKey: String, enabledCards: Set<String>): Boolean {
+    return when (sectionKey) {
+        "more" -> "battery" in enabledCards || "storage" in enabledCards
+        else -> sectionKey in enabledCards
+    }
+}
 
 fun normalizeInfoPageItemOrder(raw: String?): List<String> {
     val defaults = DEFAULT_INFO_PAGE_ITEM_ORDER

@@ -104,6 +104,7 @@ import tweak_alpha.shared.generated.resources.text_auto_listen_system_update
 import tweak_alpha.shared.generated.resources.text_auto_listen_system_update_description
 import tweak_alpha.shared.generated.resources.text_auto_start
 import tweak_alpha.shared.generated.resources.text_auto_start_description
+import tweak_alpha.shared.generated.resources.text_battery
 import tweak_alpha.shared.generated.resources.text_battery_current_scale
 import tweak_alpha.shared.generated.resources.text_battery_current_scale_description
 import tweak_alpha.shared.generated.resources.text_battery_dual_cell
@@ -142,6 +143,12 @@ import tweak_alpha.shared.generated.resources.text_notification_permission_denie
 import tweak_alpha.shared.generated.resources.text_open_sources
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick_description
+import tweak_alpha.shared.generated.resources.text_cpu_state
+import tweak_alpha.shared.generated.resources.text_gpu_state
+import tweak_alpha.shared.generated.resources.text_info_page_cards
+import tweak_alpha.shared.generated.resources.text_info_page_cards_description
+import tweak_alpha.shared.generated.resources.text_memory_state
+import tweak_alpha.shared.generated.resources.text_storage
 import tweak_alpha.shared.generated.resources.text_sf_latency_source
 import tweak_alpha.shared.generated.resources.text_sf_latency_source_1
 import tweak_alpha.shared.generated.resources.text_sf_latency_source_2
@@ -555,6 +562,23 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
             )
         }
 
+        // 面板卡片显示
+        Block {
+            var showCardsSheet by remember { mutableStateOf(false) }
+
+            ArrowPreference(
+                title = stringResource(Res.string.text_info_page_cards),
+                summary = stringResource(Res.string.text_info_page_cards_description),
+                onClick = { showCardsSheet = true },
+            )
+
+            InfoPageCardsSheet(
+                show = showCardsSheet,
+                viewModel = viewModel,
+                onDismiss = { showCardsSheet = false },
+            )
+        }
+
         // SurfaceFlinger latency 列
         Block {
             val source by viewModel.sfLatencySource.collectAsStateWithLifecycle()
@@ -805,6 +829,85 @@ private fun AboutContent() {
             )
         }
     }
+}
+
+@Composable
+private fun InfoPageCardsSheet(
+    show: Boolean,
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit,
+) {
+    val enabledCards by viewModel.infoPageEnabledCards.collectAsStateWithLifecycle()
+
+    OverlayBottomSheet(
+        show = show,
+        title = stringResource(Res.string.text_info_page_cards),
+        onDismissRequest = onDismiss,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                pressFeedbackType = PressFeedbackType.None,
+                colors = CardDefaults.defaultColors(
+                    color = MiuixTheme.colorScheme.surfaceContainer,
+                ),
+            ) {
+                InfoPageCardSwitch(
+                    title = stringResource(Res.string.text_cpu_state),
+                    key = "cpu",
+                    enabledCards = enabledCards,
+                    onCheckedChange = viewModel::setInfoPageCardEnabled,
+                )
+                InfoPageCardSwitch(
+                    title = stringResource(Res.string.text_memory_state),
+                    key = "memory",
+                    enabledCards = enabledCards,
+                    onCheckedChange = viewModel::setInfoPageCardEnabled,
+                )
+                InfoPageCardSwitch(
+                    title = stringResource(Res.string.text_gpu_state),
+                    key = "gpu",
+                    enabledCards = enabledCards,
+                    onCheckedChange = viewModel::setInfoPageCardEnabled,
+                )
+                InfoPageCardSwitch(
+                    title = stringResource(Res.string.text_battery),
+                    key = "battery",
+                    enabledCards = enabledCards,
+                    onCheckedChange = viewModel::setInfoPageCardEnabled,
+                )
+                InfoPageCardSwitch(
+                    title = stringResource(Res.string.text_storage),
+                    key = "storage",
+                    enabledCards = enabledCards,
+                    onCheckedChange = viewModel::setInfoPageCardEnabled,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoPageCardSwitch(
+    title: String,
+    key: String,
+    enabledCards: Set<String>,
+    onCheckedChange: (String, Boolean) -> Unit,
+) {
+    val isChecked = key in enabledCards
+    val isLastEnabled = isChecked && enabledCards.size == 1
+    SwitchPreference(
+        title = title,
+        checked = isChecked,
+        enabled = !isLastEnabled,
+        onCheckedChange = { checked ->
+            onCheckedChange(key, checked)
+        },
+    )
 }
 
 @Composable

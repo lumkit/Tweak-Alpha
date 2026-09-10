@@ -8,7 +8,9 @@ import io.github.lumkit.tweak.common.utils.BatteryUtils
 import io.github.lumkit.tweak.common.utils.CpuCodenameUtils
 import io.github.lumkit.tweak.common.utils.CpuFrequencyUtil
 import io.github.lumkit.tweak.common.utils.CpuLoadUtils
+import io.github.lumkit.tweak.common.utils.DEFAULT_INFO_PAGE_CARD_KEYS
 import io.github.lumkit.tweak.common.utils.DEFAULT_INFO_PAGE_ITEM_ORDER
+import io.github.lumkit.tweak.common.utils.isInfoPageSectionVisible
 import io.github.lumkit.tweak.common.utils.DeviceMemoryInfoUtils
 import io.github.lumkit.tweak.common.utils.DeviceTemperatureUtils
 import io.github.lumkit.tweak.common.utils.GpuUtils
@@ -232,6 +234,14 @@ object DeviceInfoViewModel : BaseViewModel() {
     private val _sectionOrder = MutableStateFlow(DEFAULT_INFO_PAGE_ITEM_ORDER)
     val sectionOrder = _sectionOrder.asStateFlow()
 
+    val enabledCards = TweakDataStore.infoPageEnabledCardsFlow()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = DEFAULT_INFO_PAGE_CARD_KEYS.toSet(),
+        )
+
     /** 信息页列表滚动位置，随 ViewModel 常驻。 */
     val listState = LazyListState()
 
@@ -240,11 +250,17 @@ object DeviceInfoViewModel : BaseViewModel() {
             return
         }
         val current = _sectionOrder.value
-        if (fromIndex !in current.indices || toIndex !in current.indices) {
+        val visible = current.filter { isInfoPageSectionVisible(it, enabledCards.value) }
+        if (fromIndex !in visible.indices || toIndex !in visible.indices) {
             return
         }
-        val newOrder = current.toMutableList().apply {
+        val newVisible = visible.toMutableList().apply {
             add(toIndex, removeAt(fromIndex))
+        }
+        val visibleSet = visible.toSet()
+        val visIter = newVisible.iterator()
+        val newOrder = current.map { key ->
+            if (key in visibleSet) visIter.next() else key
         }
         _sectionOrder.value = newOrder
         viewModelScope.launch {
