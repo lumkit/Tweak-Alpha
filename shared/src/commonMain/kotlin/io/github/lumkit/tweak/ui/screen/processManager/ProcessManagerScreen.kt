@@ -21,8 +21,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -75,6 +78,7 @@ import io.github.lumkit.tweak.ui.screen.feature.FeatureProvider
 import io.github.lumkit.tweak.ui.screen.feature.model.Capability
 import io.github.lumkit.tweak.ui.screen.feature.model.Feature
 import io.github.lumkit.tweak.ui.screen.feature.model.FeatureState
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -171,7 +175,14 @@ fun ProcessManagerContent(
     val navigator = LocalNavigator.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val direction = LocalLayoutDirection.current
-    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(
+        initialPage = ProcessSortMode.entries.indexOf(ProcessSortMode.Cpu).coerceAtLeast(0),
+        pageCount = { ProcessSortMode.entries.size },
+    )
+    val listStates = remember {
+        List(ProcessSortMode.entries.size) { LazyListState() }
+    }
     val background = MiuixTheme.colorScheme.surface
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
     val scrollBehavior = MiuixScrollBehavior()
@@ -179,9 +190,8 @@ fun ProcessManagerContent(
 
     val supported by viewModel.supported.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
-    val processes by viewModel.displayProcesses.collectAsStateWithLifecycle()
+    val processes by viewModel.filteredProcesses.collectAsStateWithLifecycle()
     val filterMode by viewModel.filterMode.collectAsStateWithLifecycle()
-    val sortMode by viewModel.sortMode.collectAsStateWithLifecycle()
     val searchMode by viewModel.searchMode.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val detail by viewModel.detail.collectAsStateWithLifecycle()
@@ -208,7 +218,14 @@ fun ProcessManagerContent(
         onPause = viewModel::stopAutoRefresh,
     )
 
-    LaunchedEffect(processes, pendingScroll) {
+    LaunchedEffect(pagerState.settledPage) {
+        val mode = ProcessSortMode.entries.getOrNull(pagerState.settledPage) ?: ProcessSortMode.Cpu
+        if (viewModel.sortMode.value != mode) {
+            viewModel.setSortMode(mode)
+        }
+    }
+
+    LaunchedEffect(processes, pendingScroll, pagerState.settledPage) {
         if (!pendingScroll || processes.isEmpty()) {
             return@LaunchedEffect
         }
@@ -217,9 +234,11 @@ fun ProcessManagerContent(
             viewModel.setFilterMode(ProcessFilterMode.All, persist = false)
             return@LaunchedEffect
         }
-        val index = viewModel.indexOfTarget(processes, scrollToPackage, scrollToPid)
+        val page = pagerState.settledPage.coerceIn(ProcessSortMode.entries.indices)
+        val sorted = viewModel.sortProcesses(processes, ProcessSortMode.entries[page])
+        val index = viewModel.indexOfTarget(sorted, scrollToPackage, scrollToPid)
         if (index >= 0) {
-            listState.animateScrollToItem(index)
+            listStates[page].animateScrollToItem(index)
         }
         // 无论是否找到，都只执行一次，不再保留滚动/高亮目标
         pendingScroll = false
@@ -291,8 +310,12 @@ fun ProcessManagerContent(
                     onSearchClick = { viewModel.setSearchMode(true) },
                     onSearchQueryChange = viewModel::setSearchQuery,
                     onSizeChanged = { topHeight = it.height },
-                    sortMode = sortMode,
-                    onSortChange = viewModel::setSortMode
+                    selectedSortIndex = pagerState.currentPage,
+                    onSortSelected = { index ->
+                        scope.launch {
+                            pagerState.animateScrollToPage(index)
+                        }
+                    },
                 )
             },
             floatingToolbarPosition = ToolbarPosition.BottomCenter,
@@ -339,24 +362,34 @@ fun ProcessManagerContent(
                     }
 
                     else -> {
-                        LazyColumn(
-                            state = listState,
+                        HorizontalPager(
+                            state = pagerState,
                             modifier = Modifier.fillMaxSize()
-                                .layerBackdrop(backdrop = backdrop)
-                                .nestedScroll(scrollBehavior.nestedScrollConnection),
-                            contentPadding = contentPadding,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            // 不使用稳定 key：刷新重排时按 index+offset 固定视口，
-                            // 避免 LazyList 跟着上次可见 Item 滚动。
-                            itemsIndexed(items = processes) { _, process ->
-                                ProcessListItem(
-                                    process = process,
-                                    highlighted = (highlightPid > 0 && process.pid == highlightPid) ||
-                                        (highlightPackage.isNotBlank() &&
-                                            process.appPackageName == highlightPackage),
-                                    onClick = { viewModel.openDetail(process) },
-                                )
+                                .layerBackdrop(backdrop = backdrop),
+                            beyondViewportPageCount = 1,
+                        ) { pageIndex ->
+                            val sortMode = ProcessSortMode.entries[pageIndex]
+                            val pageProcesses = remember(processes, sortMode) {
+                                viewModel.sortProcesses(processes, sortMode)
+                            }
+                            LazyColumn(
+                                state = listStates[pageIndex],
+                                modifier = Modifier.fillMaxSize()
+                                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                                contentPadding = contentPadding,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                // 不使用稳定 key：刷新重排时按 index+offset 固定视口，
+                                // 避免 LazyList 跟着上次可见 Item 滚动。
+                                itemsIndexed(items = pageProcesses) { _, process ->
+                                    ProcessListItem(
+                                        process = process,
+                                        highlighted = (highlightPid > 0 && process.pid == highlightPid) ||
+                                            (highlightPackage.isNotBlank() &&
+                                                process.appPackageName == highlightPackage),
+                                        onClick = { viewModel.openDetail(process) },
+                                    )
+                                }
                             }
                         }
 
@@ -413,8 +446,8 @@ private fun ProcessManagerTopBar(
     onSearchClick: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSizeChanged: (DpSize) -> Unit = {},
-    sortMode: ProcessSortMode,
-    onSortChange: (ProcessSortMode) -> Unit,
+    selectedSortIndex: Int,
+    onSortSelected: (Int) -> Unit,
 ) {
     SmallTopAppBar(
         title = title,
@@ -446,25 +479,10 @@ private fun ProcessManagerTopBar(
                 stringResource(Res.string.text_process_sort_pid),
                 stringResource(Res.string.text_process_sort_none),
             )
-            val selectedSortIndex = when (sortMode) {
-                ProcessSortMode.Cpu -> 0
-                ProcessSortMode.Res -> 1
-                ProcessSortMode.Pid -> 2
-                ProcessSortMode.None -> 3
-            }
             TabRowWithContour(
                 tabs = sortTabs,
                 selectedTabIndex = selectedSortIndex,
-                onTabSelected = { index ->
-                    onSortChange(
-                        when (index) {
-                            0 -> ProcessSortMode.Cpu
-                            1 -> ProcessSortMode.Res
-                            2 -> ProcessSortMode.Pid
-                            else -> ProcessSortMode.None
-                        }
-                    )
-                },
+                onTabSelected = onSortSelected,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)

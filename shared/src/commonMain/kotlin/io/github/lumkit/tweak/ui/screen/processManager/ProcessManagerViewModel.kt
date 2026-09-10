@@ -63,20 +63,12 @@ class ProcessManagerViewModel : BaseViewModel() {
     private val _detailLoading = MutableStateFlow(false)
     val detailLoading = _detailLoading.asStateFlow()
 
-    val displayProcesses = combine(
+    val filteredProcesses = combine(
         _processes,
         _filterMode,
-        _sortMode,
         _searchQuery,
-    ) { list, filter, sort, query ->
-        val filtered = list
-            .asSequence()
-            .filter { matchesFilter(it, filter) }
-            .filter { matchesQuery(it, query) }
-        when (sort) {
-            ProcessSortMode.None -> filtered.toList()
-            else -> filtered.sortedWith(sortComparator(sort)).toList()
-        }
+    ) { list, filter, query ->
+        list.filter { matchesFilter(it, filter) && matchesQuery(it, query) }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -249,6 +241,13 @@ class ProcessManagerViewModel : BaseViewModel() {
         } finally {
             hasCompletedInitialRefresh = true
             _loading.value = false
+        }
+    }
+
+    fun sortProcesses(list: List<ProcessInfo>, sort: ProcessSortMode): List<ProcessInfo> {
+        return when (sort) {
+            ProcessSortMode.None -> list
+            else -> list.sortedWith(sortComparator(sort))
         }
     }
 
