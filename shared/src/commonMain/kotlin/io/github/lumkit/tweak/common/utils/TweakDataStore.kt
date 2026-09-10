@@ -94,6 +94,8 @@ object TweakDataStore {
     private val loadWatcherOverlayYKey = intPreferencesKey("load_watcher_overlay_y")
     private val threadWatcherOverlayXKey = intPreferencesKey("thread_watcher_overlay_x")
     private val threadWatcherOverlayYKey = intPreferencesKey("thread_watcher_overlay_y")
+    private val processThreadWatcherOverlayXKey = intPreferencesKey("process_thread_watcher_overlay_x")
+    private val processThreadWatcherOverlayYKey = intPreferencesKey("process_thread_watcher_overlay_y")
     private val miniLoadWatcherOverlayXKey = intPreferencesKey("mini_load_watcher_overlay_x")
     private val miniLoadWatcherOverlayYKey = intPreferencesKey("mini_load_watcher_overlay_y")
 
@@ -483,6 +485,26 @@ object TweakDataStore {
             it.toMutablePreferences().also { preferences ->
                 preferences[threadWatcherOverlayXKey] = x
                 preferences[threadWatcherOverlayYKey] = y
+            }
+        }
+    }
+
+    fun processThreadWatcherOverlayPositionFlow(): Flow<Pair<Int, Int>?> = preferences.data.map {
+        val x = it[processThreadWatcherOverlayXKey]
+        val y = it[processThreadWatcherOverlayYKey]
+        if (x != null && y != null) x to y else null
+    }
+
+    val processThreadWatcherOverlayPosition: Pair<Int, Int>?
+        get() = runBlocking {
+            processThreadWatcherOverlayPositionFlow().firstOrNull()
+        }
+
+    suspend fun setProcessThreadWatcherOverlayPosition(x: Int, y: Int) {
+        preferences.updateData {
+            it.toMutablePreferences().also { preferences ->
+                preferences[processThreadWatcherOverlayXKey] = x
+                preferences[processThreadWatcherOverlayYKey] = y
             }
         }
     }

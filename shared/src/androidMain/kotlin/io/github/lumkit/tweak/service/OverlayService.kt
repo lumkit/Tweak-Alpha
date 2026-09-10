@@ -7,6 +7,7 @@ import android.view.Gravity
 import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
 import io.github.lumkit.tweak.overlay.LoadWatcherOverlayController
 import io.github.lumkit.tweak.overlay.MiniLoadWatcherOverlayController
+import io.github.lumkit.tweak.overlay.ProcessThreadWatcherOverlayController
 import io.github.lumkit.tweak.overlay.ThreadWatcherOverlayController
 
 class OverlayService : Service() {
@@ -27,6 +28,11 @@ class OverlayService : Service() {
             "io.github.lumkit.tweak.action.SHOW_MINI_LOAD_WATCHER_OVERLAY"
         const val ACTION_HIDE_MINI_LOAD_WATCHER_OVERLAY =
             "io.github.lumkit.tweak.action.HIDE_MINI_LOAD_WATCHER_OVERLAY"
+
+        const val ACTION_SHOW_PROCESS_THREAD_WATCHER_OVERLAY =
+            "io.github.lumkit.tweak.action.SHOW_PROCESS_THREAD_WATCHER_OVERLAY"
+        const val ACTION_HIDE_PROCESS_THREAD_WATCHER_OVERLAY =
+            "io.github.lumkit.tweak.action.HIDE_PROCESS_THREAD_WATCHER_OVERLAY"
     }
 
     private val loadWatcherOverlayController by lazy {
@@ -39,6 +45,10 @@ class OverlayService : Service() {
 
     private val miniLoadWatcherOverlayController by lazy {
         MiniLoadWatcherOverlayController(contextProvider = { this })
+    }
+
+    private val processThreadWatcherOverlayController by lazy {
+        ProcessThreadWatcherOverlayController(contextProvider = { this })
     }
 
     override fun onCreate() {
@@ -72,12 +82,21 @@ class OverlayService : Service() {
                 miniLoadWatcherOverlayController.hide()
                 stopIfNoOverlayShowing()
             }
+
+            ACTION_SHOW_PROCESS_THREAD_WATCHER_OVERLAY -> processThreadWatcherOverlayController.show()
+            ACTION_HIDE_PROCESS_THREAD_WATCHER_OVERLAY -> {
+                processThreadWatcherOverlayController.hide()
+                stopIfNoOverlayShowing()
+            }
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
         loadWatcherOverlayController.hide()
+        threadWatcherOverlayController.hide()
+        miniLoadWatcherOverlayController.hide()
+        processThreadWatcherOverlayController.hide()
         super.onDestroy()
     }
 
@@ -86,6 +105,7 @@ class OverlayService : Service() {
             loadWatcherOverlayController.isShowing,
             threadWatcherOverlayController.isShowing,
             miniLoadWatcherOverlayController.isShowing,
+            processThreadWatcherOverlayController.isShowing,
         )
         if (stateList.all { !it }) {
             stopSelf()

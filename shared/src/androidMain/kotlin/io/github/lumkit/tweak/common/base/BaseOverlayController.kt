@@ -60,12 +60,17 @@ abstract class BaseOverlayController(
     }
 
     fun hide() {
+        overlayHelper?.getPosition()?.let { (x, y) ->
+            onPositionShouldPersist(x, y)
+        }
         overlayHelper?.dismiss()
         onShowingChanged(false)
         logD("hide $overlayName", tag)
     }
 
     protected open fun onShowingChanged(isShowing: Boolean) = Unit
+
+    protected open fun onPositionShouldPersist(x: Int, y: Int) = Unit
 
     @Composable
     protected abstract fun Content()

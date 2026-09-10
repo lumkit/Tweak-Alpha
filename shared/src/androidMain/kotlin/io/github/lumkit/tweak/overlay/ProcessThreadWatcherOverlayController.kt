@@ -18,7 +18,6 @@ import io.github.lumkit.tweak.ContextContent
 import io.github.lumkit.tweak.common.base.BaseOverlayController
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
-import io.github.lumkit.tweak.common.utils.ForegroundAppMonitor
 import io.github.lumkit.tweak.common.utils.HandleDragTouchProvider
 import io.github.lumkit.tweak.common.utils.ProcessUtilLite
 import io.github.lumkit.tweak.common.utils.TweakDataStore
@@ -32,41 +31,42 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
-class ThreadWatcherOverlayController(
+class ProcessThreadWatcherOverlayController(
     contextProvider: () -> Context,
 ) : BaseOverlayController(
     contextProvider = contextProvider,
     tag = OverlayService.TAG,
 ) {
 
-    override val overlayName: String = "threadWatcherOverlay"
+    override val overlayName: String = "processThreadWatcherOverlay"
 
     override val draggable: Boolean
         get() = true
 
     override val startX: Int
-        get() = TweakDataStore.threadWatcherOverlayPosition?.first ?: super.startX
+        get() = TweakDataStore.processThreadWatcherOverlayPosition?.first ?: super.startX
 
     override val startY: Int
-        get() = TweakDataStore.threadWatcherOverlayPosition?.second ?: super.startY
+        get() = TweakDataStore.processThreadWatcherOverlayPosition?.second ?: super.startY
 
-    private val expanded = MutableStateFlow(false)
     private val controllerScope = CoroutineScope(Dispatchers.IO)
 
     override fun onShowingChanged(isShowing: Boolean) {
-        OverlayMonitor._threadWatcherIsShowing.value = isShowing
+        OverlayMonitor._processThreadWatcherIsShowing.value = isShowing
         if (!isShowing) {
-            expanded.value = false
+            OverlayMonitor._processThreadWatcherTarget.value = null
         }
     }
 
     override fun onPositionShouldPersist(x: Int, y: Int) {
         controllerScope.launch {
-            TweakDataStore.setThreadWatcherOverlayPosition(x, y)
+            TweakDataStore.setProcessThreadWatcherOverlayPosition(x, y)
         }
     }
 
@@ -79,7 +79,7 @@ class ThreadWatcherOverlayController(
         ).apply {
             onPositionSettled = { x, y ->
                 controllerScope.launch {
-                    TweakDataStore.setThreadWatcherOverlayPosition(x, y)
+                    TweakDataStore.setProcessThreadWatcherOverlayPosition(x, y)
                 }
             }
         }
@@ -97,15 +97,15 @@ class ThreadWatcherOverlayController(
                 modifier = Modifier.clip(Rectangle.copy(cornerRadius = 5.dp))
                     .background(color = Color(0x55000000))
             ) {
-                ThreadBox()
+                ProcessThreadBox()
             }
         }
     }
 }
 
-private class ThreadOverlayViewModel : BaseViewModel() {
-    private val _topPackage = MutableStateFlow("")
-    val topPackage = _topPackage.asStateFlow()
+private class ProcessThreadOverlayViewModel : BaseViewModel() {
+    private val _title = MutableStateFlow("")
+    val title = _title.asStateFlow()
 
     private val _threads = MutableStateFlow<List<ThreadInfo>>(emptyList())
     val threads = _threads.asStateFlow()
@@ -117,8 +117,28 @@ private class ThreadOverlayViewModel : BaseViewModel() {
     val loading = _loading.asStateFlow()
 
     private var refreshJob: Job? = null
+    private var loadGeneration = 0
 
     init {
+        viewModelScope.launch {
+            OverlayMonitor.processThreadWatcherTarget
+                .map { it?.pid }
+                .distinctUntilChanged()
+                .collect { pid ->
+                    if (pid == null) {
+                        return@collect
+                    }
+                    val target = OverlayMonitor.processThreadWatcherTarget.value ?: return@collect
+                    loadGeneration += 1
+                    _title.value = "${target.title} (${target.pid})"
+                    _threads.value = emptyList()
+                    _message.value = null
+                    _loading.value = true
+                    launch(Dispatchers.IO) {
+                        refreshOnce()
+                    }
+                }
+        }
         startWatching()
     }
 
@@ -135,36 +155,28 @@ private class ThreadOverlayViewModel : BaseViewModel() {
     }
 
     private suspend fun refreshOnce() {
-        if (!ForegroundAppMonitor.isRunning.value) {
-            _topPackage.value = ""
+        val target = OverlayMonitor.processThreadWatcherTarget.value
+        if (target == null) {
+            _title.value = ""
             _threads.value = emptyList()
-            _message.value = "前台应用监听未就绪"
+            _message.value = "暂无目标进程"
             _loading.value = false
             return
         }
 
-        val packageName = ForegroundAppMonitor.currentForegroundPackage?.trim().orEmpty()
-        if (packageName.isBlank()) {
-            _topPackage.value = ""
-            _threads.value = emptyList()
-            _message.value = "暂无前台应用"
-            _loading.value = false
-            return
-        }
-
-        _topPackage.value = packageName
-        _message.value = null
-        val pid = ProcessUtilLite.getAppMainProcess(packageName)
-        if (pid <= 0) {
-            _threads.value = emptyList()
-            _message.value = "暂无线程数据"
-            _loading.value = false
+        val generation = loadGeneration
+        _title.value = "${target.title} (${target.pid})"
+        if (!ProcessUtilLite.isProcessAlive(target.pid)) {
+            OverlayMonitor.hideProcessThreadWatcherOverlay()
             return
         }
 
         val threadLoads = runCatching {
-            ProcessUtilLite.getThreadLoads(pid)
+            ProcessUtilLite.getThreadLoads(target.pid)
         }.getOrDefault(emptyList())
+        if (generation != loadGeneration) {
+            return
+        }
 
         _threads.value = threadLoads
             .sortedByDescending { it.cpuLoad }
@@ -178,22 +190,21 @@ private class ThreadOverlayViewModel : BaseViewModel() {
         refreshJob = null
         super.onCleared()
     }
-
 }
 
 @Composable
-private fun ThreadBox() {
-    val viewModel: ThreadOverlayViewModel = viewModel { ThreadOverlayViewModel() }
-    val topPackage by viewModel.topPackage.collectAsStateWithLifecycle()
+private fun ProcessThreadBox() {
+    val viewModel: ProcessThreadOverlayViewModel = viewModel { ProcessThreadOverlayViewModel() }
+    val title by viewModel.title.collectAsStateWithLifecycle()
     val threads by viewModel.threads.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
 
     ThreadWatcherPanel(
-        title = topPackage.ifBlank { message ?: "暂无前台应用" },
+        title = title.ifBlank { message ?: "暂无目标进程" },
         loading = loading,
         threads = threads,
         message = message,
-        onClose = OverlayMonitor::hideThreadWatcherOverlay,
+        onClose = OverlayMonitor::hideProcessThreadWatcherOverlay,
     )
 }

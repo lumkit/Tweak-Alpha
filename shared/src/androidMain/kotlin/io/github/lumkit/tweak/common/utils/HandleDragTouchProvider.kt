@@ -63,9 +63,11 @@ class HandleDragTouchProvider(
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (isDragging) {
+                    return true
+                }
                 val wasTouchingHandle = handlePressed
                 handlePressed = false
-                isDragging = false
                 if (wasTouchingHandle) {
                     notifyInteractionEnd()
                 }

@@ -71,9 +71,11 @@ import io.github.lumkit.tweak.common.component.glassBlur
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.jumpToAppInfo
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
+import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
 import io.github.lumkit.tweak.model.ProcessInfo
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
+import io.github.lumkit.tweak.overlay.OverlayMonitor
 import io.github.lumkit.tweak.ui.screen.feature.FeatureProvider
 import io.github.lumkit.tweak.ui.screen.feature.model.Capability
 import io.github.lumkit.tweak.ui.screen.feature.model.Feature
@@ -131,6 +133,7 @@ import tweak_alpha.shared.generated.resources.text_process_oom_score_adj
 import tweak_alpha.shared.generated.resources.text_process_pid
 import tweak_alpha.shared.generated.resources.text_process_res
 import tweak_alpha.shared.generated.resources.text_process_search_label
+import tweak_alpha.shared.generated.resources.text_process_show_threads
 import tweak_alpha.shared.generated.resources.text_process_sort_cpu
 import tweak_alpha.shared.generated.resources.text_process_sort_none
 import tweak_alpha.shared.generated.resources.text_process_sort_pid
@@ -711,11 +714,7 @@ private fun ProcessDetailDialog(
                         leftLabel = stringResource(Res.string.text_process_cpu_avg),
                         leftValue = "%.1f%%".format(info.cpu),
                         rightContent = {
-//                            Text(
-//                                text = stringResource(Res.string.text_process_show_threads),
-//                                color = MiuixTheme.colorScheme.primary,
-//                                style = MiuixTheme.textStyles.body2,
-//                            )
+                            ProcessShowThreadsAction(process = info)
                         },
                     )
                     ProcessDetailGridRow(
@@ -804,6 +803,29 @@ private fun ProcessDetailDialog(
             }
         }
     }
+}
+
+@Composable
+private fun ProcessShowThreadsAction(process: ProcessInfo) {
+    val showing by OverlayMonitor.processThreadWatcherIsShowing.collectAsStateWithLifecycle()
+    val target by OverlayMonitor.processThreadWatcherTarget.collectAsStateWithLifecycle()
+    val overlayTitle = process.displayName.ifBlank { process.name }
+    val requestOverlay = rememberRequestOverlayPermission {
+        OverlayMonitor.showProcessThreadWatcherOverlay(process.pid, overlayTitle)
+    }
+
+    Text(
+        text = stringResource(Res.string.text_process_show_threads),
+        color = MiuixTheme.colorScheme.primary,
+        style = MiuixTheme.textStyles.body2,
+        modifier = Modifier.clickable {
+            if (showing && target?.pid == process.pid) {
+                OverlayMonitor.hideProcessThreadWatcherOverlay()
+            } else {
+                requestOverlay()
+            }
+        },
+    )
 }
 
 @Composable

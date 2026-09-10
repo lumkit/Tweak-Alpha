@@ -231,7 +231,7 @@
     <string name="text_process_cpus">cpus</string>
     <string name="text_process_oom_adj">oom_adj</string>
     <string name="text_process_oom_score_adj">oom_score_adj</string>
-    <string name="text_process_show_threads">Show Threads...</string>
+    <string name="text_process_show_threads">显示线程...</string>
     <string name="text_process_manage">管理</string>
     <string name="text_process_kill_android_app">停止应用</string>
     <string name="text_process_stop">结束进程</string>

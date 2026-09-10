@@ -71,6 +71,13 @@ object ProcessUtilLite {
         return pid.toIntOrNull() ?: -1
     }
 
+    suspend fun isProcessAlive(pid: Int): Boolean {
+        if (pid <= 0) {
+            return false
+        }
+        return Files.exists("/proc/$pid").getOrNull() == true
+    }
+
     suspend fun getThreadLoads(pid: Int): List<ThreadInfo> {
         val result = ReusableShells.execSync(
             "top -H -b -q -n 1 -p $pid -o TID,%CPU,CMD",
