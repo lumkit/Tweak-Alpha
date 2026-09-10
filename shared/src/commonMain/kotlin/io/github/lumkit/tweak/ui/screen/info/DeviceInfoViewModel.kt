@@ -92,12 +92,18 @@ object DeviceInfoViewModel : BaseViewModel() {
     data class MemoryInfoModel(
         val totalUsed: Float,
         val totalUsedText: String,
+        val totalUsedSizeText: String,
+        val totalSizeUnitText: String,
         val memoryUsed: Float,
         val memoryUsedText: String,
+        val memoryUsedSizeText: String,
+        val memoryAvailableSizeText: String,
         val memorySize: Long,
         val memorySizeUnitText: String,
         val swapUsed: Float,
         val swapUsedText: String,
+        val swapUsedSizeText: String,
+        val swapFreeSizeText: String,
         val swapSize: Long,
         val swapSizeUnitText: String,
         val swapCache: Long,
@@ -142,6 +148,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         val usedLoad: Float,
         val totalText: String,
         val usedText: String,
+        val usedTextInline: String,
         val userSpace: String,
         val freeText: String,
     )
@@ -446,16 +453,22 @@ object DeviceInfoViewModel : BaseViewModel() {
         _memoryInfoState.value = MemoryInfoModel(
             totalUsed = ratioOf(totalUsedSize, totalSize),
             totalUsedText = percentText(totalUsedSize, totalSize),
+            totalUsedSizeText = totalUsedSize.formatMemorySize(" "),
+            totalSizeUnitText = totalSize.formatMemorySize(" "),
             memoryUsed = ratioOf(memoryUsedSize, memorySize),
             memoryUsedText = percentText(memoryUsedSize, memorySize),
+            memoryUsedSizeText = memoryUsedSize.formatMemorySize(" "),
+            memoryAvailableSizeText = memoryInfo.memAvailable.formatMemorySize(" "),
             memorySize = memorySize,
-            memorySizeUnitText = memorySize.formatMemorySize(),
+            memorySizeUnitText = memorySize.formatMemorySize(" "),
             swapUsed = ratioOf(swapUsedSize, swapSize),
             swapUsedText = percentText(swapUsedSize, swapSize),
+            swapUsedSizeText = swapUsedSize.formatMemorySize(" "),
+            swapFreeSizeText = memoryInfo.swapFree.formatMemorySize(" "),
             swapSize = swapSize,
-            swapSizeUnitText = swapSize.formatMemorySize(),
+            swapSizeUnitText = swapSize.formatMemorySize(" "),
             swapCache = memoryInfo.swapCached,
-            swapCacheUnitText = memoryInfo.swapCached.formatMemorySize(),
+            swapCacheUnitText = memoryInfo.swapCached.formatMemorySize(" "),
         )
     }
 
@@ -548,10 +561,11 @@ object DeviceInfoViewModel : BaseViewModel() {
             StorageInfoModel(
                 flashType = flashType,
                 usedLoad = usedLoad,
-                totalText = total.formatMemorySize(),
+                totalText = total.formatMemorySize(" "),
                 usedText = used.formatMemorySize("\n"),
+                usedTextInline = used.formatMemorySize(" "),
                 userSpace = userSpace.joinToString("|"),
-                freeText = free.formatMemorySize(),
+                freeText = free.formatMemorySize(" "),
             )
         }
 

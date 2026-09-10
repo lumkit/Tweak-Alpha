@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -94,8 +95,13 @@ import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
+import top.yukonga.miuix.kmp.basic.RichTooltip
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TooltipAnchorPosition
+import top.yukonga.miuix.kmp.basic.TooltipBox
+import top.yukonga.miuix.kmp.basic.TooltipDefaults
+import top.yukonga.miuix.kmp.basic.rememberTooltipState
 import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Backup
@@ -115,8 +121,15 @@ import tweak_alpha.shared.generated.resources.text_cpu_state
 import tweak_alpha.shared.generated.resources.text_fps_record_overlay
 import tweak_alpha.shared.generated.resources.text_fps_record_overlay_description
 import tweak_alpha.shared.generated.resources.text_gpu_state
+import tweak_alpha.shared.generated.resources.text_info_available
 import tweak_alpha.shared.generated.resources.text_info_metric_load
 import tweak_alpha.shared.generated.resources.text_info_metric_temperature
+import tweak_alpha.shared.generated.resources.text_info_used_of_total
+import tweak_alpha.shared.generated.resources.text_label_flash
+import tweak_alpha.shared.generated.resources.text_label_free
+import tweak_alpha.shared.generated.resources.text_label_total
+import tweak_alpha.shared.generated.resources.text_label_used
+import tweak_alpha.shared.generated.resources.text_label_user
 import tweak_alpha.shared.generated.resources.text_memory_physical
 import tweak_alpha.shared.generated.resources.text_memory_state
 import tweak_alpha.shared.generated.resources.text_mini_load_overlay
@@ -241,35 +254,46 @@ fun InfoPage() {
                             targetValue = if (isDragging) 0.92f else 1f,
                             animationSpec = tween(durationMillis = 120),
                         )
-                        Box(
-                            modifier = Modifier
-                                .graphicsLayer { alpha = dragAlpha }
-                                .longPressDraggableHandle(
-                                    onDragStarted = {
-                                        hapticFeedback.performHapticFeedback(
-                                            HapticFeedbackType.GestureThresholdActivate,
+                        val longPressHub = remember(sectionKey) { InfoItemLongPressHub() }
+                        val reorderSlopPx = with(LocalDensity.current) { 28.dp.toPx() }
+                        val dragDetector = remember(reorderSlopPx, longPressHub) {
+                            LongPressThenSlopDragDetector(reorderSlopPx) {
+                                longPressHub.emitShow()
+                            }
+                        }
+                        CompositionLocalProvider(LocalInfoItemLongPress provides longPressHub) {
+                            Box(
+                                modifier = Modifier
+                                    .graphicsLayer { alpha = dragAlpha }
+                                    .draggableHandle(
+                                        dragGestureDetector = dragDetector,
+                                        onDragStarted = {
+                                            longPressHub.emitDismiss()
+                                            hapticFeedback.performHapticFeedback(
+                                                HapticFeedbackType.GestureThresholdActivate,
+                                            )
+                                        },
+                                        onDragStopped = {
+                                            hapticFeedback.performHapticFeedback(
+                                                HapticFeedbackType.GestureEnd,
+                                            )
+                                        },
+                                    ),
+                            ) {
+                                when (InfoPageSection.fromKey(sectionKey)) {
+                                    InfoPageSection.Cpu -> CpuInfoContent { vo ->
+                                        navigator.navigate(
+                                            Screen.ProcessManager(
+                                                scrollToPackage = vo.packageName,
+                                                scrollToPid = vo.pid,
+                                            )
                                         )
-                                    },
-                                    onDragStopped = {
-                                        hapticFeedback.performHapticFeedback(
-                                            HapticFeedbackType.GestureEnd,
-                                        )
-                                    },
-                                ),
-                        ) {
-                            when (InfoPageSection.fromKey(sectionKey)) {
-                                InfoPageSection.Cpu -> CpuInfoContent { vo ->
-                                    navigator.navigate(
-                                        Screen.ProcessManager(
-                                            scrollToPackage = vo.packageName,
-                                            scrollToPid = vo.pid,
-                                        )
-                                    )
+                                    }
+                                    InfoPageSection.Memory -> MemoryInfoContent()
+                                    InfoPageSection.Gpu -> GpuInfoContent()
+                                    InfoPageSection.More -> MoreInfoContent()
+                                    null -> Unit
                                 }
-                                InfoPageSection.Memory -> MemoryInfoContent()
-                                InfoPageSection.Gpu -> GpuInfoContent()
-                                InfoPageSection.More -> MoreInfoContent()
-                                null -> Unit
                             }
                         }
                     }
@@ -597,28 +621,53 @@ private fun MemoryInfoContent() {
     CategoryCard(
         title = stringResource(Res.string.text_memory_state)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+        ValueRichTooltipBox(
+            title = stringResource(Res.string.text_memory_state),
+            lines = listOf(
+                stringResource(Res.string.text_memory_physical) to stringResource(
+                    Res.string.text_info_used_of_total,
+                ).format(
+                    memoryState?.memoryUsedSizeText ?: "N/A",
+                    memoryState?.memorySizeUnitText ?: "N/A",
+                ),
+                stringResource(Res.string.text_info_available) to (memoryState?.memoryAvailableSizeText ?: "N/A"),
+                stringResource(Res.string.text_swap) to stringResource(
+                    Res.string.text_info_used_of_total,
+                ).format(
+                    memoryState?.swapUsedSizeText ?: "N/A",
+                    memoryState?.swapSizeUnitText ?: "N/A",
+                ),
+                stringResource(Res.string.text_total_memory_used) to stringResource(
+                    Res.string.text_info_used_of_total,
+                ).format(
+                    memoryState?.totalUsedSizeText ?: "N/A",
+                    memoryState?.totalSizeUnitText ?: "N/A",
+                ),
+                "SwapCached" to (memoryState?.swapCacheUnitText ?: "N/A"),
+            ),
         ) {
-            Box(
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                CircularProgressIndicator(
-                    progress = load,
-                    size = 80.dp,
-                    strokeWidth = 16.dp,
-                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                        foregroundColor = loadColor
-                    ),
-                )
+                Box(
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        progress = load,
+                        size = 80.dp,
+                        strokeWidth = 16.dp,
+                        colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                            foregroundColor = loadColor
+                        ),
+                    )
 
-                Text(
-                    text = stringResource(Res.string.text_total_memory),
-                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                    style = MiuixTheme.textStyles.body2,
-                )
-            }
+                    Text(
+                        text = stringResource(Res.string.text_total_memory),
+                        color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                        style = MiuixTheme.textStyles.body2,
+                    )
+                }
 
             VerticalDivider(
                 modifier = Modifier.fillMaxHeight()
@@ -647,12 +696,10 @@ private fun MemoryInfoContent() {
                         Spacer(modifier = Modifier.height(4.dp))
                         MemoryTable(
                             title = stringResource(Res.string.text_memory_physical),
-                            content = buildString {
-                                append(memoryState?.memoryUsedText ?: "N/A")
-                                append(" (")
-                                append(memoryState?.memorySizeUnitText ?: "N/A")
-                                append(")")
-                            },
+                            content = stringResource(Res.string.text_info_used_of_total).format(
+                                memoryState?.memoryUsedSizeText ?: "N/A",
+                                memoryState?.memorySizeUnitText ?: "N/A",
+                            ),
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -668,12 +715,10 @@ private fun MemoryInfoContent() {
                         Spacer(modifier = Modifier.height(4.dp))
                         MemoryTable(
                             title = stringResource(Res.string.text_swap),
-                            content = buildString {
-                                append(memoryState?.swapUsedText ?: "N/A")
-                                append(" (")
-                                append(memoryState?.swapSizeUnitText ?: "N/A")
-                                append(")")
-                            },
+                            content = stringResource(Res.string.text_info_used_of_total).format(
+                                memoryState?.swapUsedSizeText ?: "N/A",
+                                memoryState?.swapSizeUnitText ?: "N/A",
+                            ),
                         )
                     }
                     // TODO 操作按钮
@@ -689,7 +734,12 @@ private fun MemoryInfoContent() {
                                     color = MiuixTheme.colorScheme.onSurface.copy(.31f)
                                 )
                             ) {
-                                append(memoryState?.totalUsedText ?: "N/A")
+                                append(
+                                    stringResource(Res.string.text_info_used_of_total).format(
+                                        memoryState?.totalUsedSizeText ?: "N/A",
+                                        memoryState?.totalSizeUnitText ?: "N/A",
+                                    )
+                                )
                             }
                         },
                         color = MiuixTheme.colorScheme.onSurface.copy(.7f),
@@ -713,6 +763,7 @@ private fun MemoryInfoContent() {
                         textAlign = TextAlign.Center,
                     )
                 }
+            }
             }
         }
     }
@@ -739,6 +790,75 @@ private fun MemoryTable(
             style = MiuixTheme.textStyles.footnote2,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+@Composable
+private fun ValueRichTooltipBox(
+    title: String,
+    lines: List<Pair<String, String>>,
+    content: @Composable () -> Unit,
+) {
+    val longPressHub = LocalInfoItemLongPress.current
+    val state = rememberTooltipState(isPersistent = true)
+    val scope = rememberCoroutineScope()
+    val colors = TooltipDefaults.richTooltipColors()
+
+    DisposableEffect(longPressHub, state, scope) {
+        val show:  () -> Unit = { scope.launch { state.show() } }
+        val dismiss = { state.dismiss() }
+        longPressHub.show = show
+        longPressHub.dismiss = dismiss
+        onDispose {
+            if (longPressHub.show === show) {
+                longPressHub.show = null
+                longPressHub.dismiss = null
+            }
+        }
+    }
+
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+            positioning = TooltipAnchorPosition.Above,
+        ),
+        tooltip = {
+            RichTooltip(
+                title = {
+                    Text(
+                        text = title,
+                        color = colors.titleContentColor,
+                        style = MiuixTheme.textStyles.subtitle,
+                    )
+                },
+                colors = colors,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    lines.forEach { (label, value) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = label,
+                                color = colors.contentColor,
+                                style = MiuixTheme.textStyles.body2,
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(
+                                text = value,
+                                color = colors.titleContentColor,
+                                style = MiuixTheme.textStyles.body2,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        state = state,
+        focusable = true,
+        enableUserInput = false,
+    ) {
+        content()
     }
 }
 
@@ -966,32 +1086,56 @@ private fun FlowRowScope.StorageContent(
         modifier = Modifier.fillMaxWidth()
             .weight(1f)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        ValueRichTooltipBox(
+            title = stringResource(Res.string.text_storage),
+            lines = buildList {
+                add(
+                    stringResource(Res.string.text_label_used) to
+                        (storageModel?.usedTextInline ?: "N/A"),
+                )
+                add(
+                    stringResource(Res.string.text_label_free) to
+                        (storageModel?.freeText ?: "N/A"),
+                )
+                add(
+                    stringResource(Res.string.text_label_total) to
+                        (storageModel?.totalText ?: "N/A"),
+                )
+                add(
+                    stringResource(Res.string.text_label_flash) to
+                        (storageModel?.flashType ?: "N/A"),
+                )
+                storageModel?.userSpace?.takeIf { it.isNotBlank() }?.let { space ->
+                    add(stringResource(Res.string.text_label_user) to space)
+                }
+            },
         ) {
-            Box(
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                CircularProgressIndicator(
-                    progress = load,
-                    size = 48.dp,
-                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                        foregroundColor = loadColor
-                    ),
-                    strokeWidth = 8.dp,
-                )
-                Text(
-                    text = storageModel?.usedText ?: "N/A",
-                    style = MiuixTheme.textStyles.footnote2.copy(
-                        fontSize = 10.sp,
-                        lineHeight = 10.sp
-                    ),
-                    color = MiuixTheme.colorScheme.onSurface.copy(.5f),
-                    textAlign = TextAlign.Center
-                )
-            }
+                Box(
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        progress = load,
+                        size = 48.dp,
+                        colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                            foregroundColor = loadColor
+                        ),
+                        strokeWidth = 8.dp,
+                    )
+                    Text(
+                        text = storageModel?.usedText ?: "N/A",
+                        style = MiuixTheme.textStyles.footnote2.copy(
+                            fontSize = 10.sp,
+                            lineHeight = 10.sp
+                        ),
+                        color = MiuixTheme.colorScheme.onSurface.copy(.5f),
+                        textAlign = TextAlign.Center
+                    )
+                }
 
             Column {
                 Text(
@@ -1012,6 +1156,7 @@ private fun FlowRowScope.StorageContent(
                     style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                 )
+            }
             }
         }
     }
