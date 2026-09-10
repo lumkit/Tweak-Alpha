@@ -200,7 +200,7 @@ internal object FileServiceDelegate {
     @JvmStatic
     fun listInstalledApps(): Bundle = try {
         val pm = PrivilegedContextProvider.requirePackageManagerContext().packageManager
-        val matchFlags = PackageManager.MATCH_DISABLED_COMPONENTS.toLong()
+        val matchFlags = installedPackagesMatchFlags()
         val packageInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(matchFlags))
         } else {
@@ -219,11 +219,11 @@ internal object FileServiceDelegate {
         val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             pm.getPackageInfo(
                 packageName,
-                PackageManager.PackageInfoFlags.of(PackageManager.MATCH_DISABLED_COMPONENTS.toLong()),
+                PackageManager.PackageInfoFlags.of(installedPackagesMatchFlags()),
             )
         } else {
             @Suppress("DEPRECATION")
-            pm.getPackageInfo(packageName, PackageManager.MATCH_DISABLED_COMPONENTS)
+            pm.getPackageInfo(packageName, installedPackagesMatchFlags().toInt())
         }
         val bundle = packageInfo.toInstalledAppBundle(pm)
             ?: throw IllegalStateException("applicationInfo is null for $packageName")
@@ -383,15 +383,25 @@ internal object FileServiceDelegate {
     }
 }
 
+private fun installedPackagesMatchFlags(): Long {
+    return PackageManager.MATCH_DISABLED_COMPONENTS.toLong() or
+        PackageManager.MATCH_UNINSTALLED_PACKAGES.toLong()
+}
+
 private fun PackageInfo.toInstalledAppBundle(pm: PackageManager): Bundle? {
     val appInfo = applicationInfo ?: return null
+    val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+    val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+    val state = resolveAppState(pm, packageName, appInfo)
+    if (state == "UNINSTALLED" && !isSystemApp) {
+        return null
+    }
     val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         longVersionCode
     } else {
         @Suppress("DEPRECATION")
         versionCode.toLong()
     }
-    val state = resolveAppState(pm, packageName, appInfo)
     return Bundle().apply {
         putString(NativeFileBundles.KEY_PACKAGE_NAME, packageName)
         putString(NativeFileBundles.KEY_APP_NAME, runCatching {
@@ -413,10 +423,8 @@ private fun PackageInfo.toInstalledAppBundle(pm: PackageManager): Bundle? {
             NativeFileBundles.KEY_ABI_LIST,
             ArrayList(appInfo.resolveAbiBitNames()),
         )
-        putBoolean(
-            NativeFileBundles.KEY_IS_SYSTEM_APP,
-            (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-        )
+        putBoolean(NativeFileBundles.KEY_IS_SYSTEM_APP, isSystemApp)
+        putBoolean(NativeFileBundles.KEY_IS_UPDATED_SYSTEM_APP, isUpdatedSystemApp)
         putString(NativeFileBundles.KEY_APP_STATE, state)
     }
 }
@@ -426,6 +434,9 @@ private fun resolveAppState(
     packageName: String,
     appInfo: ApplicationInfo,
 ): String {
+    if (appInfo.isUninstalledForCurrentUser()) {
+        return "UNINSTALLED"
+    }
     val setting = runCatching { pm.getApplicationEnabledSetting(packageName) }
         .getOrNull() ?: PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
     return when (setting) {
@@ -434,6 +445,21 @@ private fun resolveAppState(
         PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED -> "DISABLED"
         else -> if (appInfo.enabled) "ENABLED" else "DISABLED"
     }
+}
+
+private fun ApplicationInfo.isUninstalledForCurrentUser(): Boolean {
+    val installed = (flags and ApplicationInfo.FLAG_INSTALLED) != 0
+    if (!installed) {
+        return true
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+        return false
+    }
+    return runCatching {
+        ApplicationInfo::class.java.getDeclaredField("hiddenUntilInstalled").apply {
+            isAccessible = true
+        }.getBoolean(this)
+    }.getOrDefault(false)
 }
 
 private fun ApplicationInfo.resolveAbiBitNames(): List<String> {

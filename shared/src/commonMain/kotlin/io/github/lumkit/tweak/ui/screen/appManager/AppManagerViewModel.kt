@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
 import tweak_alpha.shared.generated.resources.Res
 import tweak_alpha.shared.generated.resources.text_app_uninstall
+import tweak_alpha.shared.generated.resources.text_app_restore
 import tweak_alpha.shared.generated.resources.text_dialog_running_task
 import tweak_alpha.shared.generated.resources.text_disable_app
 import tweak_alpha.shared.generated.resources.text_enable_app
@@ -59,6 +60,9 @@ class AppManagerViewModel: BaseViewModel() {
     private val _disabledApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val disabledApps = _disabledApps.asStateFlow()
 
+    private val _uninstalledSystemApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    val uninstalledSystemApps = _uninstalledSystemApps.asStateFlow()
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
@@ -94,6 +98,9 @@ class AppManagerViewModel: BaseViewModel() {
                 _systemApps.value = it.filter { info -> info.isSystemApp && info.state == AppState.ENABLED }
                 _unabledApps.value = it.filter { info -> info.state == AppState.FROZEN }
                 _disabledApps.value = it.filter { info -> info.state == AppState.DISABLED }
+                _uninstalledSystemApps.value = it.filter { info ->
+                    info.isSystemApp && info.state == AppState.UNINSTALLED
+                }
                 _selectableAppPackageNames.value = it.map { info -> info.packageName }.toSet()
             }
         }
@@ -413,6 +420,39 @@ class AppManagerViewModel: BaseViewModel() {
         success(buildBatchOperationMessage(getString(Res.string.text_app_uninstall), summary))
     }
 
+    fun restoreSelectedSystemApps() = suspendLaunch(
+        id = "restoreSelectedSystemApps",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        val selectedApps = consumeSelectedPackages()
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+
+        if (selectedApps.isEmpty()) {
+            success()
+            return@suspendLaunch
+        }
+
+        val summary = runBatchOperation(selectedApps, AppsHelper::restoreSystemApp)
+        success(buildBatchOperationMessage(getString(Res.string.text_app_restore), summary))
+    }
+
+    fun restoreSystemApp(packageName: String) = suspendLaunch(
+        id = "restoreSystemApp",
+        complete = {
+            _loadingState.value = false
+        }
+    ) {
+        loading()
+        _loadingState.value = true
+        _loadingTextRes.value = Res.string.text_dialog_running_task
+        val summary = runBatchOperation(listOf(packageName), AppsHelper::restoreSystemApp)
+        success(buildBatchOperationMessage(getString(Res.string.text_app_restore), summary))
+    }
+
     fun setTargetAppInfo(info: AppInfo?){
         _targetAppInfo.value = info
     }
@@ -477,6 +517,7 @@ class AppManagerViewModel: BaseViewModel() {
      * 按当前状态恢复应用：
      * - [AppState.DISABLED] 走 [AppsHelper.setDisabled]
      * - [AppState.FROZEN] 走 [AppsHelper.setFrozen]
+     * - [AppState.UNINSTALLED] 走 [AppsHelper.restoreSystemApp]
      */
     private suspend fun restoreApp(
         packageName: String,
@@ -485,6 +526,7 @@ class AppManagerViewModel: BaseViewModel() {
         return when (state) {
             AppState.DISABLED -> AppsHelper.setDisabled(packageName, disabled = false)
             AppState.FROZEN -> AppsHelper.setFrozen(packageName, frozen = false)
+            AppState.UNINSTALLED -> AppsHelper.restoreSystemApp(packageName)
             AppState.ENABLED, null -> AppsHelper.setFrozen(packageName, frozen = false)
         }
     }

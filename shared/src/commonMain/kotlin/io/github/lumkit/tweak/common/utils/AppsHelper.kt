@@ -19,6 +19,9 @@ enum class AppState {
 
     /** 已冻结（`pm disable-user`，用户主动停用，图标从桌面隐藏） */
     FROZEN,
+
+    /** 已对当前用户卸载（系统应用仍保留分区 APK，可恢复） */
+    UNINSTALLED,
 }
 
 @Serializable
@@ -81,6 +84,8 @@ data class AppInfo(
     val iconPath: String,
     /** 是否为系统应用 */
     val isSystemApp: Boolean,
+    /** 是否为覆盖安装过的系统应用 */
+    val isUpdatedSystemApp: Boolean = false,
     /** 应用运行状态 */
     val state: AppState,
 )
@@ -120,6 +125,11 @@ expect object AppsHelper {
      * @param packageName 目标包名
      */
     suspend fun uninstall(packageName: String): AppOperationResult
+
+    /**
+     * 恢复已对当前用户卸载的系统应用。
+     */
+    suspend fun restoreSystemApp(packageName: String): AppOperationResult
 
     /**
      * 提取应用 APK 到指定目录（含 split APK）。

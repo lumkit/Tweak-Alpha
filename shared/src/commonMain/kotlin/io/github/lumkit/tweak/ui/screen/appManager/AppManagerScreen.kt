@@ -143,6 +143,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.window.WindowDialog
 import tweak_alpha.shared.generated.resources.Res
+import tweak_alpha.shared.generated.resources.ic_history
 import tweak_alpha.shared.generated.resources.ic_disable
 import tweak_alpha.shared.generated.resources.ic_ice_app
 import tweak_alpha.shared.generated.resources.ic_module
@@ -166,6 +167,7 @@ import tweak_alpha.shared.generated.resources.text_app_info_version_code
 import tweak_alpha.shared.generated.resources.text_app_manager
 import tweak_alpha.shared.generated.resources.text_app_manager_description
 import tweak_alpha.shared.generated.resources.text_app_search_label
+import tweak_alpha.shared.generated.resources.text_app_restore
 import tweak_alpha.shared.generated.resources.text_app_uninstall
 import tweak_alpha.shared.generated.resources.text_close
 import tweak_alpha.shared.generated.resources.text_dialog_cancel
@@ -175,7 +177,9 @@ import tweak_alpha.shared.generated.resources.text_dialog_force_stop_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_force_stop_confirm
 import tweak_alpha.shared.generated.resources.text_dialog_freeze_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_unfreeze_app_summary
+import tweak_alpha.shared.generated.resources.text_dialog_restore_system_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_uninstall_app_summary
+import tweak_alpha.shared.generated.resources.text_dialog_uninstall_system_app_summary
 import tweak_alpha.shared.generated.resources.text_dialog_warm_tip
 import tweak_alpha.shared.generated.resources.text_disable_app
 import tweak_alpha.shared.generated.resources.text_disabled_apps
@@ -196,6 +200,7 @@ import tweak_alpha.shared.generated.resources.text_selected_apps_format
 import tweak_alpha.shared.generated.resources.text_system_apps
 import tweak_alpha.shared.generated.resources.text_unable_app
 import tweak_alpha.shared.generated.resources.text_unabled_apps
+import tweak_alpha.shared.generated.resources.text_uninstalled_system_apps
 import tweak_alpha.shared.generated.resources.text_user_apps
 
 internal val AppManagerProvider = object : FeatureProvider {
@@ -236,24 +241,34 @@ private fun AppManagerContent(
     val pages = remember(viewModel) {
         listOf(
             AppPage(
+                kind = AppPageKind.System,
                 iconRes = Res.drawable.ic_system_apps,
                 titleRes = Res.string.text_system_apps,
                 listState = viewModel.systemApps,
             ),
             AppPage(
+                kind = AppPageKind.User,
                 iconRes = Res.drawable.ic_user_apps,
                 titleRes = Res.string.text_user_apps,
                 listState = viewModel.userApps,
             ),
             AppPage(
+                kind = AppPageKind.Frozen,
                 iconRes = Res.drawable.ic_ice_app,
                 titleRes = Res.string.text_unabled_apps,
                 listState = viewModel.unabledApps,
             ),
             AppPage(
+                kind = AppPageKind.Disabled,
                 iconRes = Res.drawable.ic_disable,
                 titleRes = Res.string.text_disabled_apps,
                 listState = viewModel.disabledApps,
+            ),
+            AppPage(
+                kind = AppPageKind.Uninstalled,
+                iconRes = Res.drawable.ic_history,
+                titleRes = Res.string.text_uninstalled_system_apps,
+                listState = viewModel.uninstalledSystemApps,
             ),
         )
     }
@@ -392,6 +407,8 @@ private fun AppManagerLoadStateEffects(viewModel: AppManagerViewModel) {
         WatchSnackBarState("enableApp", hostState)
         WatchSnackBarState("uninstallSelectedApps", hostState)
         WatchSnackBarState("uninstallApp", hostState)
+        WatchSnackBarState("restoreSelectedSystemApps", hostState)
+        WatchSnackBarState("restoreSystemApp", hostState)
         WatchSnackBarState("extractApk", hostState)
     }
 }
@@ -780,7 +797,7 @@ private fun AppManagerContentLayout(
                 BottomToolbar(
                     backdrop = backdrop,
                     viewModel = viewModel,
-                    currentPosition = currentPage,
+                    pageKind = pages.getOrNull(currentPage)?.kind ?: AppPageKind.System,
                     onToolBarHeight = onToolBarHeight,
                 )
             }
@@ -826,19 +843,22 @@ private fun AppManagerContentLayout(
 private fun BoxScope.BottomToolbar(
     backdrop: LayerBackdrop,
     viewModel: AppManagerViewModel,
-    currentPosition: Int,
+    pageKind: AppPageKind,
     onToolBarHeight: (Dp) -> Unit,
 ) {
     val background = MiuixTheme.colorScheme.surface
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
     val selectedApps by viewModel.selectedApps.collectAsStateWithLifecycle()
     val isEmpty = remember(selectedApps) { selectedApps.isEmpty() }
-    val isUnfreezeAction = currentPosition == 2
-    val isEnableDisabledAction = currentPosition == 3
+    val isUnfreezeAction = pageKind == AppPageKind.Frozen
+    val isEnableDisabledAction = pageKind == AppPageKind.Disabled
+    val isRestoreAction = pageKind == AppPageKind.Uninstalled
+    val isSystemUninstall = pageKind == AppPageKind.System
     var forceDialogState by remember { mutableStateOf(false) }
     var iceDialogState by remember { mutableStateOf(false) }
     var disableDialogState by remember { mutableStateOf(false) }
     var uninstallDialogState by remember { mutableStateOf(false) }
+    var restoreDialogState by remember { mutableStateOf(false) }
     val density = LocalDensity.current
 
     ForceStopDialog(
@@ -886,12 +906,24 @@ private fun BoxScope.BottomToolbar(
 
     UninstallDialog(
         show = uninstallDialogState,
+        isSystemUninstall = isSystemUninstall,
         onDismissRequest = {
             uninstallDialogState = false
         },
         onConfirm = {
             viewModel.uninstallSelectedApps()
             uninstallDialogState = false
+        }
+    )
+
+    RestoreSystemAppDialog(
+        show = restoreDialogState,
+        onDismissRequest = {
+            restoreDialogState = false
+        },
+        onConfirm = {
+            viewModel.restoreSelectedSystemApps()
+            restoreDialogState = false
         }
     )
 
@@ -922,6 +954,7 @@ private fun BoxScope.BottomToolbar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
 
+            if (!isRestoreAction) {
             // 结束进程
             Block {
                 Column(
@@ -1021,8 +1054,9 @@ private fun BoxScope.BottomToolbar(
                     )
                 }
             }
+            }
 
-            // 卸载
+            // 卸载 / 恢复
             Block {
                 Column(
                     modifier = Modifier.fillMaxSize()
@@ -1031,19 +1065,36 @@ private fun BoxScope.BottomToolbar(
                         .clickable(
                             enabled = !isEmpty,
                         ) {
-                            uninstallDialogState = true
+                            if (isRestoreAction) {
+                                restoreDialogState = true
+                            } else {
+                                uninstallDialogState = true
+                            }
                         },
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Icon(
-                        imageVector = MiuixIcons.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
-                    )
+                    if (isRestoreAction) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_history),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
+                        )
+                    } else {
+                        Icon(
+                            imageVector = MiuixIcons.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MiuixTheme.colorScheme.onSurface.copy(.75f),
+                        )
+                    }
                     Text(
-                        text = stringResource(Res.string.text_app_uninstall),
+                        text = if (isRestoreAction) {
+                            stringResource(Res.string.text_app_restore)
+                        } else {
+                            stringResource(Res.string.text_app_uninstall)
+                        },
                         style = MiuixTheme.textStyles.footnote1,
                         color = MiuixTheme.colorScheme.onSurface.copy(.75f)
                     )
@@ -1164,17 +1215,42 @@ private fun DisableActionDialog(
 @Composable
 private fun UninstallDialog(
     show: Boolean,
+    isSystemUninstall: Boolean = false,
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     OverlayDialog(
         title = stringResource(Res.string.text_dialog_warm_tip),
-        summary = stringResource(Res.string.text_dialog_uninstall_app_summary),
+        summary = if (isSystemUninstall) {
+            stringResource(Res.string.text_dialog_uninstall_system_app_summary)
+        } else {
+            stringResource(Res.string.text_dialog_uninstall_app_summary)
+        },
         show = show,
         onDismissRequest = onDismissRequest,
     ) {
         DialogActionButtons(
             confirmText = stringResource(Res.string.text_app_uninstall),
+            onConfirm = onConfirm,
+            onCancel = onDismissRequest,
+        )
+    }
+}
+
+@Composable
+private fun RestoreSystemAppDialog(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    OverlayDialog(
+        title = stringResource(Res.string.text_dialog_warm_tip),
+        summary = stringResource(Res.string.text_dialog_restore_system_app_summary),
+        show = show,
+        onDismissRequest = onDismissRequest,
+    ) {
+        DialogActionButtons(
+            confirmText = stringResource(Res.string.text_app_restore),
             onConfirm = onConfirm,
             onCancel = onDismissRequest,
         )
@@ -1209,10 +1285,19 @@ private fun DialogActionButtons(
 
 @Immutable
 private data class AppPage(
+    val kind: AppPageKind,
     val iconRes: DrawableResource,
     val titleRes: StringResource,
     val listState: StateFlow<List<AppInfo>>,
 )
+
+private enum class AppPageKind {
+    System,
+    User,
+    Frozen,
+    Disabled,
+    Uninstalled,
+}
 
 @Composable
 private fun AppItems(
@@ -1400,8 +1485,11 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
     var freezeDialogState by remember { mutableStateOf(false) }
     var disableDialogState by remember { mutableStateOf(false) }
     var uninstallDialogState by remember { mutableStateOf(false) }
+    var restoreDialogState by remember { mutableStateOf(false) }
     val isUnfreezeAction = appInfo?.state == AppState.FROZEN
     val isEnableDisabledAction = appInfo?.state == AppState.DISABLED
+    val isUninstalled = appInfo?.state == AppState.UNINSTALLED
+    val isSystemUninstall = appInfo?.isSystemApp == true && !isUninstalled
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(appInfo) {
@@ -1410,6 +1498,7 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
             freezeDialogState = false
             disableDialogState = false
             uninstallDialogState = false
+            restoreDialogState = false
         }
     }
 
@@ -1457,12 +1546,24 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
 
     UninstallDialog(
         show = uninstallDialogState,
+        isSystemUninstall = isSystemUninstall,
         onDismissRequest = { uninstallDialogState = false },
         onConfirm = {
             val packageName = appInfo?.packageName ?: return@UninstallDialog
             uninstallDialogState = false
             viewModel.setTargetAppInfo(null)
             viewModel.uninstallApp(packageName)
+        },
+    )
+
+    RestoreSystemAppDialog(
+        show = restoreDialogState,
+        onDismissRequest = { restoreDialogState = false },
+        onConfirm = {
+            val packageName = appInfo?.packageName ?: return@RestoreSystemAppDialog
+            restoreDialogState = false
+            viewModel.setTargetAppInfo(null)
+            viewModel.restoreSystemApp(packageName)
         },
     )
 
@@ -1597,67 +1698,85 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = { forceDialogState = true },
-                        colors = ButtonDefaults.buttonColorsPrimary(
-                            color = MiuixTheme.colorScheme.primaryContainer,
-                        ),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.text_force_kill_app)
-                        )
+                    if (!isUninstalled) {
+                        Button(
+                            onClick = { forceDialogState = true },
+                            colors = ButtonDefaults.buttonColorsPrimary(
+                                color = MiuixTheme.colorScheme.primaryContainer,
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.text_force_kill_app)
+                            )
+                        }
                     }
 
                     Button(
-                        onClick = { uninstallDialogState = true },
+                        onClick = {
+                            if (isUninstalled) {
+                                restoreDialogState = true
+                            } else {
+                                uninstallDialogState = true
+                            }
+                        },
                         colors = ButtonDefaults.buttonColorsPrimary(
-                            color = MiuixTheme.colorScheme.error.copy(.5f),
+                            color = if (isUninstalled) {
+                                MiuixTheme.colorScheme.primaryContainer
+                            } else {
+                                MiuixTheme.colorScheme.error.copy(.5f)
+                            },
                         ),
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = stringResource(Res.string.text_app_uninstall)
+                            text = if (isUninstalled) {
+                                stringResource(Res.string.text_app_restore)
+                            } else {
+                                stringResource(Res.string.text_app_uninstall)
+                            }
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                if (!isUninstalled) {
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { freezeDialogState = true },
-                        colors = ButtonDefaults.buttonColorsPrimary(
-                            color = MiuixTheme.colorScheme.primaryContainer,
-                        ),
-                        modifier = Modifier.weight(1f)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = if (info.state == AppState.FROZEN) {
-                                stringResource(Res.string.text_enable_app)
-                            } else {
-                                stringResource(Res.string.text_unable_app)
-                            }
-                        )
-                    }
+                        Button(
+                            onClick = { freezeDialogState = true },
+                            colors = ButtonDefaults.buttonColorsPrimary(
+                                color = MiuixTheme.colorScheme.primaryContainer,
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = if (info.state == AppState.FROZEN) {
+                                    stringResource(Res.string.text_enable_app)
+                                } else {
+                                    stringResource(Res.string.text_unable_app)
+                                }
+                            )
+                        }
 
-                    Button(
-                        onClick = { disableDialogState = true },
-                        colors = ButtonDefaults.buttonColorsPrimary(
-                            color = MiuixTheme.colorScheme.primaryContainer,
-                        ),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = if (info.state == AppState.DISABLED) {
-                                stringResource(Res.string.text_enable_disabled_app)
-                            } else {
-                                stringResource(Res.string.text_disable_app)
-                            }
-                        )
+                        Button(
+                            onClick = { disableDialogState = true },
+                            colors = ButtonDefaults.buttonColorsPrimary(
+                                color = MiuixTheme.colorScheme.primaryContainer,
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = if (info.state == AppState.DISABLED) {
+                                    stringResource(Res.string.text_enable_disabled_app)
+                                } else {
+                                    stringResource(Res.string.text_disable_app)
+                                }
+                            )
+                        }
                     }
                 }
 

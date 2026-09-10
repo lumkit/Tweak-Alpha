@@ -124,7 +124,12 @@ actual object AppsHelper {
         when (action) {
             Intent.ACTION_PACKAGE_REMOVED -> {
                 if (!intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) {
-                    removePackage(packageName)
+                    val existing = _apps.value.find { it.packageName == packageName }
+                    if (existing?.isSystemApp == true) {
+                        markSystemAppUninstalled(packageName)
+                    } else {
+                        removePackage(packageName)
+                    }
                     logD(
                         "AppsHelper remove package cost ${Clock.System.now().toEpochMilliseconds() - time}ms, $packageName",
                         TAG,
@@ -207,7 +212,7 @@ actual object AppsHelper {
         pm: PackageManager,
         cacheDir: String,
     ): List<AppInfo> = withContext(Dispatchers.IO) {
-        val matchFlags = PackageManager.MATCH_DISABLED_COMPONENTS.toLong()
+        val matchFlags = installedPackagesMatchFlags()
         val packageInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(matchFlags))
         } else {
@@ -233,11 +238,11 @@ actual object AppsHelper {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 pm.getPackageInfo(
                     packageName,
-                    PackageManager.PackageInfoFlags.of(PackageManager.MATCH_DISABLED_COMPONENTS.toLong()),
+                    PackageManager.PackageInfoFlags.of(installedPackagesMatchFlags()),
                 )
             } else {
                 @Suppress("DEPRECATION")
-                pm.getPackageInfo(packageName, PackageManager.MATCH_DISABLED_COMPONENTS)
+                pm.getPackageInfo(packageName, installedPackagesMatchFlags().toInt())
             }
         }.getOrNull() ?: return@withContext null
         runCatching { packageInfo.toAppInfo(pm, cacheDir) }.getOrNull()
@@ -270,7 +275,7 @@ actual object AppsHelper {
 
     private fun PackageInfo.toAppInfo(pm: PackageManager, cacheDir: String): AppInfo {
         val appInfo = applicationInfo ?: error("applicationInfo is null for $packageName")
-        return buildAppInfo(
+        val result = buildAppInfo(
             pm = pm,
             cacheDir = cacheDir,
             packageName = packageName,
@@ -291,8 +296,13 @@ actual object AppsHelper {
             lastUpdateTime = lastUpdateTime,
             abiList = appInfo.resolveAbiList(),
             isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
+            isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
             state = resolveState(pm, packageName, appInfo),
         )
+        if (result.state == AppState.UNINSTALLED && !result.isSystemApp) {
+            error("skip uninstalled user package $packageName")
+        }
+        return result
     }
 
     private fun Bundle.toAppInfo(pm: PackageManager, cacheDir: String): AppInfo {
@@ -300,7 +310,7 @@ actual object AppsHelper {
         val state = runCatching {
             AppState.valueOf(getString(NativeFileBundles.KEY_APP_STATE).orEmpty())
         }.getOrDefault(AppState.ENABLED)
-        return buildAppInfo(
+        val result = buildAppInfo(
             pm = pm,
             cacheDir = cacheDir,
             packageName = packageName,
@@ -318,8 +328,13 @@ actual object AppsHelper {
                 ?.mapNotNull(::parseAppAbi)
                 .orEmpty(),
             isSystemApp = getBoolean(NativeFileBundles.KEY_IS_SYSTEM_APP),
+            isUpdatedSystemApp = getBoolean(NativeFileBundles.KEY_IS_UPDATED_SYSTEM_APP),
             state = state,
         )
+        if (result.state == AppState.UNINSTALLED && !result.isSystemApp) {
+            error("skip uninstalled user package $packageName")
+        }
+        return result
     }
 
     private fun buildAppInfo(
@@ -338,6 +353,7 @@ actual object AppsHelper {
         lastUpdateTime: Long,
         abiList: List<AppAbi>,
         isSystemApp: Boolean,
+        isUpdatedSystemApp: Boolean,
         state: AppState,
     ): AppInfo {
         val iconFile = File(cacheDir, "$packageName.webp")
@@ -357,6 +373,7 @@ actual object AppsHelper {
             abiList = abiList,
             iconPath = iconFile.absolutePath,
             isSystemApp = isSystemApp,
+            isUpdatedSystemApp = isUpdatedSystemApp,
             state = state,
         )
     }
@@ -410,6 +427,9 @@ actual object AppsHelper {
         packageName: String,
         appInfo: ApplicationInfo,
     ): AppState {
+        if (appInfo.isUninstalledForCurrentUser()) {
+            return AppState.UNINSTALLED
+        }
         val setting = runCatching { pm.getApplicationEnabledSetting(packageName) }
             .getOrNull() ?: PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
         return when (setting) {
@@ -420,10 +440,36 @@ actual object AppsHelper {
         }
     }
 
-    actual suspend fun uninstall(packageName: String): AppOperationResult =
-        runPrivileged("uninstall", "pm uninstall $packageName") {
-            removePackage(packageName)
+    actual suspend fun uninstall(packageName: String): AppOperationResult {
+        if (isProtectedPackage(packageName)) {
+            return AppOperationResult.Failure("该应用不允许卸载")
         }
+        val info = _apps.value.find { it.packageName == packageName }
+        return if (info?.isSystemApp == true) {
+            uninstallSystemAppForCurrentUser(info)
+        } else {
+            runPrivileged("uninstall", "pm uninstall ${shellQuote(packageName)}") {
+                removePackage(packageName)
+            }
+        }
+    }
+
+    actual suspend fun restoreSystemApp(packageName: String): AppOperationResult {
+        val info = _apps.value.find { it.packageName == packageName }
+        val commands = buildList {
+            add("cmd package install-existing --user 0 ${shellQuote(packageName)}")
+            add("pm install-existing --user 0 ${shellQuote(packageName)}")
+            val sourceDir = info?.sourceDir.orEmpty()
+            if (sourceDir.isNotBlank()) {
+                add("pm install -r ${shellQuote(sourceDir)}")
+            }
+        }
+        return runPrivilegedFallback(
+            operation = "restoreSystemApp",
+            commands = commands,
+            onSuccess = { upsertPackage(packageName) },
+        )
+    }
 
     actual suspend fun extractApk(
         packageName: String,
@@ -634,6 +680,46 @@ actual object AppsHelper {
         lastFailure ?: AppOperationResult.Failure("$operation 执行失败")
     }
 
+    private suspend fun uninstallSystemAppForCurrentUser(info: AppInfo): AppOperationResult {
+        val pkg = shellQuote(info.packageName)
+        if (info.isUpdatedSystemApp) {
+            runPrivileged("uninstall-update", "pm uninstall $pkg") { }
+        }
+        return runPrivileged("uninstall-user", "pm uninstall --user 0 $pkg") {
+            markSystemAppUninstalled(info.packageName)
+        }
+    }
+
+    private suspend fun markSystemAppUninstalled(packageName: String) {
+        val refreshed = upsertPackage(packageName)
+        if (refreshed?.state == AppState.UNINSTALLED) {
+            return
+        }
+        val existing = _apps.value.find { it.packageName == packageName }
+        if (existing != null) {
+            _apps.value = _apps.value.map { app ->
+                if (app.packageName == packageName) {
+                    app.copy(state = AppState.UNINSTALLED)
+                } else {
+                    app
+                }
+            }
+        }
+    }
+
+    private fun isProtectedPackage(packageName: String): Boolean {
+        return packageName == application.packageName || packageName in PROTECTED_PACKAGES
+    }
+
+    private fun shellQuote(value: String): String {
+        return "'${value.replace("'", "")}'"
+    }
+
+    private fun installedPackagesMatchFlags(): Long {
+        return PackageManager.MATCH_DISABLED_COMPONENTS.toLong() or
+            PackageManager.MATCH_UNINSTALLED_PACKAGES.toLong()
+    }
+
     private val FAILURE_KEYWORDS = listOf(
         "Failure",
         "Error",
@@ -645,11 +731,34 @@ actual object AppsHelper {
         "denied",
     )
 
+    private val PROTECTED_PACKAGES = setOf(
+        "android",
+        "com.android.systemui",
+        "com.android.settings",
+        "com.android.packageinstaller",
+        "com.google.android.packageinstaller",
+    )
+
     private val FORCE_STOP_FALLBACK_KEYWORDS = listOf(
         "Unknown option",
         "Unknown user",
         "IllegalArgumentException",
     )
+}
+
+private fun ApplicationInfo.isUninstalledForCurrentUser(): Boolean {
+    val installed = (flags and ApplicationInfo.FLAG_INSTALLED) != 0
+    if (!installed) {
+        return true
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+        return false
+    }
+    return runCatching {
+        ApplicationInfo::class.java.getDeclaredField("hiddenUntilInstalled").apply {
+            isAccessible = true
+        }.getBoolean(this)
+    }.getOrDefault(false)
 }
 
 private fun ApplicationInfo.resolveAbiList(): List<AppAbi> {
