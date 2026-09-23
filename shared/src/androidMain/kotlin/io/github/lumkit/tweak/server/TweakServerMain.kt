@@ -6,15 +6,21 @@ import android.os.Process
 import android.system.Os
 import androidx.annotation.Keep
 import io.github.lumkit.tweak.common.ConstCommon
+import io.github.lumkit.tweak.common.crash.CrashLogSource
+import io.github.lumkit.tweak.common.crash.CrashLogStore
 import io.github.lumkit.tweak.common.daemon.DaemonPaths
+import io.github.lumkit.tweak.common.daemon.DaemonProcessIdentity
 import io.github.lumkit.tweak.common.utils.logE
+import io.github.lumkit.tweak.server.TweakServerMain.main
+import io.github.lumkit.tweak.server.TweakServerMain.startEmbedded
 import io.github.lumkit.tweak.server.battery.BatteryEngine
 import io.github.lumkit.tweak.server.fakecontext.FakeContext
-import io.github.lumkit.tweak.sharednative.BatteryBridge
 import io.github.lumkit.tweak.server.ipc.BinderDelivery
 import io.github.lumkit.tweak.server.ipc.TweakServerBinder
+import io.github.lumkit.tweak.sharednative.BatteryBridge
 import io.github.lumkit.tweak.sharednative.HostPresenceWatch
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.exitProcess
 
 /**
@@ -29,6 +35,8 @@ object TweakServerMain {
     private const val TAG = "TweakServerMain"
     const val VERSION = "2.0.2-c3"
     private const val BINDER_REDELIVER_MS = 60_000L
+    private const val WATCHDOG_PEER_MS = 5_000L
+    private val crashRecorded = AtomicBoolean(false)
 
     private data class Session(
         val packageName: String,
@@ -40,6 +48,7 @@ object TweakServerMain {
         val hostWatch: HostPresenceWatch?,
         val mainHandler: Handler,
         val binderRedeliver: Runnable,
+        val watchdogPeer: Runnable,
     )
 
     @Volatile
@@ -58,8 +67,8 @@ object TweakServerMain {
         }
         val mainHandler = Handler(Looper.getMainLooper())
 
-        Thread.setDefaultUncaughtExceptionHandler { t, e ->
-            logE("uncaught in ${t.name}: ${e.message}", e, TAG)
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            recordDaemonCrash(thread, error)
             exitProcess(255)
         }
         try {
@@ -69,8 +78,8 @@ object TweakServerMain {
                 mainHandler = mainHandler,
             )
             Looper.loop()
-        } catch (t: Throwable) {
-            logE("fatal: ${t.message}", t, TAG)
+        } catch (error: Throwable) {
+            recordDaemonCrash(Thread.currentThread(), error)
             exitProcess(1)
         }
     }
@@ -154,6 +163,7 @@ object TweakServerMain {
         val batteryEngine = BatteryEngine.createDefault(daemonDir)
         batteryEngine.start()
 
+        val holdFile = File(daemonDir, DaemonPaths.KEEPALIVE_HOLD_NAME)
         val hostWatch = if (embedded) {
             null
         } else {
@@ -162,6 +172,7 @@ object TweakServerMain {
                 context = FakeContext.systemContext,
                 mainHandler = mainHandler,
                 onHostGone = {
+                    runCatching { holdFile.writeText("1\n") }
                     teardown(cleanupWorkspace = true, reason = "host uninstalled")
                 },
             )
@@ -195,6 +206,15 @@ object TweakServerMain {
                 current.mainHandler.postDelayed(this, BINDER_REDELIVER_MS)
             }
         }
+        val watchdogPeer = object : Runnable {
+            override fun run() {
+                val current = session ?: return
+                if (!current.embedded) {
+                    runCatching { ensureWatchdogProcess(current.packageName) }
+                }
+                current.mainHandler.postDelayed(this, WATCHDOG_PEER_MS)
+            }
+        }
         session = Session(
             packageName = packageName,
             pidFile = pidFile,
@@ -205,6 +225,7 @@ object TweakServerMain {
             hostWatch = hostWatch,
             mainHandler = mainHandler,
             binderRedeliver = binderRedeliver,
+            watchdogPeer = watchdogPeer,
         )
         runCatching { hostWatch?.start() }
             .onFailure { logE("host watch start failed: ${it.message}", it, TAG) }
@@ -218,6 +239,10 @@ object TweakServerMain {
             BinderDelivery.sendToApp(current.packageName, current.serverBinder)
         }, 1_000L)
         mainHandler.postDelayed(binderRedeliver, 2_000L)
+        if (!embedded) {
+            preferSurviveLmk()
+            mainHandler.postDelayed(watchdogPeer, WATCHDOG_PEER_MS)
+        }
     }
 
     @Synchronized
@@ -231,6 +256,7 @@ object TweakServerMain {
         )
         runCatching { current.hostWatch?.stop() }
         current.mainHandler.removeCallbacks(current.binderRedeliver)
+        current.mainHandler.removeCallbacks(current.watchdogPeer)
         current.batteryEngine.stop()
         runCatching { current.pidFile.delete() }
         session = null
@@ -242,6 +268,12 @@ object TweakServerMain {
         if (cleanupWorkspace || !current.embedded) {
             exitProcess(0)
         }
+    }
+
+    private fun recordDaemonCrash(thread: Thread, error: Throwable) {
+        if (!crashRecorded.compareAndSet(false, true)) return
+        logE("uncaught in ${thread.name}: ${error.message}", error, TAG)
+        CrashLogStore.write(CrashLogSource.DAEMON, thread.name, error)
     }
 
     private fun resolveAppPackageName(args: Array<String>): String {
@@ -261,10 +293,61 @@ object TweakServerMain {
         if (!pidFile.isFile) return false
         val pid = pidFile.readText().trim().toIntOrNull() ?: return false
         if (pid <= 0 || pid == selfPid) return false
-        return runCatching {
-            Os.kill(pid, 0)
-            true
-        }.getOrDefault(false)
+        // Os.kill(pid, 0) 对任意仍存活的 pid 都会成功，pid 复用后会误判并直接退出。
+        return isTweakServerCmdline(pid)
+    }
+
+    private fun isTweakServerCmdline(pid: Int): Boolean {
+        val file = File("/proc/$pid/cmdline")
+        if (!file.isFile || !file.canRead()) return false
+        val text = runCatching {
+            file.readBytes().toString(Charsets.ISO_8859_1).replace('\u0000', ' ')
+        }.getOrNull()
+        return DaemonProcessIdentity.isTweakServerCmdline(text)
+    }
+
+    private fun preferSurviveLmk() {
+        runCatching { File("/proc/self/oom_score_adj").writeText("-1000") }
+    }
+
+    private fun ensureWatchdogProcess(packageName: String) {
+        val daemonDir = File(DaemonPaths.WORK_ROOT, "daemon")
+        if (File(daemonDir, DaemonPaths.KEEPALIVE_HOLD_NAME).exists()) return
+        if (processRunning("tweak_watchdog")) return
+        val starter = File(daemonDir, DaemonPaths.STARTER_BIN_NAME)
+        val apk = File(daemonDir, DaemonPaths.SERVER_APK_NAME)
+        if (!starter.isFile || !apk.isFile) return
+        Runtime.getRuntime().exec(
+            arrayOf(
+                starter.absolutePath,
+                "--watchdog",
+                "--apk=${apk.absolutePath}",
+                "--package=$packageName",
+            ),
+        )
+    }
+
+    private fun processRunning(name: String): Boolean {
+        val text = runCatching {
+            Runtime.getRuntime()
+                .exec(arrayOf("sh", "-c", "grep -l '^$name$' /proc/[0-9]*/comm 2>/dev/null | head -n 1"))
+                .inputStream
+                .bufferedReader()
+                .readText()
+                .trim()
+        }.getOrDefault("")
+        if (text.isNotEmpty()) return true
+        val pidof = runCatching {
+            Runtime.getRuntime()
+                .exec(arrayOf("sh", "-c", "pidof $name 2>/dev/null"))
+                .inputStream
+                .bufferedReader()
+                .readText()
+                .trim()
+        }.getOrDefault("")
+        return pidof.split(Regex("\\s+")).any { token ->
+            token.toIntOrNull()?.let { it > 0 } == true
+        }
     }
 
     /** pidfile 丢失时，避免再拉起第二个 tweak_server */

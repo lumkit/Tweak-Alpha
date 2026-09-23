@@ -2,11 +2,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <unistd.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
 #define EXIT_FATAL_SET_CLASSPATH 3
 #define EXIT_FATAL_FORK 4
@@ -16,8 +19,11 @@
 
 #define PACKAGE_NAME "io.github.lumkit.tweak"
 #define SERVER_NAME "tweak_server"
+#define WATCHDOG_NAME "tweak_watchdog"
 #define SERVER_CLASS_PATH "io.github.lumkit.tweak.server.TweakServerMain"
 #define BOOT_LOG_PATH "/data/local/tmp/tweak-alpha/daemon/starter.boot.log"
+#define KEEPALIVE_HOLD_PATH "/data/local/tmp/tweak-alpha/daemon/keepalive.hold"
+#define WATCHDOG_INTERVAL_SEC 5
 
 static void boot_log(const char *msg) {
     const int fd = open(BOOT_LOG_PATH, O_WRONLY | O_CREAT | O_APPEND, 0666);
@@ -25,6 +31,9 @@ static void boot_log(const char *msg) {
     dprintf(fd, "pid=%d uid=%d %s\n", getpid(), getuid(), msg);
     close(fd);
 }
+
+static void prefer_survive_lmk();
+static void start_server(const char *dex_path, const char *package_name);
 
 static char *trim(char *str) {
     if (str == nullptr) return nullptr;
@@ -86,6 +95,7 @@ static void run_server(const char *dex_path, const char *package_name) {
             nullptr
     };
 
+    prefer_survive_lmk();
     execvp(argv[0], argv);
     snprintf(msg, sizeof(msg), "fatal: exec app_process failed errno=%d", errno);
     boot_log(msg);
@@ -93,13 +103,131 @@ static void run_server(const char *dex_path, const char *package_name) {
     exit(EXIT_FATAL_APP_PROCESS);
 }
 
-static bool tweak_server_running() {
-    FILE *f = popen("pidof tweak_server 2>/dev/null", "r");
+static void prefer_survive_lmk() {
+    const int fd = open("/proc/self/oom_score_adj", O_WRONLY | O_CLOEXEC);
+    if (fd < 0) return;
+    if (write(fd, "-1000", 5) < 0) {
+        boot_log("oom_score_adj write failed");
+    }
+    close(fd);
+}
+
+static bool process_running(const char *name) {
+    char cmd[160];
+    snprintf(cmd, sizeof(cmd), "pidof %s 2>/dev/null", name);
+    FILE *f = popen(cmd, "r");
     if (f == nullptr) return false;
     char line[128] = {0};
     const bool running = fgets(line, sizeof(line), f) != nullptr && atoi(line) > 0;
     pclose(f);
     return running;
+}
+
+static bool comm_running(const char *name) {
+    if (process_running(name)) return true;
+    DIR *dir = opendir("/proc");
+    if (dir == nullptr) return false;
+    bool found = false;
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != nullptr) {
+        if (ent->d_name[0] < '1' || ent->d_name[0] > '9') continue;
+        char path[64];
+        snprintf(path, sizeof(path), "/proc/%s/comm", ent->d_name);
+        FILE *comm = fopen(path, "r");
+        if (comm == nullptr) continue;
+        char buf[32] = {0};
+        if (fgets(buf, sizeof(buf), comm) != nullptr) {
+            char *nl = strchr(buf, '\n');
+            if (nl != nullptr) *nl = '\0';
+            if (strcmp(buf, name) == 0) found = true;
+        }
+        fclose(comm);
+        if (found) break;
+    }
+    closedir(dir);
+    return found;
+}
+
+static bool tweak_server_running() {
+    return process_running(SERVER_NAME);
+}
+
+static bool keepalive_held() {
+    return access(KEEPALIVE_HOLD_PATH, F_OK) == 0;
+}
+
+static void revive_server(const char *dex_path, const char *package_name) {
+    const pid_t pid = fork();
+    if (pid < 0) {
+        boot_log("watchdog revive fork failed");
+        return;
+    }
+    if (pid == 0) {
+        start_server(dex_path, package_name);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+}
+
+static void watchdog_loop(const char *dex_path, const char *package_name) {
+    prctl(PR_SET_NAME, WATCHDOG_NAME, 0, 0, 0);
+    prefer_survive_lmk();
+    boot_log("watchdog loop enter");
+    char dex_copy[PATH_MAX];
+    char pkg_copy[256];
+    snprintf(dex_copy, sizeof(dex_copy), "%s", dex_path);
+    snprintf(pkg_copy, sizeof(pkg_copy), "%s", package_name);
+
+    while (true) {
+        sleep(WATCHDOG_INTERVAL_SEC);
+        if (keepalive_held()) {
+            boot_log("watchdog exit: keepalive hold");
+            _exit(0);
+        }
+        if (!tweak_server_running()) {
+            if (keepalive_held()) {
+                boot_log("watchdog exit: keepalive hold");
+                _exit(0);
+            }
+            boot_log("watchdog revive tweak_server");
+            revive_server(dex_copy, pkg_copy);
+        }
+    }
+}
+
+static void become_watchdog(const char *dex_path, const char *package_name) {
+    if (comm_running(WATCHDOG_NAME)) {
+        boot_log("skip: tweak_watchdog already running");
+        return;
+    }
+    // 先 fork 再 setsid：调用方经常已经是 session leader，直接 setsid 会失败，
+    // 父进程退出时子进程会收到 SIGHUP。
+    const pid_t first = fork();
+    if (first < 0) {
+        boot_log("watchdog first fork failed");
+        return;
+    }
+    if (first > 0) {
+        return;
+    }
+    if (setsid() < 0) {
+        boot_log("watchdog setsid failed");
+    }
+    const pid_t second = fork();
+    if (second < 0) {
+        _exit(1);
+    }
+    if (second > 0) {
+        _exit(0);
+    }
+    watchdog_loop(dex_path, package_name);
+}
+
+static void spawn_watchdog(const char *dex_path, const char *package_name) {
+    if (comm_running(WATCHDOG_NAME) || keepalive_held()) {
+        return;
+    }
+    become_watchdog(dex_path, package_name);
 }
 
 static void start_server(const char *dex_path, const char *package_name) {
@@ -190,10 +318,13 @@ int main(int argc, char *argv[]) {
 
     boot_log("starter main enter");
 
+    bool watchdog_mode = false;
     const char *apk_path = nullptr;
     const char *package_name = PACKAGE_NAME;
     for (int i = 1; i < argc; ++i) {
-        if (strncmp(argv[i], "--apk=", 6) == 0) {
+        if (strcmp(argv[i], "--watchdog") == 0) {
+            watchdog_mode = true;
+        } else if (strncmp(argv[i], "--apk=", 6) == 0) {
             apk_path = argv[i] + 6;
         } else if (strncmp(argv[i], "--package=", 10) == 0) {
             package_name = argv[i] + 10;
@@ -224,5 +355,11 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FATAL_PM_PATH);
     }
 
+    if (watchdog_mode) {
+        become_watchdog(apk_path, package_name);
+        return 0;
+    }
+
+    spawn_watchdog(apk_path, package_name);
     start_server(apk_path, package_name);
 }

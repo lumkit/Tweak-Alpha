@@ -115,6 +115,8 @@ import tweak_alpha.shared.generated.resources.text_battery_record_sample_interva
 import tweak_alpha.shared.generated.resources.text_battery_record_sample_interval_description
 import tweak_alpha.shared.generated.resources.text_battery_unit_calibration
 import tweak_alpha.shared.generated.resources.text_battery_unit_calibration_description
+import tweak_alpha.shared.generated.resources.text_cpu_state
+import tweak_alpha.shared.generated.resources.text_crash_history
 import tweak_alpha.shared.generated.resources.text_dialog_cancel
 import tweak_alpha.shared.generated.resources.text_dialog_confirm
 import tweak_alpha.shared.generated.resources.text_float_navigation_bar
@@ -129,10 +131,14 @@ import tweak_alpha.shared.generated.resources.text_framework_mode_shizuku
 import tweak_alpha.shared.generated.resources.text_framework_mode_unknow
 import tweak_alpha.shared.generated.resources.text_github
 import tweak_alpha.shared.generated.resources.text_github_web
+import tweak_alpha.shared.generated.resources.text_gpu_state
 import tweak_alpha.shared.generated.resources.text_hide_in_background
 import tweak_alpha.shared.generated.resources.text_hide_in_background_description
+import tweak_alpha.shared.generated.resources.text_info_page_cards
+import tweak_alpha.shared.generated.resources.text_info_page_cards_description
 import tweak_alpha.shared.generated.resources.text_join_qq
 import tweak_alpha.shared.generated.resources.text_jump_to_app_info
+import tweak_alpha.shared.generated.resources.text_memory_state
 import tweak_alpha.shared.generated.resources.text_native_daemon
 import tweak_alpha.shared.generated.resources.text_native_daemon_description
 import tweak_alpha.shared.generated.resources.text_native_daemon_loading
@@ -143,21 +149,16 @@ import tweak_alpha.shared.generated.resources.text_notification_permission_denie
 import tweak_alpha.shared.generated.resources.text_open_sources
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick
 import tweak_alpha.shared.generated.resources.text_panel_refresh_tick_description
-import tweak_alpha.shared.generated.resources.text_cpu_state
-import tweak_alpha.shared.generated.resources.text_gpu_state
-import tweak_alpha.shared.generated.resources.text_info_page_cards
-import tweak_alpha.shared.generated.resources.text_info_page_cards_description
-import tweak_alpha.shared.generated.resources.text_memory_state
-import tweak_alpha.shared.generated.resources.text_storage
-import tweak_alpha.shared.generated.resources.text_sf_latency_source
-import tweak_alpha.shared.generated.resources.text_sf_latency_source_1
-import tweak_alpha.shared.generated.resources.text_sf_latency_source_2
 import tweak_alpha.shared.generated.resources.text_process_info_overview
 import tweak_alpha.shared.generated.resources.text_process_info_overview_description
 import tweak_alpha.shared.generated.resources.text_qq_url
 import tweak_alpha.shared.generated.resources.text_runtime_mode_loading
 import tweak_alpha.shared.generated.resources.text_settings
+import tweak_alpha.shared.generated.resources.text_sf_latency_source
+import tweak_alpha.shared.generated.resources.text_sf_latency_source_1
+import tweak_alpha.shared.generated.resources.text_sf_latency_source_2
 import tweak_alpha.shared.generated.resources.text_special_thanks
+import tweak_alpha.shared.generated.resources.text_storage
 import tweak_alpha.shared.generated.resources.text_theme
 import tweak_alpha.shared.generated.resources.text_theme_dark
 import tweak_alpha.shared.generated.resources.text_theme_light
@@ -775,6 +776,16 @@ private fun AboutContent() {
                 },
                 onClick = {
 
+                }
+            )
+        }
+
+        // 历史崩溃
+        Block {
+            ArrowPreference(
+                title = stringResource(Res.string.text_crash_history),
+                onClick = {
+                    navigator.navigate(Screen.CrashHistory)
                 }
             )
         }

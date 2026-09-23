@@ -5,6 +5,8 @@ import android.os.Process
 import io.github.lumkit.tweak.MainActivity
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.ConstCommon
+import io.github.lumkit.tweak.common.crash.CrashLogSource
+import io.github.lumkit.tweak.common.crash.CrashLogStore
 import io.github.lumkit.tweak.common.utils.BRAND
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_CODE
 import io.github.lumkit.tweak.common.utils.BUILD_VERSION_NAME
@@ -71,6 +73,7 @@ object CrashReporter {
         handling = true
         runCatching {
             val report = buildReport(thread, throwable)
+            CrashLogStore.write(CrashLogSource.CLIENT, thread.name, throwable)
             CrashSession.setPending(report)
             relaunchToCrashScreen(report)
         }.onFailure {

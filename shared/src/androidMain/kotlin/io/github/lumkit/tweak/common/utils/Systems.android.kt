@@ -104,7 +104,14 @@ private suspend fun killDetachedOwnedProcessesByShell() {
             "if [ -z \"\$pids\" ]; then pids=\$(pidof \"$pkg:file_service\" 2>/dev/null); fi; " +
             "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi; " +
             "pids=\$(pidof tweak_server 2>/dev/null); " +
-            "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi",
+            "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi; " +
+            "for commfile in /proc/[0-9]*/comm; do " +
+            "comm=\$(cat \"\$commfile\" 2>/dev/null | tr -d '\\n'); " +
+            "if [ \"\$comm\" = tweak_watchdog ]; then " +
+            "pid=\${commfile#/proc/}; pid=\${pid%/comm}; " +
+            "kill -TERM \"\$pid\" 2>/dev/null; kill -KILL \"\$pid\" 2>/dev/null; " +
+            "fi; " +
+            "done",
     )
 }
 

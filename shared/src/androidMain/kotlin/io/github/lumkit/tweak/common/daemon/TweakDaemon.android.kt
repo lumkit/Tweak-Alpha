@@ -109,9 +109,13 @@ actual object TweakDaemon {
             if (!quickArtifactsReady(paths)) {
                 logD("artifacts outdated before start, stop + reinstall", TAG)
                 installFastPathKey = null
+                latchKeepaliveHold(paths)
                 stopRunningServerForReinstall(paths)
                 if (!install()) return@runCatching false
             }
+
+            clearKeepaliveHold(paths)
+            ensureWatchdog(paths)
 
             if (pingInternal()) return@runCatching true
 
@@ -174,6 +178,7 @@ actual object TweakDaemon {
     actual suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val paths = DaemonPaths.resolve()
+            latchKeepaliveHold(paths)
             val hadStandalone = standaloneServerAlive(paths)
             // 优先 Binder 自退出：Root 拉起的 tweak_server 在切到 Shizuku 后，shell kill 常无效
             val svc = TweakServerConnection.service
@@ -211,13 +216,10 @@ actual object TweakDaemon {
             if (!exited) {
                 logD("daemon still alive after binder/embedded stop, try shell kill fallback", TAG)
                 val pid = readServerPid(paths)
-                if (pid > 0 && !isFileServicePid(pid)) {
+                if (isTweakServerPid(pid)) {
                     ReusableShells.execSync("kill -TERM $pid 2>/dev/null; kill -KILL $pid 2>/dev/null")
                 }
-                ReusableShells.execSync(
-                    "pids=\$(pidof tweak_server 2>/dev/null); " +
-                        "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi",
-                )
+                ReusableShells.execSync(killStandaloneDaemonsShell())
                 exited = waitUntil(
                     condition = { !pingInternal() && !standaloneServerAlive(paths) },
                     attempts = 20,
@@ -305,13 +307,14 @@ actual object TweakDaemon {
      */
     private suspend fun clearDaemonArtifactsPreservingLogs(paths: DaemonPaths.Resolved) {
         val preserve = DaemonPaths.BATTERY_LOGS_DIR_NAME
+        val preserveHold = DaemonPaths.KEEPALIVE_HOLD_NAME
         logD("clear daemon artifacts, preserve=$preserve dir=${paths.dir}", TAG)
         forceChmod777(paths.workRoot, paths.dir)
 
         val localDir = File(paths.dir)
         if (localDir.isDirectory) {
             localDir.listFiles()?.forEach { child ->
-                if (child.name == preserve) return@forEach
+                if (child.name == preserve || child.name == preserveHold) return@forEach
                 forceChmod777(child.absolutePath)
                 runCatching {
                     if (child.isDirectory) child.deleteRecursively() else child.delete()
@@ -323,12 +326,14 @@ actual object TweakDaemon {
         ReusableShells.execSync(
             "d=${paths.dir.shellQuote()}; " +
                 "preserve=${preserve.shellQuote()}; " +
+                "hold=${preserveHold.shellQuote()}; " +
                 "chmod 777 \"\$d\" 2>/dev/null || true; " +
                 "if [ -d \"\$d\" ]; then " +
                 "for f in \"\$d\"/* \"\$d\"/.[!.]* \"\$d\"/..?*; do " +
                 "[ -e \"\$f\" ] || continue; " +
                 "b=\$(basename \"\$f\"); " +
                 "[ \"\$b\" = \"\$preserve\" ] && continue; " +
+                "[ \"\$b\" = \"\$hold\" ] && continue; " +
                 "chmod -R 777 \"\$f\" 2>/dev/null || true; " +
                 "rm -rf \"\$f\"; " +
                 "done; " +
@@ -338,7 +343,7 @@ actual object TweakDaemon {
         val listed = Files.list(paths.dir).getOrNull().orEmpty()
         for (name in listed) {
             val base = name.substringAfterLast('/').substringAfterLast('\\')
-            if (base.isEmpty() || base == preserve || base == "." || base == "..") continue
+            if (base.isEmpty() || base == preserve || base == preserveHold || base == "." || base == "..") continue
             val path = if (name.startsWith(paths.dir)) name else "${paths.dir}/$base"
             forceChmod777(path)
             runCatching { Files.delete(path, recursive = true) }
@@ -470,6 +475,7 @@ actual object TweakDaemon {
      * 重装产物前停掉独立 tweak_server（嵌入 file_service 用 stopEmbedded，不杀父进程）。
      */
     private suspend fun stopRunningServerForReinstall(paths: DaemonPaths.Resolved) {
+        latchKeepaliveHold(paths)
         val alive = pingInternal() || standaloneServerAlive(paths)
         if (!alive) {
             runCatching { Files.stopTweakServerEmbedded() }
@@ -482,13 +488,10 @@ actual object TweakDaemon {
         }
         runCatching { Files.stopTweakServerEmbedded() }
         val pid = readServerPid(paths)
-        if (pid > 0 && !isFileServicePid(pid)) {
+        if (isTweakServerPid(pid)) {
             ReusableShells.execSync("kill -TERM $pid 2>/dev/null; kill -KILL $pid 2>/dev/null")
         }
-        ReusableShells.execSync(
-            "pids=\$(pidof tweak_server 2>/dev/null); " +
-                "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi",
-        )
+        ReusableShells.execSync(killStandaloneDaemonsShell())
         waitUntil({ !standaloneServerAlive(paths) && !pingInternal() }, attempts = 30, delayMs = 50)
         TweakServerConnection.clear()
         Files.delete(paths.serverPid)
@@ -834,6 +837,52 @@ actual object TweakDaemon {
         fun serialize(): String = "$sourceDir|$versionCode|$lastUpdateTime|$length"
     }
 
+    private suspend fun latchKeepaliveHold(paths: DaemonPaths.Resolved) {
+        runCatching { File(paths.keepaliveHold).writeText("1\n") }
+        ReusableShells.execSync(
+            "mkdir -p ${paths.dir.shellQuote()}; echo 1 > ${paths.keepaliveHold.shellQuote()}",
+        )
+    }
+
+    private suspend fun clearKeepaliveHold(paths: DaemonPaths.Resolved) {
+        runCatching { File(paths.keepaliveHold).delete() }
+        ReusableShells.execSync("rm -f ${paths.keepaliveHold.shellQuote()} 2>/dev/null || true")
+    }
+
+    private fun killStandaloneDaemonsShell(): String =
+        "for commfile in /proc/[0-9]*/comm; do " +
+            "comm=\$(cat \"\$commfile\" 2>/dev/null | tr -d '\\n'); " +
+            "pid=\${commfile#/proc/}; pid=\${pid%/comm}; " +
+            "if [ \"\$comm\" = tweak_watchdog ] || [ \"\$comm\" = tweak_server ]; then " +
+            "kill -TERM \"\$pid\" 2>/dev/null; kill -KILL \"\$pid\" 2>/dev/null; " +
+            "fi; " +
+            "done; " +
+            "pids=\$(pidof tweak_server 2>/dev/null); " +
+            "if [ -n \"\$pids\" ]; then kill -TERM \$pids 2>/dev/null; kill -KILL \$pids 2>/dev/null; fi"
+
+    private suspend fun ensureWatchdog(paths: DaemonPaths.Resolved) {
+        if (Files.exists(paths.keepaliveHold).getOrNull() == true) return
+        val alive = ReusableShells.execSync(
+            "grep -l '^tweak_watchdog$' /proc/[0-9]*/comm 2>/dev/null | head -n 1 || true",
+        ).trim()
+        if (alive.isNotEmpty()) return
+        val starter = paths.starterBin
+        if (Files.exists(starter).getOrNull() != true && !File(starter).isFile) return
+        val serverApk = resolveActiveServerApkPath(paths)
+        val pkg = application.packageName
+        val bootLog = "${paths.dir}/starter.boot.log"
+        val envPrefix =
+            "export ANDROID_DATA=/data ANDROID_ROOT=/system " +
+                "PATH=/system/bin:/system/xbin:/vendor/bin:/product/bin; " +
+                "unset LD_LIBRARY_PATH CLASSPATH ANDROID_SOCKET_zygote ANDROID_ENTRYPOINT;"
+        ReusableShells.execSync(
+            "$envPrefix " +
+                "setsid ${starter.shellQuote()} --watchdog " +
+                "--apk=${serverApk.shellQuote()} --package=${pkg.shellQuote()} " +
+                ">>${bootLog.shellQuote()} 2>&1 < /dev/null &",
+        )
+    }
+
     private suspend fun launchStarter(paths: DaemonPaths.Resolved): String {
         if (standaloneServerAlive(paths)) {
             return "mode=skip_already_running pidof=tweak_server"
@@ -942,18 +991,36 @@ actual object TweakDaemon {
         }
     }
 
-    /** 独立 tweak_server 是否存活（先读 pidfile，必要时再 pidof） */
+    /**
+     * 独立 tweak_server 是否存活。
+     * pidfile 里的 pid 必须 cmdline 仍是 tweak_server；仅 `/proc/<pid>` 存在会把复用后的无关进程当成采集进程。
+     */
     private suspend fun standaloneServerAlive(paths: DaemonPaths.Resolved): Boolean {
-        val pid = readServerPid(paths)
-        if (pid > 0 && !isFileServicePid(pid)) {
-            if (File("/proc/$pid").exists()) {
-                return true
-            }
-            if (Files.exists("/proc/$pid").getOrNull() == true) {
-                return true
-            }
+        if (isTweakServerPid(readServerPid(paths))) {
+            return true
         }
         return shellServerAlive()
+    }
+
+    private suspend fun isTweakServerPid(pid: Int): Boolean {
+        if (pid <= 0) return false
+        return DaemonProcessIdentity.isTweakServerCmdline(readProcCmdline(pid))
+    }
+
+    private suspend fun readProcCmdline(pid: Int): String {
+        val local = runCatching {
+            File("/proc/$pid/cmdline").takeIf { it.canRead() }?.readBytes()
+                ?.toString(Charsets.ISO_8859_1)
+                ?.replace('\u0000', ' ')
+                ?.trim()
+        }.getOrNull()
+        if (!local.isNullOrBlank()) return local
+        // 不用 `tr < /proc/pid/cmdline`：文件不存在时重定向会吃掉持久 shell 的 stdin 并挂死。
+        return runCatching {
+            ReusableShells.execSync(
+                "if [ -r /proc/$pid/cmdline ]; then cat /proc/$pid/cmdline 2>/dev/null | tr '\\0' ' '; fi",
+            )
+        }.getOrDefault("").trim()
     }
 
     private suspend fun waitForBinderAttach(attempts: Int, delayMs: Long): Boolean =

@@ -1,7 +1,9 @@
 package io.github.lumkit.tweak.common.utils
 
+import io.github.lumkit.tweak.common.crash.CrashLogStore
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordLogSync
+import io.github.lumkit.tweak.common.utils.PrivilegedAppInitializer.bgScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +62,8 @@ object PrivilegedAppInitializer {
 
     private suspend fun runHeavyBootstrap() {
         try {
+            runCatching { CrashLogStore.publishPending() }
+                .onFailure { logE("publish crash logs failed: ${it.message}", it, TAG) }
             withTimeout(heavyBootstrapTimeout) {
                 coroutineScope {
                     val toolkitJob = async { bootstrapToolkit() }

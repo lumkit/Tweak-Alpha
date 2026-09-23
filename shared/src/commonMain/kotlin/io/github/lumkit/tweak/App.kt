@@ -35,6 +35,7 @@ import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Navigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.navigation.rememberNavigationState
+import io.github.lumkit.tweak.ui.screen.crash.CrashHistoryScreen
 import io.github.lumkit.tweak.ui.screen.crash.CrashScreen
 import io.github.lumkit.tweak.ui.screen.feature.FeatureRegistry
 import io.github.lumkit.tweak.ui.screen.filePicker.FilePickerScreen
@@ -145,6 +146,9 @@ private fun AppRoute(
             }
             entry<Screen.Crash> {
                 CrashScreen()
+            }
+            entry<Screen.CrashHistory> {
+                CrashHistoryScreen()
             }
             entry<Screen.Main> {
                 MainScreen()

@@ -70,4 +70,8 @@ sealed class Screen: NavKey {
 
     @Serializable
     data object DischargeStatistics: Screen()
+
+    /** 客户端与守护进程的历史崩溃文件。 */
+    @Serializable
+    data object CrashHistory : Screen()
 }
