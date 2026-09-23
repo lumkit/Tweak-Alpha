@@ -110,6 +110,7 @@ object DeviceInfoViewModel : BaseViewModel() {
         val swapSizeUnitText: String,
         val swapCache: Long,
         val swapCacheUnitText: String,
+        val zramCompAlgorithm: String? = null,
     )
 
     @Immutable
@@ -459,6 +460,7 @@ object DeviceInfoViewModel : BaseViewModel() {
 
     private suspend fun updateMemoryInfo() {
         val memoryInfo = DeviceMemoryInfoUtils.getMemoryInfo()
+        val zramCompAlgorithm = DeviceMemoryInfoUtils.getEnabledZramCompAlgorithm()
         val memorySize = memoryInfo.memTotal
         val memoryUsedSize = (memoryInfo.memTotal - memoryInfo.memAvailable).coerceAtLeast(0L)
         val swapSize = memoryInfo.swapTotal
@@ -485,6 +487,7 @@ object DeviceInfoViewModel : BaseViewModel() {
             swapSizeUnitText = swapSize.formatMemorySize(" "),
             swapCache = memoryInfo.swapCached,
             swapCacheUnitText = memoryInfo.swapCached.formatMemorySize(" "),
+            zramCompAlgorithm = zramCompAlgorithm,
         )
     }
 

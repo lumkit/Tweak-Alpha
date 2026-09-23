@@ -84,6 +84,8 @@ data class DeviceMemoryInfoModel(
 object DeviceMemoryInfoUtils {
     private const val memInfoPath = "/proc/meminfo"
     private const val devfreqRoot = "/sys/class/devfreq"
+    private val zramDeviceName = Regex("zram\\d+")
+    private val activeCompAlgorithm = Regex("\\[([^\\]]+)]")
 
     private val memoryFreqKeywords = listOf(
         "ddr",
@@ -96,6 +98,30 @@ object DeviceMemoryInfoUtils {
         "bus_dcvs",
         "bus",
     )
+
+    /**
+     * 已开启的 ZRAM 压缩算法。
+     *
+     * 虚拟内存关闭时 `disksize` 为 0，此时返回 null。
+     * 多个已启用的 zram 设备会按设备号拼接，例如 `lz4/zstd`。
+     */
+    suspend fun getEnabledZramCompAlgorithm(): String? {
+        val swapped = Files.readText("/proc/swaps").getOrNull().orEmpty()
+            .lineSequence()
+            .mapNotNull { line ->
+                val token = line.trim().split(Regex("\\s+")).firstOrNull() ?: return@mapNotNull null
+                token.substringAfterLast('/').takeIf { it.matches(zramDeviceName) }
+            }
+            .distinct()
+            .sortedBy { it.removePrefix("zram").toIntOrNull() ?: Int.MAX_VALUE }
+            .toList()
+        val devices = swapped.ifEmpty { listOf("zram0") }
+
+        val algorithms = devices.mapNotNull { device ->
+            readEnabledZramAlgorithm(device)
+        }.distinct()
+        return algorithms.takeIf { it.isNotEmpty() }?.joinToString("/")
+    }
 
     suspend fun getMemoryFreq(): Long? {
         val candidates = Files.list(devfreqRoot).getOrNull().orEmpty()
@@ -234,6 +260,34 @@ object DeviceMemoryInfoUtils {
 
     private fun Map<String, Long>.rawValue(key: String): Long {
         return get(key) ?: 0L
+    }
+
+    private suspend fun readEnabledZramAlgorithm(device: String): String? {
+        val diskSize = Files.readText("/sys/block/$device/disksize").getOrNull()
+            ?.trim()
+            ?.toLongOrNull()
+            ?: 0L
+        if (diskSize <= 0L) {
+            return null
+        }
+
+        val raw = Files.readText("/sys/block/$device/comp_algorithm").getOrNull()?.trim()
+            .orEmpty()
+            .ifBlank {
+                Files.readText("/sys/block/$device/algorithm").getOrNull()?.trim().orEmpty()
+            }
+        return parseZramCompAlgorithm(raw)
+    }
+
+    private fun parseZramCompAlgorithm(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) {
+            return null
+        }
+        activeCompAlgorithm.find(trimmed)?.groupValues?.getOrNull(1)?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { return it }
+        return trimmed.takeIf { !it.contains(' ') && !it.contains('[') }
     }
 
     private suspend fun readMemoryFreqFromPath(path: String): Long? {

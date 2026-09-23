@@ -622,6 +622,10 @@ private fun MemoryInfoContent() {
     val loadColor by animatedColorAsUsed(load)
     val memoryLoadColor by animatedColorAsUsed(memoryLoad)
     val swapLoadColor by animatedColorAsUsed(swapLoad)
+    val swapLabel = memoryState?.zramCompAlgorithm
+        ?.takeIf { it.isNotBlank() }
+        ?.let { "${stringResource(Res.string.text_swap)} ($it)" }
+        ?: stringResource(Res.string.text_swap)
 
     CategoryCard(
         title = stringResource(Res.string.text_memory_state)
@@ -636,7 +640,7 @@ private fun MemoryInfoContent() {
                     memoryState?.memorySizeUnitText ?: "N/A",
                 ),
                 stringResource(Res.string.text_info_available) to (memoryState?.memoryAvailableSizeText ?: "N/A"),
-                stringResource(Res.string.text_swap) to stringResource(
+                swapLabel to stringResource(
                     Res.string.text_info_used_of_total,
                 ).format(
                     memoryState?.swapUsedSizeText ?: "N/A",
@@ -719,7 +723,7 @@ private fun MemoryInfoContent() {
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         MemoryTable(
-                            title = stringResource(Res.string.text_swap),
+                            title = swapLabel,
                             content = stringResource(Res.string.text_info_used_of_total).format(
                                 memoryState?.swapUsedSizeText ?: "N/A",
                                 memoryState?.swapSizeUnitText ?: "N/A",
