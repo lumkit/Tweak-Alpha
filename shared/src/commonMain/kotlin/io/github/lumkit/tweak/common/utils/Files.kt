@@ -23,6 +23,7 @@ import io.github.lumkit.tweak.model.selectNativeFileBackend
 object Files {
 
     private fun resolveBackend(): NativeFileBackend {
+        // 面板采样是热路径，只读当前值，不阻塞等待 DataStore。模式尚未发出时走用户后端。
         return selectNativeFileBackend(RuntimeModeStore.mode.value)
     }
 
