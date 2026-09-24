@@ -34,7 +34,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +44,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -77,7 +75,6 @@ import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import sh.calvin.reorderable.ReorderableItem
@@ -88,13 +85,8 @@ import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
-import top.yukonga.miuix.kmp.basic.RichTooltip
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TooltipAnchorPosition
-import top.yukonga.miuix.kmp.basic.TooltipBox
-import top.yukonga.miuix.kmp.basic.TooltipDefaults
-import top.yukonga.miuix.kmp.basic.rememberTooltipState
 import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -229,24 +221,24 @@ fun InfoPage() {
                             targetValue = if (isDragging) 0.92f else 1f,
                             animationSpec = tween(durationMillis = 120),
                         )
-                        val longPressHub = remember(sectionKey) { InfoItemLongPressHub() }
+                        val sectionGestures = remember(sectionKey) { InfoSectionGestures() }
                         val reorderSlopPx = with(LocalDensity.current) { 28.dp.toPx() }
-                        val dragDetector = remember(reorderSlopPx, longPressHub) {
+                        val dragDetector = remember(reorderSlopPx, sectionGestures) {
                             LongPressThenSlopDragDetector(reorderSlopPx) { localPosition ->
-                                longPressHub.emitShow(localPosition)
+                                sectionGestures.emitShow(localPosition)
                             }
                         }
-                        CompositionLocalProvider(LocalInfoItemLongPress provides longPressHub) {
+                        CompositionLocalProvider(LocalInfoSectionGestures provides sectionGestures) {
                             Box(
                                 modifier = Modifier
                                     .graphicsLayer { alpha = dragAlpha }
                                     .onGloballyPositioned { coordinates ->
-                                        longPressHub.originInRoot = coordinates.positionInRoot()
+                                        sectionGestures.originInRoot = coordinates.positionInRoot()
                                     }
                                     .draggableHandle(
                                         dragGestureDetector = dragDetector,
                                         onDragStarted = {
-                                            longPressHub.emitDismiss()
+                                            sectionGestures.emitDismiss()
                                             hapticFeedback.performHapticFeedback(
                                                 HapticFeedbackType.GestureThresholdActivate,
                                             )
@@ -600,11 +592,8 @@ private fun MemoryInfoContent() {
         ?.let { "${stringResource(Res.string.text_virtual_memory)} ($it)" }
         ?: stringResource(Res.string.text_virtual_memory)
 
-    CategoryCard(
-        title = stringResource(Res.string.text_memory_state)
-    ) {
-        ValueRichTooltipBox(
-            title = stringResource(Res.string.text_memory_state),
+    ValueRichTooltipBox(
+        title = stringResource(Res.string.text_memory_state),
             lines = listOf(
                 stringResource(Res.string.text_memory_physical) to stringResource(
                     Res.string.text_info_used_of_total,
@@ -627,6 +616,9 @@ private fun MemoryInfoContent() {
                 ),
                 "SwapCached" to (memoryState?.swapCacheUnitText ?: "N/A"),
             ),
+    ) {
+        CategoryCard(
+            title = stringResource(Res.string.text_memory_state)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -775,74 +767,6 @@ private fun MemoryTable(
 }
 
 @Composable
-private fun ValueRichTooltipBox(
-    title: String,
-    lines: List<Pair<String, String>>,
-    content: @Composable () -> Unit,
-) {
-    val longPressHub = LocalInfoItemLongPress.current
-    val state = rememberTooltipState(isPersistent = true)
-    val scope = rememberCoroutineScope()
-    val colors = TooltipDefaults.richTooltipColors()
-
-    DisposableEffect(longPressHub, state, scope) {
-        val show:  () -> Unit = { scope.launch { state.show() } }
-        val dismiss = { state.dismiss() }
-        longPressHub.show = show
-        longPressHub.dismiss = dismiss
-        onDispose {
-            if (longPressHub.show === show) {
-                longPressHub.show = null
-                longPressHub.dismiss = null
-            }
-        }
-    }
-
-    TooltipBox(
-        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-            positioning = TooltipAnchorPosition.Above,
-        ),
-        tooltip = {
-            RichTooltip(
-                title = {
-                    Text(
-                        text = title,
-                        color = colors.titleContentColor,
-                        style = MiuixTheme.textStyles.subtitle,
-                    )
-                },
-                colors = colors,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    lines.forEach { (label, value) ->
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(
-                                text = label,
-                                color = colors.contentColor,
-                                style = MiuixTheme.textStyles.body2,
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = value,
-                                color = colors.titleContentColor,
-                                style = MiuixTheme.textStyles.body2,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        state = state,
-        focusable = true,
-        enableUserInput = false,
-    ) {
-        content()
-    }
-}
-
-@Composable
 private fun GpuInfoContent() {
     val density = LocalDensity.current
     val translateY = remember {
@@ -986,18 +910,11 @@ private fun FlowRowScope.BatteryContent(
 ) {
     val load = batteryModel?.capacity ?: 0f
     val loadColor by animatedColorAsBattery(load)
-    val longPressHub = LocalInfoItemLongPress.current
-    DisposableEffect(longPressHub) {
-        onDispose { longPressHub.suppressBounds = null }
-    }
 
     CategoryCard(
         title = stringResource(Res.string.text_battery),
         modifier = Modifier.fillMaxWidth()
             .weight(1f)
-            .onGloballyPositioned { coordinates ->
-                longPressHub.suppressBounds = coordinates.boundsInRoot()
-            }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1074,13 +991,9 @@ private fun FlowRowScope.StorageContent(
     val load = storageModel?.usedLoad ?: 0f
     val loadColor by animatedColorAsUsed(load)
 
-    CategoryCard(
+    ValueRichTooltipBox(
+        modifier = Modifier.fillMaxWidth().weight(1f),
         title = stringResource(Res.string.text_storage),
-        modifier = Modifier.fillMaxWidth()
-            .weight(1f)
-    ) {
-        ValueRichTooltipBox(
-            title = stringResource(Res.string.text_storage),
             lines = buildList {
                 add(
                     stringResource(Res.string.text_label_used) to
@@ -1102,6 +1015,10 @@ private fun FlowRowScope.StorageContent(
                     add(stringResource(Res.string.text_label_user) to space)
                 }
             },
+    ) {
+        CategoryCard(
+            title = stringResource(Res.string.text_storage),
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

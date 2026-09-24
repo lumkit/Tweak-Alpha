@@ -5,31 +5,23 @@ import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.logI
 import io.github.lumkit.tweak.navigation.Navigator
 import io.github.lumkit.tweak.navigation.Screen
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 
 object NavigationViewModel : BaseViewModel() {
 
-    private val json by lazy {
-        Json {
-            ignoreUnknownKeys = true
-            encodeDefaults = true
-            classDiscriminator = "type"
-        }
-    }
+    private val pendingScreens = MutableSharedFlow<Screen>(replay = 1, extraBufferCapacity = 1)
 
     fun navigate(screen: Screen) {
         if (!screen.isDeeplinkNavigable()) {
             return
         }
-        navigate(NavigationIntent.of(screen))
+        pendingScreens.tryEmit(screen)
     }
 
-    fun navigate(intent: NavigationIntent) = suspendLaunch(
-        id = "navigate",
-    ) {
-        loading()
-        success(json.encodeToString(intent))
+    fun navigate(intent: NavigationIntent) {
+        val screen = NavigationIntent.decodeScreen(intent.screenJson) ?: return
+        navigate(screen)
     }
 
     private var isSetup = false
@@ -40,34 +32,12 @@ object NavigationViewModel : BaseViewModel() {
         isSetup = true
         logI("setup navigation watcher", tag = "NavigationWatcher")
 
-        val id = "navigate"
         viewModelScope.launch {
-            loadState.collect {
-                logI("watch $id, map = $it", tag = "NavigationWatcher")
-                val state = it[id] ?: return@collect
-                logI("watch $id, state = $state", tag = "NavigationWatcher")
-                launch {
-                    navHandle(state, navigator)
-                }
-                clearLoadState(id)
-            }
-        }
-    }
-
-    private fun navHandle(loadState: LoadState, navigator: Navigator) {
-        when (loadState) {
-            is LoadState.Failure,
-            is LoadState.Loading,
-            -> Unit
-            is LoadState.Success -> {
-                val intent = runCatching {
-                    json.decodeFromString<NavigationIntent>(loadState.message ?: "{}")
-                }.getOrNull() ?: return
-
-                val screen = NavigationIntent.decodeScreen(intent.screenJson) ?: return
+            pendingScreens.collect { screen ->
                 if (!screen.isDeeplinkNavigable()) {
-                    return
+                    return@collect
                 }
+                logI("navigate $screen", tag = "NavigationWatcher")
                 navigator.singleTop(screen)
             }
         }

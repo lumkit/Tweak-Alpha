@@ -12,25 +12,37 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.positionChange
 import sh.calvin.reorderable.DragGestureDetector
 
-internal class InfoItemLongPressHub {
-    var originInRoot: Offset = Offset.Zero
+internal class InfoLongPressCard {
+    var boundsInRoot: Rect = Rect.Zero
     var show: (() -> Unit)? = null
     var dismiss: (() -> Unit)? = null
-    /** 落在这块区域内的长按不弹出 Tooltip。 */
-    var suppressBounds: Rect? = null
+}
+
+internal class InfoSectionGestures {
+    var originInRoot: Offset = Offset.Zero
+    private val cards = mutableListOf<InfoLongPressCard>()
+
+    fun attach(card: InfoLongPressCard) {
+        if (card !in cards) {
+            cards += card
+        }
+    }
+
+    fun detach(card: InfoLongPressCard) {
+        cards -= card
+    }
 
     fun emitShow(localPosition: Offset) {
         val positionInRoot = originInRoot + localPosition
-        if (suppressBounds?.contains(positionInRoot) == true) return
-        show?.invoke()
+        cards.lastOrNull { it.boundsInRoot.contains(positionInRoot) }?.show?.invoke()
     }
 
     fun emitDismiss() {
-        dismiss?.invoke()
+        cards.forEach { it.dismiss?.invoke() }
     }
 }
 
-internal val LocalInfoItemLongPress = staticCompositionLocalOf { InfoItemLongPressHub() }
+internal val LocalInfoSectionGestures = staticCompositionLocalOf { InfoSectionGestures() }
 
 /**
  * 长按先回调 [onLongPress]（用于弹出 Tooltip），手指再移动超过 [slopPx] 才开始拖动排序。
