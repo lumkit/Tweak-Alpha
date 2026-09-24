@@ -2,9 +2,8 @@ package io.github.lumkit.tweak.common.utils
 
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
-import io.github.lumkit.tweak.model.GlobalViewModel
-import io.github.lumkit.tweak.model.RuntimeMode
-import io.github.lumkit.tweak.model.asNativeFileBackend
+import io.github.lumkit.tweak.model.RuntimeModeStore
+import io.github.lumkit.tweak.model.selectNativeFileBackend
 
 /**
  * 统一的 Native 文件访问入口。
@@ -13,7 +12,7 @@ import io.github.lumkit.tweak.model.asNativeFileBackend
  * [NativeFileService]。业务层不需要关心当前究竟是 Root、Shizuku 还是后续新增的
  * 其他 backend，只需要通过这里发起文件访问即可。
  *
- * backend 的选择规则来自 [GlobalViewModel.runtimeModeState]：
+ * backend 的选择规则来自 [RuntimeModeStore.mode]：
  * - `Root` 模式下会路由到 [NativeFileBackend.ROOT]
  * - 未知模式下会回落到 [NativeFileBackend.User]
  *
@@ -23,11 +22,8 @@ import io.github.lumkit.tweak.model.asNativeFileBackend
  */
 object Files {
 
-    private suspend fun resolveBackend(): NativeFileBackend {
-        // 面板采样是热路径：不能在每次 sysfs 读取上阻塞等待 DataStore。
-        // 模式尚未加载时先走 User；StateFlow Eagerly 发出值后下一轮即切到特权 backend。
-        val mode = GlobalViewModel.runtimeModeState.value ?: RuntimeMode.Unknow
-        return mode.asNativeFileBackend()
+    private fun resolveBackend(): NativeFileBackend {
+        return selectNativeFileBackend(RuntimeModeStore.mode.value)
     }
 
     private suspend fun getService(): NativeFileService {
