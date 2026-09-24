@@ -59,7 +59,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
@@ -69,38 +68,25 @@ import io.github.lumkit.tweak.common.component.ChartState
 import io.github.lumkit.tweak.common.component.LintStackChart
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.component.rememberChartState
-import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.isInfoPageSectionVisible
 import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
-import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
 import io.github.lumkit.tweak.model.GlobalViewModel
-import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
-import io.github.lumkit.tweak.overlay.OverlayMonitor
-import io.github.lumkit.tweak.ui.screen.fpsRecord.showRecordOverlay
-import io.github.lumkit.tweak.ui.screen.settings.SettingsViewModel
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.RichTooltip
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -110,13 +96,6 @@ import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.TooltipDefaults
 import top.yukonga.miuix.kmp.basic.rememberTooltipState
 import top.yukonga.miuix.kmp.basic.VerticalDivider
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Backup
-import top.yukonga.miuix.kmp.icon.extended.Close2
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -125,8 +104,6 @@ import tweak_alpha.shared.generated.resources.ic_process_linux
 import tweak_alpha.shared.generated.resources.nav_home
 import tweak_alpha.shared.generated.resources.text_battery
 import tweak_alpha.shared.generated.resources.text_cpu_state
-import tweak_alpha.shared.generated.resources.text_fps_record_overlay
-import tweak_alpha.shared.generated.resources.text_fps_record_overlay_description
 import tweak_alpha.shared.generated.resources.text_gpu_state
 import tweak_alpha.shared.generated.resources.text_info_available
 import tweak_alpha.shared.generated.resources.text_info_metric_load
@@ -139,20 +116,6 @@ import tweak_alpha.shared.generated.resources.text_label_used
 import tweak_alpha.shared.generated.resources.text_label_user
 import tweak_alpha.shared.generated.resources.text_memory_physical
 import tweak_alpha.shared.generated.resources.text_memory_state
-import tweak_alpha.shared.generated.resources.text_mini_load_overlay
-import tweak_alpha.shared.generated.resources.text_mini_load_overlay_description
-import tweak_alpha.shared.generated.resources.text_overlay_load
-import tweak_alpha.shared.generated.resources.text_overlay_load_description
-import tweak_alpha.shared.generated.resources.text_overlay_thread
-import tweak_alpha.shared.generated.resources.text_overlay_thread_description
-import tweak_alpha.shared.generated.resources.text_overlay_watcher
-import tweak_alpha.shared.generated.resources.text_overlay_watcher_description
-import tweak_alpha.shared.generated.resources.text_reboot
-import tweak_alpha.shared.generated.resources.text_reboot_to_bl
-import tweak_alpha.shared.generated.resources.text_reboot_to_edl
-import tweak_alpha.shared.generated.resources.text_reboot_to_rec
-import tweak_alpha.shared.generated.resources.text_shutdown
-import tweak_alpha.shared.generated.resources.text_soft_reboot
 import tweak_alpha.shared.generated.resources.text_storage
 import tweak_alpha.shared.generated.resources.text_storage_flash_type
 import tweak_alpha.shared.generated.resources.text_storage_free
@@ -210,7 +173,7 @@ fun InfoPage() {
                     scrollBehavior = scrollBehavior,
                     backdrop = backdrop,
                     actions = {
-                        Actions()
+                        PowerMenu()
                     }
                 )
             },
@@ -740,7 +703,6 @@ private fun MemoryInfoContent() {
                             ),
                         )
                     }
-                    // TODO 操作按钮
                 }
 
                 Row {
@@ -1188,194 +1150,6 @@ private fun FlowRowScope.StorageContent(
                     color = MiuixTheme.colorScheme.onSurface.copy(.8f)
                 )
             }
-            }
-        }
-    }
-}
-
-data class RebootAction(
-    val text: StringResource,
-    val enabled: Boolean = true,
-    val onTap: () -> Unit
-)
-
-@Composable
-private fun RowScope.Actions() {
-    val scope = rememberCoroutineScope { Dispatchers.IO }
-    val settingsViewModel: SettingsViewModel = viewModel { SettingsViewModel() }
-    val runtimeMode by settingsViewModel.runtimeMode.collectAsStateWithLifecycle()
-
-    // 监听器悬浮窗
-    Box {
-        var popState by remember { mutableStateOf(false) }
-
-        val requestOverlay = rememberRequestOverlayPermission {
-            popState = true
-        }
-
-        IconButton(
-            onClick = {
-                requestOverlay()
-            }
-        ) {
-            Icon(
-                imageVector = MiuixIcons.Backup,
-                contentDescription = null
-            )
-        }
-
-        val loadWatcherShowState by OverlayMonitor.loadWatcherIsShowing.collectAsStateWithLifecycle()
-        val threadWatcherShowState by OverlayMonitor.threadWatcherIsShowing.collectAsStateWithLifecycle()
-        val miniLoadOverlayShowState by OverlayMonitor.miniLoadWatcherIsShowing.collectAsStateWithLifecycle()
-
-        OverlayDialog(
-            title = stringResource(Res.string.text_overlay_watcher),
-            summary = stringResource(Res.string.text_overlay_watcher_description),
-            show = popState,
-            onDismissRequest = { popState = false }
-        ) {
-            Column {
-                SwitchPreference(
-                    title = stringResource(Res.string.text_overlay_load),
-                    summary = stringResource(Res.string.text_overlay_load_description),
-                    checked = loadWatcherShowState,
-                    onCheckedChange = {
-                        if (!it) {
-                            OverlayMonitor.hideLoadWatcherOverlay()
-                        } else {
-                            OverlayMonitor.showLoadWatcherOverlay()
-                        }
-                    }
-                )
-
-                SwitchPreference(
-                    title = stringResource(Res.string.text_overlay_thread),
-                    summary = stringResource(Res.string.text_overlay_thread_description),
-                    checked = threadWatcherShowState,
-                    onCheckedChange = {
-                        if (!it) {
-                            OverlayMonitor.hideThreadWatcherOverlay()
-                        } else {
-                            OverlayMonitor.showThreadWatcherOverlay()
-                        }
-                    }
-                )
-
-                SwitchPreference(
-                    title = stringResource(Res.string.text_mini_load_overlay),
-                    summary = stringResource(Res.string.text_mini_load_overlay_description),
-                    checked = miniLoadOverlayShowState,
-                    onCheckedChange = {
-                        if (!it) {
-                            OverlayMonitor.hideMiniLoadWatcherOverlay()
-                        } else {
-                            OverlayMonitor.showMiniLoadWatcherOverlay()
-                        }
-                    }
-                )
-
-                ArrowPreference(
-                    title = stringResource(Res.string.text_fps_record_overlay),
-                    summary = stringResource(Res.string.text_fps_record_overlay_description),
-                    onClick = {
-                        showRecordOverlay()
-                    }
-                )
-            }
-        }
-    }
-
-    // 高级重启
-    Box {
-        var popState by remember { mutableStateOf(false) }
-
-        val actions = remember(runtimeMode) {
-            listOf(
-                RebootAction(
-                    text = Res.string.text_shutdown,
-                    onTap = {
-                        scope.launch {
-                            ReusableShells.execSync("/system/bin/svc power shutdown || /system/bin/reboot -p || /system/bin/setprop sys.powerctl shutdown")
-                        }
-                    }
-                ),
-                RebootAction(
-                    text = Res.string.text_reboot,
-                    onTap = {
-                        scope.launch {
-                            ReusableShells.execSync("/system/bin/svc power reboot || /system/bin/reboot || /system/bin/setprop sys.powerctl reboot")
-                        }
-                    }
-                ),
-                RebootAction(
-                    text = Res.string.text_soft_reboot,
-                    enabled = runtimeMode == RuntimeMode.Root,
-                    onTap = {
-                        scope.launch {
-                            ReusableShells.execSync(
-                                "if [ -x /data/adb/ksud ]; then /data/adb/ksud soft-reboot; else setprop ctl.restart zygote; fi",
-                            )
-                        }
-                    }
-                ),
-                RebootAction(
-                    text = Res.string.text_reboot_to_rec,
-                    onTap = {
-                        scope.launch {
-                            ReusableShells.execSync("/system/bin/svc power reboot recovery || /system/bin/reboot recovery || /system/bin/setprop sys.powerctl reboot,recovery")
-                        }
-                    }
-                ),
-                RebootAction(
-                    text = Res.string.text_reboot_to_bl,
-                    onTap = {
-                        scope.launch {
-                            ReusableShells.execSync("/system/bin/svc power reboot bootloader || /system/bin/reboot bootloader || /system/bin/setprop sys.powerctl reboot,bootloader")
-                        }
-                    }
-                ),
-                RebootAction(
-                    text = Res.string.text_reboot_to_edl,
-                    enabled = runtimeMode == RuntimeMode.Root,
-                    onTap = {
-                        scope.launch {
-                            ReusableShells.execSync("/system/bin/reboot edl || /system/bin/setprop sys.powerctl reboot,edl")
-                        }
-                    }
-                ),
-            )
-        }
-
-        IconButton(
-            onClick = {
-                popState = true
-            }
-        ) {
-            Icon(
-                imageVector = MiuixIcons.Close2,
-                contentDescription = null
-            )
-        }
-
-        OverlayListPopup(
-            show = popState,
-            alignment = PopupPositionProvider.Align.End,
-            onDismissRequest = { popState = false }
-        ) {
-            ListPopupColumn {
-                actions.forEachIndexed { index, action ->
-                    DropdownImpl(
-                        text = stringResource(action.text),
-                        optionSize = actions.size,
-                        isSelected = false,
-                        index = index,
-                        enabled = action.enabled,
-                        onSelectedIndexChange = {
-                            action.onTap()
-                            popState = false
-                        }
-                    )
-                }
             }
         }
     }
