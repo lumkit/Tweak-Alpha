@@ -39,3 +39,4 @@ google-services.json
 /androidSharedNative/src/main/jniLibs/
 # cmake POST_BUILD 产物：assets/tweakd/<abi>/tweakd
 /androidSharedNative/src/main/assets/tweakd/*/tweakd
+.DS_Store
