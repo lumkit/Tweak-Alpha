@@ -8,6 +8,16 @@ enum class CrashLogSource {
     CLIENT,
 }
 
+sealed interface CrashWriteResult {
+    data class Stored(val path: String) : CrashWriteResult
+    data class Failed(val reason: String) : CrashWriteResult
+}
+
+fun CrashWriteResult.pathOrNull(): String? = when (this) {
+    is CrashWriteResult.Stored -> path
+    is CrashWriteResult.Failed -> null
+}
+
 data class CrashLogEntry(
     val path: String,
     val source: CrashLogSource,
@@ -23,7 +33,7 @@ data class CrashLogEntry(
  * 客户端先写入应用私有目录，[publishPending] 在特权就绪后拷到工作区。
  */
 expect object CrashLogStore {
-    fun write(source: CrashLogSource, threadName: String, throwable: Throwable): String?
+    fun write(source: CrashLogSource, threadName: String, throwable: Throwable): CrashWriteResult
 
     suspend fun publishPending()
 

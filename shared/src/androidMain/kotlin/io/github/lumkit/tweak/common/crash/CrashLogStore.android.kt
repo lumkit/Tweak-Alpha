@@ -8,6 +8,7 @@ import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.NativeFileResult
 import io.github.lumkit.tweak.common.utils.getOrNull
+import io.github.lumkit.tweak.common.utils.logE
 import java.io.File
 
 actual object CrashLogStore {
@@ -15,7 +16,7 @@ actual object CrashLogStore {
     private const val DIR = "${ConstCommon.Path.TWEAK_ALPHA_ROOT}/crashes"
     private const val LOCAL_DIR_NAME = "crashes"
 
-    actual fun write(source: CrashLogSource, threadName: String, throwable: Throwable): String? {
+    actual fun write(source: CrashLogSource, threadName: String, throwable: Throwable): CrashWriteResult {
         val timestamp = System.currentTimeMillis()
         val name = "${source.fileToken}_${timestamp}_${Process.myPid()}.log"
         val text = render(source, timestamp, threadName, throwable)
@@ -24,13 +25,17 @@ actual object CrashLogStore {
         }
         // 应用进程无法在 /data/local/tmp 下建目录（属主是 shell，SELinux 也会拒绝）。
         // 先落到私有目录，特权就绪后再发布到工作区。
-        return runCatching {
+        return try {
             val dir = localDir()
-            if (!dir.isDirectory && !dir.mkdirs()) return@runCatching null
+            if (!dir.isDirectory && !dir.mkdirs()) {
+                return CrashWriteResult.Failed("mkdir failed: ${dir.absolutePath}")
+            }
             val file = File(dir, name)
             file.writeText(text)
-            file.absolutePath
-        }.getOrNull()
+            CrashWriteResult.Stored(file.absolutePath)
+        } catch (e: Exception) {
+            CrashWriteResult.Failed(e.message ?: e::class.simpleName.orEmpty())
+        }
     }
 
     actual suspend fun publishPending() {
@@ -47,6 +52,8 @@ actual object CrashLogStore {
             if (written is NativeFileResult.Success) {
                 runCatching { Files.chmod(dest, "0644") }
                 file.delete()
+            } else {
+                logE("publish crash log failed: $dest", tag = "CrashLogStore")
             }
         }
     }
@@ -76,16 +83,20 @@ actual object CrashLogStore {
         return Files.readText(path).getOrNull().orEmpty()
     }
 
-    private fun writeWorkFile(name: String, text: String): String? {
-        return runCatching {
+    private fun writeWorkFile(name: String, text: String): CrashWriteResult {
+        return try {
             val dir = File(DIR)
-            if (!dir.isDirectory && !dir.mkdirs()) return@runCatching null
+            if (!dir.isDirectory && !dir.mkdirs()) {
+                return CrashWriteResult.Failed("mkdir failed: ${dir.absolutePath}")
+            }
             runCatching { Os.chmod(dir.absolutePath, 511) }
             val file = File(dir, name)
             file.writeText(text)
             runCatching { Os.chmod(file.absolutePath, 420) }
-            file.absolutePath
-        }.getOrNull()
+            CrashWriteResult.Stored(file.absolutePath)
+        } catch (e: Exception) {
+            CrashWriteResult.Failed(e.message ?: e::class.simpleName.orEmpty())
+        }
     }
 
     private fun localDir(): File = File(application.filesDir, LOCAL_DIR_NAME)
