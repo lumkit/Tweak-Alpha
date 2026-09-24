@@ -1,7 +1,7 @@
 # Tweak
 
 <div align="center">
-  <img src="androidApp/src/main/res/mipmap-xxhdpi/ic_logo.png" alt="Tweak Logo" width="120"/>
+  <img src="shared/src/androidMain/res/mipmap-xxhdpi/ic_logo.png" alt="Tweak Logo" width="120"/>
   <h3>Android 玩机工具箱</h3>
   <p>强大的 Android 系统调优与监控工具</p>
 </div>
