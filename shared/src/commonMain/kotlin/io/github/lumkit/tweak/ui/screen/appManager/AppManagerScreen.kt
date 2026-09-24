@@ -91,10 +91,7 @@ import io.github.lumkit.tweak.common.component.glassBlur
 import io.github.lumkit.tweak.common.utils.AppInfo
 import io.github.lumkit.tweak.common.utils.AppState
 import io.github.lumkit.tweak.common.utils.AppsHelper
-import io.github.lumkit.tweak.common.utils.Files
 import io.github.lumkit.tweak.common.utils.formatDateTime
-import io.github.lumkit.tweak.common.utils.formatMemorySize
-import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
@@ -1481,6 +1478,7 @@ private fun AppItem(
 
 @Composable
 private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
+    val apkSize by viewModel.apkSizeLabel.collectAsStateWithLifecycle()
     var forceDialogState by remember { mutableStateOf(false) }
     var freezeDialogState by remember { mutableStateOf(false) }
     var disableDialogState by remember { mutableStateOf(false) }
@@ -1577,10 +1575,6 @@ private fun AppInfoDialog(viewModel: AppManagerViewModel, appInfo: AppInfo?) {
                 .fillMaxWidth(),
         ) {
             appInfo?.also { info ->
-                val apkSize by produceState(initialValue = "--", key1 = info.sourceDir) {
-                    value = Files.length(info.sourceDir).getOrNull()?.formatMemorySize(" ") ?: "--"
-                }
-
                 BasicComponent(
                     modifier = Modifier.fillMaxWidth(),
                     startAction = {

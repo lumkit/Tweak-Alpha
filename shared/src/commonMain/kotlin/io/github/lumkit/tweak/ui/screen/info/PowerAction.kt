@@ -1,5 +1,6 @@
 package io.github.lumkit.tweak.ui.screen.info
 
+import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.model.RuntimeMode
 
 enum class PowerAction {
@@ -32,6 +33,10 @@ fun PowerAction.shellScript(): String {
             "/system/bin/reboot edl || /system/bin/setprop sys.powerctl reboot,edl"
     }
     return "$body\necho __TWEAK_EXIT:$?"
+}
+
+suspend fun PowerAction.run(): Int? {
+    return parsePowerExit(ReusableShells.execSync(shellScript()))
 }
 
 fun parsePowerExit(output: String): Int? {

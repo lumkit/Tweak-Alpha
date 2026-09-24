@@ -11,7 +11,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import io.github.lumkit.tweak.common.shell.ReusableShells
 import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
 import io.github.lumkit.tweak.overlay.OverlayMonitor
@@ -177,8 +176,7 @@ fun RowScope.PowerMenu() {
                         enabled = action.isEnabled(runtimeMode),
                         onSelectedIndexChange = {
                             scope.launch {
-                                val output = ReusableShells.execSync(action.shellScript())
-                                val code = parsePowerExit(output)
+                                val code = action.run()
                                 if (code != null && code != 0) {
                                     logE("power action $action failed: $code", tag = "PowerMenu")
                                 }

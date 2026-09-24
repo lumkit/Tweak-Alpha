@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,13 +29,12 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.layerBackdrop
 import io.github.lumkit.tweak.common.Const
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.utils.FileEntry
-import io.github.lumkit.tweak.common.utils.Files
-import io.github.lumkit.tweak.common.utils.NativeFileResult
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
@@ -82,9 +82,11 @@ fun FilePickerScreen(route: Screen.FilePicker) {
 
     val rootPath = remember { Const.Path.externalStorage.trimEnd('/') }
     var currentPath by remember { mutableStateOf(rootPath) }
-    var entries by remember { mutableStateOf<List<FileEntry>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val listingScope = rememberCoroutineScope()
+    val listing = remember(listingScope) { DirectoryListing(listingScope) }
+    val entries by listing.entries.collectAsStateWithLifecycle()
+    val loading by listing.loading.collectAsStateWithLifecycle()
+    val errorMessage by listing.errorMessage.collectAsStateWithLifecycle()
     var selectedPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
     var buttonHeight by remember { mutableStateOf(0.dp) }
     val delivered = remember { AtomicBoolean(false) }
@@ -108,22 +110,7 @@ fun FilePickerScreen(route: Screen.FilePicker) {
     )
 
     LaunchedEffect(currentPath) {
-        loading = true
-        errorMessage = null
-        when (val result = Files.listEntries(currentPath)) {
-            is NativeFileResult.Success -> {
-                entries = result.value.sortedWith(
-                    compareByDescending<FileEntry> { it.isDirectory }
-                        .thenBy { it.name.lowercase() }
-                )
-            }
-
-            is NativeFileResult.Failure -> {
-                entries = emptyList()
-                errorMessage = result.error.message
-            }
-        }
-        loading = false
+        listing.load(currentPath)
     }
 
     val canGoUp = remember(currentPath) {

@@ -4,6 +4,9 @@ import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.feature.commitStartExtractApk
 import io.github.lumkit.tweak.common.utils.AppInfo
+import io.github.lumkit.tweak.common.utils.Files
+import io.github.lumkit.tweak.common.utils.formatMemorySize
+import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.AppOperationResult
 import io.github.lumkit.tweak.common.utils.AppState
 import io.github.lumkit.tweak.common.utils.AppsHelper
@@ -88,6 +91,8 @@ class AppManagerViewModel: BaseViewModel() {
 
     private val _targetAppInfo = MutableStateFlow<AppInfo?>(null)
     val targetAppInfo = _targetAppInfo.asStateFlow()
+    private val _apkSizeLabel = MutableStateFlow("--")
+    val apkSizeLabel = _apkSizeLabel.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -453,8 +458,16 @@ class AppManagerViewModel: BaseViewModel() {
         success(buildBatchOperationMessage(getString(Res.string.text_app_restore), summary))
     }
 
-    fun setTargetAppInfo(info: AppInfo?){
+    fun setTargetAppInfo(info: AppInfo?) {
         _targetAppInfo.value = info
+        _apkSizeLabel.value = "--"
+        val sourceDir = info?.sourceDir ?: return
+        viewModelScope.launch {
+            val label = Files.length(sourceDir).getOrNull()?.formatMemorySize(" ") ?: "--"
+            if (_targetAppInfo.value?.sourceDir == sourceDir) {
+                _apkSizeLabel.value = label
+            }
+        }
     }
 
     /**
