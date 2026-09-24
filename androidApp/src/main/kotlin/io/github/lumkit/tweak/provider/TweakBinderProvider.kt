@@ -10,6 +10,7 @@ import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logW
 import io.github.lumkit.tweak.server.ipc.TweakBinderContract
 import io.github.lumkit.tweak.server.ipc.TweakServerConnection
+import io.github.lumkit.tweak.server.ipc.isPrivilegedCaller
 
 /**
  * 接收 TweakServer（app_process）投递的 Binder。
@@ -25,6 +26,11 @@ class TweakBinderProvider : ContentProvider() {
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
         if (method != TweakBinderContract.METHOD_SET_BINDER || extras == null) {
+            return Bundle.EMPTY
+        }
+        val callingUid = android.os.Binder.getCallingUid()
+        if (!isPrivilegedCaller(callingUid)) {
+            logW("[BINDER] rejected caller uid=$callingUid", TAG)
             return Bundle.EMPTY
         }
         val binder: IBinder? = extras.getBinder(TweakBinderContract.EXTRA_BINDER)
