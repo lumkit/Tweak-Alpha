@@ -50,7 +50,7 @@ import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.fps.FpsUtils
 import io.github.lumkit.tweak.common.utils.getDeviceScreenRefreshRate
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.SamplingSettingsStore
 import io.github.lumkit.tweak.service.OverlayService
 import io.github.lumkit.tweak.ui.screen.info.DeviceInfoViewModel
 import io.github.lumkit.tweak.ui.theme.getJetBrainsMonoRegularFontFamily
@@ -177,7 +177,7 @@ class LoadWatcherViewModel : BaseViewModel() {
         viewModelScope.launch {
             while (isActive) {
                 updateBundle()
-                delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
+                delay(SamplingSettingsStore.infoUpdateIntervalMs.value.milliseconds)
             }
         }
     }

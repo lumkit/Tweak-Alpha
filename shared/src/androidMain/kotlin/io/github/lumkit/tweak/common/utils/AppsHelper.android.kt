@@ -16,7 +16,7 @@ import androidx.core.graphics.drawable.toBitmap
 import io.github.lumkit.tweak.application
 import io.github.lumkit.tweak.common.Const
 import io.github.lumkit.tweak.common.shell.ReusableShells
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeModeStore
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.model.asNativeFileBackend
 import io.github.lumkit.tweak.sharednative.NativeFileBundles
@@ -154,7 +154,7 @@ actual object AppsHelper {
         pm: PackageManager,
         cacheDir: String,
     ): List<AppInfo>? = withContext(Dispatchers.IO) {
-        val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        val runtimeMode = RuntimeModeStore.mode.filterNotNull().first()
         val bundle = runCatching {
             when (runtimeMode) {
                 RuntimeMode.Root -> RootFileServiceConnectionManager.getService().listInstalledApps()
@@ -187,7 +187,7 @@ actual object AppsHelper {
         pm: PackageManager,
         cacheDir: String,
     ): AppInfo? = withContext(Dispatchers.IO) {
-        val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        val runtimeMode = RuntimeModeStore.mode.filterNotNull().first()
         val bundle = runCatching {
             when (runtimeMode) {
                 RuntimeMode.Root -> RootFileServiceConnectionManager.getService().getInstalledApp(packageName)
@@ -500,7 +500,7 @@ actual object AppsHelper {
             return@withContext AppOperationResult.Failure("未找到 APK 源文件")
         }
 
-        val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        val runtimeMode = RuntimeModeStore.mode.filterNotNull().first()
         val backend = runtimeMode.asNativeFileBackend()
         if (backend == NativeFileBackend.User) {
             return@withContext AppOperationResult.Failure("当前运行模式不支持特权文件提取")

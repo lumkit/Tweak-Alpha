@@ -2,7 +2,7 @@ package io.github.lumkit.tweak.common.daemon
 
 import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.common.daemon.DaemonPaths.SERVER_APK_NAME
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeModeStore
 import io.github.lumkit.tweak.model.RuntimeMode
 
 /**
@@ -44,7 +44,7 @@ object DaemonPaths {
     }
 
     suspend fun resolve(): Resolved {
-        return resolve(GlobalViewModel.currentRuntimeMode())
+        return resolve(RuntimeModeStore.current())
     }
 
     fun resolve(mode: RuntimeMode): Resolved {

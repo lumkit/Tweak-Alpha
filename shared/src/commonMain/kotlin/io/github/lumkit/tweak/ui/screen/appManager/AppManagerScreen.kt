@@ -394,19 +394,19 @@ private fun AppManagerLoadStateEffects(viewModel: AppManagerViewModel) {
     val hostState = LocalSnackBarHostState.current
 
     viewModel.LoadStateLaunchEffect {
-        WatchSnackBarState("forceKillSelectedApps", hostState)
-        WatchSnackBarState("forceKillApp", hostState)
-        WatchSnackBarState("unableSelectedApps", hostState)
-        WatchSnackBarState("unableApp", hostState)
-        WatchSnackBarState("disableSelectedApps", hostState)
-        WatchSnackBarState("disableApp", hostState)
-        WatchSnackBarState("enableSelectedApps", hostState)
-        WatchSnackBarState("enableApp", hostState)
-        WatchSnackBarState("uninstallSelectedApps", hostState)
-        WatchSnackBarState("uninstallApp", hostState)
-        WatchSnackBarState("restoreSelectedSystemApps", hostState)
-        WatchSnackBarState("restoreSystemApp", hostState)
-        WatchSnackBarState("extractApk", hostState)
+        WatchSnackBarState(AppManagerViewModel.forceKillSelectedAppsSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.forceKillAppSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.unableSelectedAppsSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.unableAppSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.disableSelectedAppsSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.disableAppSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.enableSelectedAppsSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.enableAppSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.uninstallSelectedAppsSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.uninstallAppSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.restoreSelectedSystemAppsSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.restoreSystemAppSlot, hostState)
+        WatchSnackBarState(AppManagerViewModel.extractApkSlot, hostState)
     }
 }
 
@@ -425,10 +425,10 @@ private fun AppManagerExtractEffects() {
 
 @Composable
 private fun BaseViewModel.LoadStateWatcher.WatchSnackBarState(
-    id: String,
+    slot: io.github.lumkit.tweak.common.base.LoadSlot,
     hostState: SnackbarHostState,
 ) {
-    Watch(id) {
+    Watch(slot) {
         it.message?.takeIf(String::isNotBlank)?.also { msg ->
             hostState.showSnackbar(msg)
         }

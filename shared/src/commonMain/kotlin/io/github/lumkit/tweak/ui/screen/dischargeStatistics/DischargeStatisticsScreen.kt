@@ -170,7 +170,7 @@ fun DischargeStatisticsScreen(
     var scenesHelpVisible by remember { mutableStateOf(false) }
 
     viewModel.LoadStateLaunchEffect {
-        Watch(DischargeStatisticsViewModel.NATIVE_DAEMON_ENABLE_LOAD_ID) {
+        Watch(viewModel.nativeDaemonEnableSlot) {
             nativeDaemonEnabling = it is BaseViewModel.LoadState.Loading
         }
     }

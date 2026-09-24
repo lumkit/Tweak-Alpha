@@ -21,7 +21,7 @@ import io.github.lumkit.tweak.common.utils.ComposeOverlayHelper
 import io.github.lumkit.tweak.common.utils.HandleDragTouchProvider
 import io.github.lumkit.tweak.common.utils.ProcessUtilLite
 import io.github.lumkit.tweak.common.utils.TweakDataStore
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.SamplingSettingsStore
 import io.github.lumkit.tweak.model.ThreadInfo
 import io.github.lumkit.tweak.service.OverlayService
 import io.github.lumkit.tweak.ui.theme.getJetBrainsMonoRegularFontFamily
@@ -149,7 +149,7 @@ private class ProcessThreadOverlayViewModel : BaseViewModel() {
         refreshJob = viewModelScope.launch(Dispatchers.IO) {
             while (true) {
                 refreshOnce()
-                delay(GlobalViewModel.processInfoUpdateTimeState.value.milliseconds)
+                delay(SamplingSettingsStore.processInfoUpdateMs.value.milliseconds)
             }
         }
     }

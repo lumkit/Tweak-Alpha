@@ -39,7 +39,7 @@ import io.github.lumkit.tweak.common.component.LiquidBottomTabs
 import io.github.lumkit.tweak.common.component.ScreenSurface
 import io.github.lumkit.tweak.common.component.glassBlur
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.AppearanceSettingsStore
 import io.github.lumkit.tweak.model.NavigationViewModel
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.ui.screen.feature.FeaturePage
@@ -83,7 +83,7 @@ private fun BoxScope.NavBar(
 ) {
     val density = LocalDensity.current
     val contentColor = MiuixTheme.colorScheme.onSurface
-    val enabledFloatNavBar by GlobalViewModel.enabledFloatNavBar.collectAsStateWithLifecycle()
+    val enabledFloatNavBar by AppearanceSettingsStore.enabledFloatNavBar.collectAsStateWithLifecycle()
 
     AnimatedContent(
         targetState = enabledFloatNavBar,

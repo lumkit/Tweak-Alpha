@@ -188,7 +188,7 @@ fun ChargeStatisticsScreen(
     val chargeSample by viewModel.chartSamples.collectAsStateWithLifecycle()
 
     viewModel.LoadStateLaunchEffect {
-        Watch(ChargeStatisticsViewModel.NATIVE_DAEMON_ENABLE_LOAD_ID) {
+        Watch(viewModel.nativeDaemonEnableSlot) {
             nativeDaemonEnabling = it is BaseViewModel.LoadState.Loading
         }
     }

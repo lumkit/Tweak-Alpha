@@ -39,7 +39,7 @@ import io.github.lumkit.tweak.common.utils.GpuUtils
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.formatPower
 import io.github.lumkit.tweak.common.utils.fps.FpsUtils
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.SamplingSettingsStore
 import io.github.lumkit.tweak.service.OverlayService
 import io.github.lumkit.tweak.shared.R
 import io.github.lumkit.tweak.ui.screen.info.DeviceInfoViewModel
@@ -129,7 +129,7 @@ private class MiniLoadContentViewModel : BaseViewModel() {
             while (isActive) {
                 updateDetail()
                 tick++
-                delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
+                delay(SamplingSettingsStore.infoUpdateIntervalMs.value.milliseconds)
             }
         }
     }

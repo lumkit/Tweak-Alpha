@@ -14,7 +14,7 @@ import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.common.utils.openPrivilegedReadOnlyFd
 import io.github.lumkit.tweak.common.utils.openPrivilegedWriteOnlyFd
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeModeStore
 import io.github.lumkit.tweak.model.asNativeFileBackend
 import io.github.lumkit.tweak.server.TweakServerMain
 import io.github.lumkit.tweak.server.ipc.TweakServerConnection
@@ -1048,7 +1048,7 @@ actual object TweakDaemon {
     }
 
     private suspend fun resolvePrivilegedBackend(): NativeFileBackend {
-        val backend = GlobalViewModel.currentRuntimeMode().asNativeFileBackend()
+        val backend = RuntimeModeStore.current().asNativeFileBackend()
         require(backend != NativeFileBackend.User) {
             "当前运行模式不支持安装 starter"
         }

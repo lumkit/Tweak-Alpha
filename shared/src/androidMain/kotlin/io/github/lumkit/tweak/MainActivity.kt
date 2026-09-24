@@ -11,7 +11,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.lifecycleScope
 import io.github.lumkit.tweak.common.ConstCommon
 import io.github.lumkit.tweak.model.CrashReporter
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.AppearanceSettingsStore
 import io.github.lumkit.tweak.model.NavigationIntent
 import io.github.lumkit.tweak.model.NavigationViewModel
 import io.github.lumkit.tweak.model.parseDeeplinkRoute
@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
 
     private fun observeHideInBackground() {
         lifecycleScope.launch {
-            GlobalViewModel.hideInBackgroundState.collect { enabled ->
+            AppearanceSettingsStore.hideInBackground.collect { enabled ->
                 applyHideInBackground(enabled)
             }
         }

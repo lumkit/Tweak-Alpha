@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.ui.screen.appManager
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.base.LoadSlot
 import io.github.lumkit.tweak.common.feature.commitStartExtractApk
 import io.github.lumkit.tweak.common.utils.AppInfo
 import io.github.lumkit.tweak.common.utils.Files
@@ -40,6 +41,20 @@ class AppManagerViewModel: BaseViewModel() {
 
     companion object {
         private const val TAG = "AppManagerViewModel"
+
+        val forceKillSelectedAppsSlot = LoadSlot()
+        val forceKillAppSlot = LoadSlot()
+        val unableSelectedAppsSlot = LoadSlot()
+        val unableAppSlot = LoadSlot()
+        val disableSelectedAppsSlot = LoadSlot()
+        val disableAppSlot = LoadSlot()
+        val enableSelectedAppsSlot = LoadSlot()
+        val enableAppSlot = LoadSlot()
+        val uninstallSelectedAppsSlot = LoadSlot()
+        val uninstallAppSlot = LoadSlot()
+        val restoreSelectedSystemAppsSlot = LoadSlot()
+        val restoreSystemAppSlot = LoadSlot()
+        val extractApkSlot = LoadSlot()
     }
 
     private val _loadingState = MutableStateFlow(false)
@@ -235,7 +250,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun forceKillSelectedApps() = suspendLaunch(
-        id = "forceKillSelectedApps",
+        slot = forceKillSelectedAppsSlot,
         complete = {
             _loadingState.value = false
         }
@@ -255,7 +270,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun forceKillApp(packageName: String) = suspendLaunch(
-        id = "forceKillApp",
+        slot = forceKillAppSlot,
         complete = {
             _loadingState.value = false
         }
@@ -268,7 +283,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun unableSelectedApps() = suspendLaunch(
-        id = "unableSelectedApps",
+        slot = unableSelectedAppsSlot,
         complete = {
             _loadingState.value = false
         }
@@ -290,7 +305,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun enableSelectedApps() = suspendLaunch(
-        id = "enableSelectedApps",
+        slot = enableSelectedAppsSlot,
         complete = {
             _loadingState.value = false
         }
@@ -321,7 +336,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun disableSelectedApps() = suspendLaunch(
-        id = "disableSelectedApps",
+        slot = disableSelectedAppsSlot,
         complete = {
             _loadingState.value = false
         }
@@ -343,7 +358,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun freezeApp(packageName: String) = suspendLaunch(
-        id = "unableApp",
+        slot = unableAppSlot,
         complete = {
             _loadingState.value = false
         }
@@ -358,7 +373,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun disableApp(packageName: String) = suspendLaunch(
-        id = "disableApp",
+        slot = disableAppSlot,
         complete = {
             _loadingState.value = false
         }
@@ -373,7 +388,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun enableApp(packageName: String, state: AppState) = suspendLaunch(
-        id = "enableApp",
+        slot = enableAppSlot,
         complete = {
             _loadingState.value = false
         }
@@ -393,7 +408,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun uninstallSelectedApps() = suspendLaunch(
-        id = "uninstallSelectedApps",
+        slot = uninstallSelectedAppsSlot,
         complete = {
             _loadingState.value = false
         }
@@ -413,7 +428,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun uninstallApp(packageName: String) = suspendLaunch(
-        id = "uninstallApp",
+        slot = uninstallAppSlot,
         complete = {
             _loadingState.value = false
         }
@@ -426,7 +441,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun restoreSelectedSystemApps() = suspendLaunch(
-        id = "restoreSelectedSystemApps",
+        slot = restoreSelectedSystemAppsSlot,
         complete = {
             _loadingState.value = false
         }
@@ -446,7 +461,7 @@ class AppManagerViewModel: BaseViewModel() {
     }
 
     fun restoreSystemApp(packageName: String) = suspendLaunch(
-        id = "restoreSystemApp",
+        slot = restoreSystemAppSlot,
         complete = {
             _loadingState.value = false
         }
@@ -474,7 +489,7 @@ class AppManagerViewModel: BaseViewModel() {
      * 启动单个应用的安装包提取。
      */
     fun extractApk(packageName: String, appName: String) = suspendLaunch(
-        id = "extractApk",
+        slot = extractApkSlot,
     ) {
         startExtractApk(
             listOf(
@@ -490,7 +505,7 @@ class AppManagerViewModel: BaseViewModel() {
      * 多选批量提取安装包：串行执行，共用一个进度 Dialog。
      */
     fun extractSelectedApps() = suspendLaunch(
-        id = "extractApk",
+        slot = extractApkSlot,
     ) {
         val packages = consumeSelectedPackages()
         if (packages.isEmpty()) {

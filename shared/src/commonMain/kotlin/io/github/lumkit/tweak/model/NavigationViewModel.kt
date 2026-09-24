@@ -1,14 +1,19 @@
 package io.github.lumkit.tweak.model
 
-import androidx.lifecycle.viewModelScope
-import io.github.lumkit.tweak.common.base.BaseViewModel
 import io.github.lumkit.tweak.common.utils.logI
 import io.github.lumkit.tweak.navigation.Navigator
 import io.github.lumkit.tweak.navigation.Screen
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 
-object NavigationViewModel : BaseViewModel() {
+/**
+ * 深链在 Activity 收到时导航器可能还没挂上，所以先记在进程里，等主界面订阅后再跳。
+ */
+object NavigationViewModel {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val pendingScreens = MutableSharedFlow<Screen>(replay = 1, extraBufferCapacity = 1)
 
@@ -32,7 +37,7 @@ object NavigationViewModel : BaseViewModel() {
         isSetup = true
         logI("setup navigation watcher", tag = "NavigationWatcher")
 
-        viewModelScope.launch {
+        scope.launch {
             pendingScreens.collect { screen ->
                 if (!screen.isDeeplinkNavigable()) {
                     return@collect

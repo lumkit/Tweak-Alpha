@@ -16,7 +16,7 @@ import io.github.lumkit.tweak.common.utils.NativeFileBackend
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.common.utils.openPrivilegedReadOnlyFd
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeModeStore
 import io.github.lumkit.tweak.model.asNativeFileBackend
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -255,7 +255,7 @@ actual object FastbootManager {
     }
 
     private suspend fun resolvePrivilegedBackend(path: String): NativeFileBackend {
-        val runtimeMode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        val runtimeMode = RuntimeModeStore.mode.filterNotNull().first()
         val backend = runtimeMode.asNativeFileBackend()
         require(backend != NativeFileBackend.User) {
             "当前运行模式不支持通过特权 Binder 打开文件 FD: $path"

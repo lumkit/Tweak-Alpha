@@ -200,7 +200,7 @@ fun UpdateSystemScreen() {
     }
 
     UpdateEngineViewModel.LoadStateLaunchEffect {
-        Watch("ACTION_CANCEL_UPDATE") {
+        Watch(UpdateEngineViewModel.cancelUpdateSlot) {
             when (it) {
                 is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
                     it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->
@@ -210,7 +210,7 @@ fun UpdateSystemScreen() {
                 is BaseViewModel.LoadState.Loading -> Unit
             }
         }
-        Watch("ACTION_MERGE_UPDATE") {
+        Watch(UpdateEngineViewModel.mergeUpdateSlot) {
             when (it) {
                 is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
                     it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->
@@ -220,7 +220,7 @@ fun UpdateSystemScreen() {
                 is BaseViewModel.LoadState.Loading -> Unit
             }
         }
-        Watch("ACTION_RESET_UPDATE") {
+        Watch(UpdateEngineViewModel.resetUpdateSlot) {
             when (it) {
                 is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
                     it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->
@@ -230,7 +230,7 @@ fun UpdateSystemScreen() {
                 is BaseViewModel.LoadState.Loading -> Unit
             }
         }
-        Watch("ACTION_SUSPEND_UPDATE") {
+        Watch(UpdateEngineViewModel.suspendUpdateSlot) {
             when (it) {
                 is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
                     it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->
@@ -240,7 +240,7 @@ fun UpdateSystemScreen() {
                 is BaseViewModel.LoadState.Loading -> Unit
             }
         }
-        Watch("ACTION_RESUME_UPDATE") {
+        Watch(UpdateEngineViewModel.resumeUpdateSlot) {
             when (it) {
                 is BaseViewModel.LoadState.Failure, is BaseViewModel.LoadState.Success -> {
                     it.message?.takeIf { msg -> msg.isNotBlank() }?.also {  msg ->

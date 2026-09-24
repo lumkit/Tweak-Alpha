@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.ui.screen.settings
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.base.LoadSlot
 import io.github.lumkit.tweak.common.daemon.NativeDaemonController
 import io.github.lumkit.tweak.common.daemon.TweakDaemon
 import io.github.lumkit.tweak.common.database.battery.BatteryRecordDefaults
@@ -28,10 +29,8 @@ import kotlin.time.Duration.Companion.seconds
 
 class SettingsViewModel : BaseViewModel() {
 
-    companion object {
-        const val NATIVE_DAEMON_TOGGLE_LOAD_ID = "nativeDaemonToggle"
-        const val RUNTIME_MODE_TOGGLE_LOAD_ID = "runtimeModeToggle"
-    }
+    val nativeDaemonToggleSlot = LoadSlot()
+    val runtimeModeToggleSlot = LoadSlot()
 
     private val _isIgnoringBatteryOptimizations = MutableStateFlow(false)
     val isIgnoringBatteryOptimizations = _isIgnoringBatteryOptimizations.asStateFlow()
@@ -214,7 +213,7 @@ class SettingsViewModel : BaseViewModel() {
     }
 
     fun setRuntimeMode(mode: RuntimeMode, after: (() -> Unit)? = null) = suspendLaunch(
-        id = RUNTIME_MODE_TOGGLE_LOAD_ID,
+        slot = runtimeModeToggleSlot,
     ) {
         loading()
         // 切模式（尤其 Root→Shizuku）前先经 Binder 让旧守护进程自行退出；
@@ -258,7 +257,7 @@ class SettingsViewModel : BaseViewModel() {
     }
 
     fun setNativeDaemonEnabled(enable: Boolean) = suspendLaunch(
-        id = NATIVE_DAEMON_TOGGLE_LOAD_ID,
+        slot = nativeDaemonToggleSlot,
     ) {
         loading()
         NativeDaemonController.setEnabled(enable)

@@ -4,7 +4,7 @@ import android.content.pm.PackageManager
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeModeStore
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
@@ -153,7 +153,7 @@ actual object ShellExecutor {
     }
 
     actual suspend fun getRuntimeWithRuntimeMode(redirectErrorStream: Boolean): Process {
-        return when (GlobalViewModel.runtimeModeState.filterNotNull().firstOrNull()) {
+        return when (RuntimeModeStore.mode.filterNotNull().firstOrNull()) {
             RuntimeMode.Unknow -> error("this should not happen, please report this to the developer")
             RuntimeMode.Root -> getSuperUserRuntime(redirectErrorStream)
             RuntimeMode.Shizuku -> getShizukuRuntime()

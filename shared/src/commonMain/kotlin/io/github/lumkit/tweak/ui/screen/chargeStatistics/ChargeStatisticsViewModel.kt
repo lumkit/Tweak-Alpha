@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.ui.screen.chargeStatistics
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.base.LoadSlot
 import io.github.lumkit.tweak.common.component.ChartState
 import io.github.lumkit.tweak.common.component.LintCurveChartState
 import io.github.lumkit.tweak.common.component.bounds
@@ -50,9 +51,7 @@ import kotlin.time.Clock
  */
 class ChargeStatisticsViewModel : BaseViewModel() {
 
-    companion object {
-        const val NATIVE_DAEMON_ENABLE_LOAD_ID = "chargeStatisticsNativeDaemon"
-    }
+    val nativeDaemonEnableSlot = LoadSlot()
 
     private val repository = BatteryRecordRepository()
 
@@ -409,7 +408,7 @@ class ChargeStatisticsViewModel : BaseViewModel() {
         _chargeHistoryNativeDaemonPrompt.value = false
     }
 
-    fun enableNativeDaemonForChargeHistory() = suspendLaunch(id = NATIVE_DAEMON_ENABLE_LOAD_ID) {
+    fun enableNativeDaemonForChargeHistory() = suspendLaunch(slot = nativeDaemonEnableSlot) {
         loading()
         NativeDaemonController.setEnabled(true)
         if (!needsNativeDaemonPrompt()) {

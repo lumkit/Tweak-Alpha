@@ -2,6 +2,7 @@ package io.github.lumkit.tweak.ui.screen.fpsRecord
 
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.base.LoadSlot
 import io.github.lumkit.tweak.common.database.fps.repos.FpsRecordRepository
 import io.github.lumkit.tweak.common.database.fps.table.FpsMetricEntity
 import io.github.lumkit.tweak.common.database.fps.table.FpsNoteSessionEntity
@@ -53,6 +54,9 @@ object FpsRecordServiceViewModel : BaseViewModel() {
     private const val TAG = "FpsRecordServiceViewModel"
     private const val IMMERSIVE_IDLE_TIMEOUT_MILLIS = 5000L
 
+    val startRecordSlot = LoadSlot()
+    val stopRecordSlot = LoadSlot()
+
     private val repository: FpsRecordRepository = FpsRecordRepository()
 
     private val _isRecordingState = MutableStateFlow(false)
@@ -86,7 +90,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
     }
 
     fun startRecord() = suspendLaunch(
-        id = "startRecord",
+        slot = startRecordSlot,
         failed = {
             failure(it)
             withContext(Dispatchers.Main) {
@@ -207,7 +211,7 @@ object FpsRecordServiceViewModel : BaseViewModel() {
 
 
     fun stopRecord() = suspendLaunch(
-        id = "stopRecord"
+        slot = stopRecordSlot,
     ) {
         loading()
 

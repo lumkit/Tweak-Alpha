@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.ui.screen.fpsRecord
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.base.LoadSlot
 import io.github.lumkit.tweak.common.database.fps.repos.FpsRecordRepository
 import io.github.lumkit.tweak.common.database.fps.table.FpsMetricEntity
 import io.github.lumkit.tweak.common.database.fps.table.FpsNoteSessionEntity
@@ -31,12 +32,14 @@ import kotlin.time.Duration.Companion.milliseconds
 
 object FpsRecordViewModel : BaseViewModel() {
 
-    private const val ID_CREATE_SESSION = "create_session"
-    private const val ID_RECORD_METRIC = "record_metric"
-    private const val ID_RECORD_METRICS = "record_metrics"
-    private const val ID_LOAD_METRICS = "load_metrics"
-    private const val ID_SOFT_DELETE = "soft_delete_session"
-    private const val ID_DELETE = "delete_session"
+    val initPlatformInfoSlot = LoadSlot()
+    val createSessionSlot = LoadSlot()
+    val recordMetricSlot = LoadSlot()
+    val recordMetricsSlot = LoadSlot()
+    val loadMetricsSlot = LoadSlot()
+    val softDeleteSessionSlot = LoadSlot()
+    val deleteSessionSlot = LoadSlot()
+    val softDeleteSessionsSlot = LoadSlot()
 
     private val repository: FpsRecordRepository = FpsRecordRepository()
 
@@ -107,7 +110,7 @@ object FpsRecordViewModel : BaseViewModel() {
     )
 
     init {
-        suspendLaunch(id = "init_platform_info") {
+        suspendLaunch(slot = initPlatformInfoSlot) {
             loading()
             val platformName = getString(getDeviceType().displayNameResource)
             _platformInfoState.value = PlatformInfo(
@@ -130,7 +133,7 @@ object FpsRecordViewModel : BaseViewModel() {
 
     /** 创建会话 */
     fun createSession(session: FpsNoteSessionEntity, onCreated: (Long) -> Unit = {}) {
-        suspendLaunch(id = ID_CREATE_SESSION, context = Dispatchers.IO) {
+        suspendLaunch(slot = createSessionSlot, context = Dispatchers.IO) {
             loading()
             val id = repository.insertSession(session)
             success()
@@ -140,21 +143,21 @@ object FpsRecordViewModel : BaseViewModel() {
 
     /** 记录单条采样 */
     fun recordMetric(metric: FpsMetricEntity) {
-        suspendLaunch(id = ID_RECORD_METRIC, context = Dispatchers.IO) {
+        suspendLaunch(slot = recordMetricSlot, context = Dispatchers.IO) {
             repository.insertMetric(metric)
         }
     }
 
     /** 批量记录采样 */
     fun recordMetrics(metrics: List<FpsMetricEntity>) {
-        suspendLaunch(id = ID_RECORD_METRICS, context = Dispatchers.IO) {
+        suspendLaunch(slot = recordMetricsSlot, context = Dispatchers.IO) {
             repository.insertMetrics(metrics)
         }
     }
 
     /** 加载指定会话的采样数据 */
     fun loadMetrics(sessionId: Long) {
-        suspendLaunch(id = ID_LOAD_METRICS, context = Dispatchers.IO) {
+        suspendLaunch(slot = loadMetricsSlot, context = Dispatchers.IO) {
             loading()
             _metrics.value = repository.queryMetricsBySessionId(sessionId)
             success()
@@ -163,7 +166,7 @@ object FpsRecordViewModel : BaseViewModel() {
 
     /** 软删除会话 */
     fun softDeleteSession(sessionId: Long) {
-        suspendLaunch(id = ID_SOFT_DELETE, context = Dispatchers.IO) {
+        suspendLaunch(slot = softDeleteSessionSlot, context = Dispatchers.IO) {
             loading()
             repository.softDeleteSession(sessionId)
             success()
@@ -172,7 +175,7 @@ object FpsRecordViewModel : BaseViewModel() {
 
     /** 硬删除会话及采样数据 */
     fun deleteSession(sessionId: Long) {
-        suspendLaunch(id = ID_DELETE, context = Dispatchers.IO) {
+        suspendLaunch(slot = deleteSessionSlot, context = Dispatchers.IO) {
             loading()
             repository.deleteSession(sessionId)
             success()
@@ -209,7 +212,7 @@ object FpsRecordViewModel : BaseViewModel() {
     }
 
     fun softDeleteSessions() = suspendLaunch(
-        "softDeleteSessions"
+        slot = softDeleteSessionsSlot,
     ) {
         loading()
         _selectedSessionIds.value.forEach {

@@ -5,8 +5,8 @@ import io.github.lumkit.tweak.common.utils.LibSuX
 import io.github.lumkit.tweak.common.utils.PrivilegedAppInitializer
 import io.github.lumkit.tweak.common.utils.ShizukuX
 import io.github.lumkit.tweak.common.utils.TweakDataStore
-import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
+import io.github.lumkit.tweak.model.RuntimeModeStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,11 +19,7 @@ class SplashViewModel : BaseViewModel() {
     private val _checkLoadingState = MutableStateFlow(false)
     val checkLoadingState: StateFlow<Boolean> = _checkLoadingState.asStateFlow()
 
-    val runtimeModeState = GlobalViewModel.runtimeModeState
-
-    init {
-        GlobalViewModel.create()
-    }
+    val runtimeModeState = RuntimeModeStore.mode
 
     suspend fun setRuntimeMode(runtimeMode: RuntimeMode) {
         TweakDataStore.setRuntimeMode(runtimeMode)
@@ -36,7 +32,7 @@ class SplashViewModel : BaseViewModel() {
         block: () -> Unit
     ) {
         // StateFlow 可能仍为 null（Eagerly 首次读盘前）；回退 DataStore，避免静默 return 卡在 Splash
-        val mode = GlobalViewModel.currentRuntimeMode()
+        val mode = RuntimeModeStore.current()
         if (mode == RuntimeMode.Unknow) return
 
         withCheckLoading {

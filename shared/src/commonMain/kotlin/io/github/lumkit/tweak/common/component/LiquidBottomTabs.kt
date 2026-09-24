@@ -54,7 +54,7 @@ import com.kyant.shapes.Capsule
 import io.github.lumkit.tweak.common.utils.DampedDragAnimation
 import io.github.lumkit.tweak.common.utils.InteractiveHighlight
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.AppearanceSettingsStore
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
@@ -73,8 +73,8 @@ fun LiquidBottomTabs(
     shape: Shape = Capsule(),
     content: @Composable RowScope.() -> Unit
 ) {
-    val enableBlur by GlobalViewModel.enabledBlur.collectAsStateWithLifecycle()
-    val enabledLiquidGlass by GlobalViewModel.enabledLiquidGlass.collectAsStateWithLifecycle()
+    val enableBlur by AppearanceSettingsStore.enabledBlur.collectAsStateWithLifecycle()
+    val enabledLiquidGlass by AppearanceSettingsStore.enabledLiquidGlass.collectAsStateWithLifecycle()
     val supportsAdvancedEffects = remember { isAdvancedBackdropEffectSupported() }
     val accentColor = MiuixTheme.colorScheme.primary
     val containerColor = if (supportsAdvancedEffects && enableBlur) {

@@ -170,7 +170,7 @@ private fun FpsRecordContent() {
     }
 
     viewModel.LoadStateLaunchEffect {
-        Watch("softDeleteSessions", false) {
+        Watch(FpsRecordViewModel.softDeleteSessionsSlot, autoClear = false) {
             val isLoading = it is BaseViewModel.LoadState.Loading
             loadingState = isLoading
         }

@@ -24,7 +24,7 @@ import io.github.lumkit.tweak.common.utils.formatVoltage
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.model.AndroidSoc
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.SamplingSettingsStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,9 +57,7 @@ import kotlin.time.Duration.Companion.seconds
  */
 expect fun isAppInForeground(): Boolean
 
-object DeviceInfoViewModel : BaseViewModel() {
-
-    private const val TAG = "DeviceInfoViewModel"
+class DeviceInfoViewModel : BaseViewModel() {
 
     @Serializable
     data class CpuInfoModel(
@@ -318,7 +316,7 @@ object DeviceInfoViewModel : BaseViewModel() {
                 }
 
                 _loadingState.value = true
-                delay(GlobalViewModel.infoUpdateTimeSpanMillisecondsState.value.milliseconds)
+                delay(SamplingSettingsStore.infoUpdateIntervalMs.value.milliseconds)
             }
         }
 
@@ -347,7 +345,7 @@ object DeviceInfoViewModel : BaseViewModel() {
                         logD("process info loadingTime: $loadingTime", TAG)
                     }
 
-                    delay(GlobalViewModel.processInfoUpdateTimeState.value.milliseconds)
+                    delay(SamplingSettingsStore.processInfoUpdateMs.value.milliseconds)
                 }
             }
         }
@@ -450,12 +448,16 @@ object DeviceInfoViewModel : BaseViewModel() {
         }
     }
 
-    fun formatFreq(freq: String, unit: String = "MHz"): String =
-        formatFreqOrNull(freq, unit).orEmpty()
+    companion object {
+        private const val TAG = "DeviceInfoViewModel"
 
-    fun formatFreqOrNull(freq: String, unit: String = "MHz"): String? {
-        val khz = freq.toLongOrNull()?.takeIf { it > 0L } ?: return null
-        return "%d%s".format(khz / 1000L, unit)
+        fun formatFreq(freq: String, unit: String = "MHz"): String =
+            formatFreqOrNull(freq, unit).orEmpty()
+
+        fun formatFreqOrNull(freq: String, unit: String = "MHz"): String? {
+            val khz = freq.toLongOrNull()?.takeIf { it > 0L } ?: return null
+            return "%d%s".format(khz / 1000L, unit)
+        }
     }
 
     private suspend fun updateMemoryInfo() {

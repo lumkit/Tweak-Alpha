@@ -8,6 +8,7 @@ import coil3.request.crossfade
 import com.topjohnwu.superuser.Shell
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.isDebugBuild
+import io.github.lumkit.tweak.model.BatteryCalibrationSync
 import io.github.lumkit.tweak.model.CrashReporter
 import io.github.lumkit.tweak.sharednative.BatteryBridge
 
@@ -20,6 +21,7 @@ class TweakApplication : Application(), SingletonImageLoader.Factory {
         application = this
 
         CrashReporter.install()
+        BatteryCalibrationSync.start()
         BatteryBridge.init(this)
         initLibSu()
     }

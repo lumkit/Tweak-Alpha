@@ -34,7 +34,8 @@ import io.github.lumkit.tweak.LocalSnackBarHostState
 import io.github.lumkit.tweak.common.component.TopBar
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.AppearanceSettingsStore
+import io.github.lumkit.tweak.model.RuntimeModeStore
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
@@ -68,7 +69,7 @@ fun FeaturePage() {
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberLayerBackdropColor()
     val providers by FeatureRegistry.providers
-    val runtimeMode by GlobalViewModel.runtimeModeState.collectAsStateWithLifecycle()
+    val runtimeMode by RuntimeModeStore.mode.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val hostState = LocalSnackBarHostState.current
     val scope = rememberCoroutineScope()
@@ -90,7 +91,7 @@ fun FeaturePage() {
             )
         }
 
-        val enabledFloatNavBar by GlobalViewModel.enabledFloatNavBar.collectAsStateWithLifecycle()
+        val enabledFloatNavBar by AppearanceSettingsStore.enabledFloatNavBar.collectAsStateWithLifecycle()
         val navBarBottomPadding by animateDpAsState(
             targetValue = if (enabledFloatNavBar) {
                 28.dp

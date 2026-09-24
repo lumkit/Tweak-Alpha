@@ -26,7 +26,7 @@ import io.github.lumkit.tweak.common.utils.documentFile
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeModeStore
 import io.github.lumkit.tweak.model.NavigationIntent
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.navigation.Screen
@@ -166,7 +166,7 @@ class UpdateEngineService: BaseService() {
         logD("start update service (background watch)", TAG)
 
         updateScope.launch {
-            GlobalViewModel.runtimeModeState.collect { mode ->
+            RuntimeModeStore.mode.collect { mode ->
                 if (mode != RuntimeMode.Root) {
                     logD("runtime mode is $mode, skip follow", TAG)
                     return@collect
@@ -270,7 +270,7 @@ class UpdateEngineService: BaseService() {
             ACTION_CANCEL_UPDATE -> {
                 updateScope.launch {
                     UpdateEngineViewModel.launchTask(
-                        id = "ACTION_CANCEL_UPDATE",
+                        slot = UpdateEngineViewModel.cancelUpdateSlot,
                     ) {
                         loading()
                         UpdateEngineClient.cancel().trim().also {
@@ -284,7 +284,7 @@ class UpdateEngineService: BaseService() {
             ACTION_MERGE_UPDATE -> {
                 updateScope.launch {
                     UpdateEngineViewModel.launchTask(
-                        id = "ACTION_MERGE_UPDATE",
+                        slot = UpdateEngineViewModel.mergeUpdateSlot,
                     ) {
                         loading()
                         UpdateEngineClient.merge().trim().also {
@@ -298,7 +298,7 @@ class UpdateEngineService: BaseService() {
             ACTION_RESET_UPDATE -> {
                 updateScope.launch {
                     UpdateEngineViewModel.launchTask(
-                        id = "ACTION_RESET_UPDATE",
+                        slot = UpdateEngineViewModel.resetUpdateSlot,
                     ) {
                         loading()
                         UpdateEngineClient.reset().trim().also {
@@ -312,7 +312,7 @@ class UpdateEngineService: BaseService() {
             ACTION_SUSPEND_UPDATE -> {
                 updateScope.launch {
                     UpdateEngineViewModel.launchTask(
-                        id = "ACTION_SUSPEND_UPDATE",
+                        slot = UpdateEngineViewModel.suspendUpdateSlot,
                     ) {
                         loading()
                         UpdateEngineClient.suspend().trim().also {
@@ -326,7 +326,7 @@ class UpdateEngineService: BaseService() {
             ACTION_RESUME_UPDATE -> {
                 updateScope.launch {
                     UpdateEngineViewModel.launchTask(
-                        id = "ACTION_RESUME_UPDATE",
+                        slot = UpdateEngineViewModel.resumeUpdateSlot,
                     ) {
                         loading()
                         UpdateEngineClient.resume().trim().also {

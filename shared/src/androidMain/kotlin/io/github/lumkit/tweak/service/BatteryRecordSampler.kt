@@ -12,7 +12,7 @@ import io.github.lumkit.tweak.common.utils.BatteryCapacityEstimateStore
 import io.github.lumkit.tweak.common.utils.BatteryUtils
 import io.github.lumkit.tweak.common.utils.logD
 import io.github.lumkit.tweak.common.utils.logE
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.SamplingSettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -74,7 +74,7 @@ class BatteryRecordSampler(
                     runCatching { sampleOnce() }
                         .onFailure { logE(it.stackTraceToString(), it, TAG) }
                 }
-                val intervalMs = GlobalViewModel.batteryRecordSampleIntervalMsState.value
+                val intervalMs = SamplingSettingsStore.batteryRecordIntervalMs.value
                     .coerceAtLeast(100)
                 delay(intervalMs.milliseconds)
             }
@@ -154,7 +154,7 @@ class BatteryRecordSampler(
     }
 
     private fun sampleIntervalMs(): Int =
-        GlobalViewModel.batteryRecordSampleIntervalMsState.value.coerceAtLeast(100)
+        SamplingSettingsStore.batteryRecordIntervalMs.value.coerceAtLeast(100)
 
     private suspend fun maybeConfirmChargingSession(sessionId: Long, now: Long) {
         val session = repository.querySessionById(sessionId) ?: return

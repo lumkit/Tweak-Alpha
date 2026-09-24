@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.Const
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.base.LoadSlot
 import io.github.lumkit.tweak.common.feature.UpdateEngineEvent
 import io.github.lumkit.tweak.common.feature.UpdateStatus
 import io.github.lumkit.tweak.common.feature.commitCancelUpdate
@@ -26,6 +27,12 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 
 object UpdateEngineViewModel: BaseViewModel() {
+
+    val cancelUpdateSlot = LoadSlot()
+    val mergeUpdateSlot = LoadSlot()
+    val resetUpdateSlot = LoadSlot()
+    val suspendUpdateSlot = LoadSlot()
+    val resumeUpdateSlot = LoadSlot()
 
     private val _updateEvent = MutableStateFlow<UpdateEngineEvent?>(null)
     val updateEvent = _updateEvent.asStateFlow()
@@ -123,10 +130,10 @@ object UpdateEngineViewModel: BaseViewModel() {
     }
 
     fun launchTask(
-        id: Any?,
+        slot: LoadSlot,
         context: CoroutineContext = Dispatchers.Main,
         failed: suspend LoadStateCoroutineScope.(Throwable) -> Unit = { failure(it) },
         complete: suspend () -> Unit = {},
         block: suspend LoadStateCoroutineScope.() -> Unit,
-    ) = suspendLaunch(id, context, failed, complete, block)
+    ) = suspendLaunch(slot, context, failed, complete, block)
 }

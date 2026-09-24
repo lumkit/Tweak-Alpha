@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.ui.screen.dischargeStatistics
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.base.BaseViewModel
+import io.github.lumkit.tweak.common.base.LoadSlot
 import io.github.lumkit.tweak.common.component.AppMinuteBarColumn
 import io.github.lumkit.tweak.common.component.LineChartData
 import io.github.lumkit.tweak.common.component.LineChartXAxisData
@@ -40,9 +41,10 @@ import kotlin.time.Clock
 class DischargeStatisticsViewModel : BaseViewModel() {
 
     companion object {
-        const val NATIVE_DAEMON_ENABLE_LOAD_ID = "dischargeStatisticsNativeDaemon"
         private const val TAG = "DischargeStatisticsViewModel"
     }
+
+    val nativeDaemonEnableSlot = LoadSlot()
 
     private val repository = BatteryRecordRepository()
 
@@ -390,7 +392,7 @@ class DischargeStatisticsViewModel : BaseViewModel() {
         _nativeDaemonPrompt.value = false
     }
 
-    fun enableNativeDaemon() = suspendLaunch(id = NATIVE_DAEMON_ENABLE_LOAD_ID) {
+    fun enableNativeDaemon() = suspendLaunch(slot = nativeDaemonEnableSlot) {
         loading()
         NativeDaemonController.setEnabled(true)
         if (!needsNativeDaemonPrompt()) {

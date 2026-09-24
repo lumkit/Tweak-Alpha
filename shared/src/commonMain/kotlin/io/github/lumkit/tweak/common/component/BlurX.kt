@@ -18,7 +18,7 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.shadow.Shadow
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.isAdvancedRenderEffectSupported
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.AppearanceSettingsStore
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -28,7 +28,7 @@ fun Modifier.glassBlur(
     shape: Shape = RoundedCornerShape(0.dp),
     shadow: Shadow = Shadow(radius = 0.dp)
 ) = composed {
-    val enabled by GlobalViewModel.enabledBlur.collectAsStateWithLifecycle()
+    val enabled by AppearanceSettingsStore.enabledBlur.collectAsStateWithLifecycle()
     val supported = remember { isAdvancedRenderEffectSupported() }
     val advancedBackdropEffectSupported = remember { isAdvancedBackdropEffectSupported() }
 

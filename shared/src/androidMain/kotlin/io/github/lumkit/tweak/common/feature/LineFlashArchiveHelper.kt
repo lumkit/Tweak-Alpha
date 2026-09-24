@@ -11,7 +11,7 @@ import io.github.lumkit.tweak.common.utils.StorageUtils
 import io.github.lumkit.tweak.common.utils.getOrNull
 import io.github.lumkit.tweak.common.utils.joinPath
 import io.github.lumkit.tweak.common.utils.openPrivilegedReadOnlyFd
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeModeStore
 import io.github.lumkit.tweak.model.asNativeFileBackend
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -199,7 +199,7 @@ object LineFlashArchiveHelper {
     }
 
     private suspend fun resolveBackend(): NativeFileBackend {
-        val mode = GlobalViewModel.runtimeModeState.filterNotNull().first()
+        val mode = RuntimeModeStore.mode.filterNotNull().first()
         return mode.asNativeFileBackend().also {
             require(it != NativeFileBackend.User) { "当前运行模式不支持特权文件操作" }
         }

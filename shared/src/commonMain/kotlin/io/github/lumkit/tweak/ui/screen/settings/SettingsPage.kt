@@ -59,7 +59,8 @@ import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.requestNotificationPermission
 import io.github.lumkit.tweak.common.utils.restartApp
 import io.github.lumkit.tweak.common.utils.trySetIsIgnoringBatteryOptimizations
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.AppearanceSettingsStore
+import io.github.lumkit.tweak.model.SamplingSettingsStore
 import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
@@ -188,10 +189,10 @@ fun SettingsPage(
     var runtimeModeLoading by remember { mutableStateOf(false) }
 
     viewModel.LoadStateLaunchEffect {
-        Watch(SettingsViewModel.NATIVE_DAEMON_TOGGLE_LOAD_ID) {
+        Watch(viewModel.nativeDaemonToggleSlot) {
             nativeDaemonLoading = it is BaseViewModel.LoadState.Loading
         }
-        Watch(SettingsViewModel.RUNTIME_MODE_TOGGLE_LOAD_ID) {
+        Watch(viewModel.runtimeModeToggleSlot) {
             runtimeModeLoading = it is BaseViewModel.LoadState.Loading
         }
     }
@@ -245,7 +246,7 @@ fun SettingsPage(
             )
         }
 
-        val enabledFloatNavBar by GlobalViewModel.enabledFloatNavBar.collectAsStateWithLifecycle()
+        val enabledFloatNavBar by AppearanceSettingsStore.enabledFloatNavBar.collectAsStateWithLifecycle()
         val navBarBottomPadding by animateDpAsState(
             targetValue = if (enabledFloatNavBar) {
                 28.dp
@@ -394,7 +395,7 @@ private fun ThemeContent(viewModel: SettingsViewModel) {
 
         // 全局缩放比
         Block {
-            val uiScale by GlobalViewModel.globalScaleDensityState.collectAsStateWithLifecycle()
+            val uiScale by AppearanceSettingsStore.globalScaleDensity.collectAsStateWithLifecycle()
             var scale by remember(uiScale) { mutableFloatStateOf(uiScale) }
             var inputDialogState by remember { mutableStateOf(false) }
 
@@ -404,7 +405,7 @@ private fun ThemeContent(viewModel: SettingsViewModel) {
                     scale = it
                 },
                 onValueChangeFinished = {
-                    GlobalViewModel.setGlobalScaleDensity(scale)
+                    AppearanceSettingsStore.setGlobalScaleDensity(scale)
                 },
                 title = stringResource(Res.string.text_ui_scale),
                 summary = stringResource(Res.string.text_ui_scale_description),
@@ -460,7 +461,7 @@ private fun ThemeContent(viewModel: SettingsViewModel) {
                             onClick = {
                                 val scale = scaleText.toIntOrNull() ?: (scale * 100).toInt()
                                 val safeScale = (scale / 100f).coerceIn(.8f, 1.1f)
-                                GlobalViewModel.setGlobalScaleDensity(safeScale)
+                                AppearanceSettingsStore.setGlobalScaleDensity(safeScale)
                                 inputDialogState = false
                             },
                             colors = ButtonDefaults.buttonColorsPrimary(),
@@ -549,7 +550,7 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
         // 面板刷新间隔
         Block {
             val level by viewModel.infoUpdateTimeSpanLevel.collectAsStateWithLifecycle()
-            val tick by GlobalViewModel.infoUpdateTimeSpanMillisecondsState.collectAsStateWithLifecycle()
+            val tick by SamplingSettingsStore.infoUpdateIntervalMs.collectAsStateWithLifecycle()
 
             SliderPreference(
                 value = level.toFloat(),
@@ -685,13 +686,13 @@ private fun FrameworkContent(viewModel: SettingsViewModel) {
 
         // 后台隐藏
         Block {
-            val hideInBackground by GlobalViewModel.hideInBackgroundState.collectAsStateWithLifecycle()
+            val hideInBackground by AppearanceSettingsStore.hideInBackground.collectAsStateWithLifecycle()
 
             SwitchPreference(
                 title = stringResource(Res.string.text_hide_in_background),
                 summary = stringResource(Res.string.text_hide_in_background_description),
                 checked = hideInBackground,
-                onCheckedChange = GlobalViewModel::setHideInBackground,
+                onCheckedChange = AppearanceSettingsStore::setHideInBackground,
             )
         }
 

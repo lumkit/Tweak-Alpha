@@ -7,7 +7,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 object RuntimeModeStore {
     /**
@@ -24,4 +29,17 @@ object RuntimeModeStore {
             started = SharingStarted.Eagerly,
             initialValue = null,
         )
+
+    /**
+     * 解析当前运行模式。DataStore 在 Direct Boot / 文件锁异常时可能一直不发出值，
+     * 调用方不能无限等待。
+     */
+    suspend fun current(timeout: Duration = 2.seconds): RuntimeMode {
+        mode.value?.let { return it }
+        return withTimeoutOrNull(timeout) {
+            mode.filterNotNull().first()
+        } ?: withTimeoutOrNull(timeout) {
+            TweakDataStore.runtimeModeFlow().first()
+        } ?: RuntimeMode.Unknow
+    }
 }

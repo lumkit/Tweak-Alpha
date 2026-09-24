@@ -30,7 +30,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import io.github.lumkit.tweak.common.utils.ripple
 import io.github.lumkit.tweak.model.CrashSession
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.AppearanceSettingsStore
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Navigator
 import io.github.lumkit.tweak.navigation.Screen
@@ -109,7 +109,7 @@ private fun GlobalCompositionProvider(
     val navigationState = rememberNavigationState(startRoute = startRoute)
     val navigator = remember { Navigator(navigationState) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val globalScaleDensity by GlobalViewModel.globalScaleDensityState.collectAsStateWithLifecycle()
+    val globalScaleDensity by AppearanceSettingsStore.globalScaleDensity.collectAsStateWithLifecycle()
     val uiScaleAni by animateFloatAsState(
         targetValue = globalScaleDensity,
         animationSpec = tween(

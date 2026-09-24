@@ -57,6 +57,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
@@ -71,7 +72,7 @@ import io.github.lumkit.tweak.common.utils.animatedColorAsBattery
 import io.github.lumkit.tweak.common.utils.animatedColorAsUsed
 import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.AppearanceSettingsStore
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
@@ -130,10 +131,12 @@ private enum class InfoPageSection(val key: String) {
 }
 
 @Composable
-fun InfoPage() {
-    val loadState by DeviceInfoViewModel.loadingState.collectAsStateWithLifecycle()
-    val sectionOrder by DeviceInfoViewModel.sectionOrder.collectAsStateWithLifecycle()
-    val enabledCards by DeviceInfoViewModel.enabledCards.collectAsStateWithLifecycle()
+fun InfoPage(
+    viewModel: DeviceInfoViewModel = viewModel { DeviceInfoViewModel() },
+) {
+    val loadState by viewModel.loadingState.collectAsStateWithLifecycle()
+    val sectionOrder by viewModel.sectionOrder.collectAsStateWithLifecycle()
+    val enabledCards by viewModel.enabledCards.collectAsStateWithLifecycle()
     val visibleSections = remember(sectionOrder, enabledCards) {
         sectionOrder.filter { isInfoPageSectionVisible(it, enabledCards) }
     }
@@ -148,9 +151,9 @@ fun InfoPage() {
         animationSpec = tween(durationMillis = 400)
     )
 
-    val lazyListState = DeviceInfoViewModel.listState
+    val lazyListState = viewModel.listState
     val reorderableLazyListState = rememberReorderableLazyListState(lazyListState) { from, to ->
-        DeviceInfoViewModel.moveSection(from.index, to.index)
+        viewModel.moveSection(from.index, to.index)
         hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
     }
 
@@ -178,7 +181,7 @@ fun InfoPage() {
                 )
             }
 
-            val enabledFloatNavBar by GlobalViewModel.enabledFloatNavBar.collectAsStateWithLifecycle()
+            val enabledFloatNavBar by AppearanceSettingsStore.enabledFloatNavBar.collectAsStateWithLifecycle()
             val navBarBottomPadding by animateDpAsState(
                 targetValue = if (enabledFloatNavBar) {
                     28.dp
@@ -251,7 +254,7 @@ fun InfoPage() {
                                     ),
                             ) {
                                 when (InfoPageSection.fromKey(sectionKey)) {
-                                    InfoPageSection.Cpu -> CpuInfoContent { vo ->
+                                    InfoPageSection.Cpu -> CpuInfoContent(viewModel) { vo ->
                                         navigator.navigate(
                                             Screen.ProcessManager(
                                                 scrollToPackage = vo.packageName,
@@ -259,9 +262,9 @@ fun InfoPage() {
                                             )
                                         )
                                     }
-                                    InfoPageSection.Memory -> MemoryInfoContent()
-                                    InfoPageSection.Gpu -> GpuInfoContent()
-                                    InfoPageSection.More -> MoreInfoContent()
+                                    InfoPageSection.Memory -> MemoryInfoContent(viewModel)
+                                    InfoPageSection.Gpu -> GpuInfoContent(viewModel)
+                                    InfoPageSection.More -> MoreInfoContent(viewModel)
                                     null -> Unit
                                 }
                             }
@@ -304,11 +307,12 @@ fun InfoPage() {
 
 @Composable
 private fun CpuInfoContent(
+    viewModel: DeviceInfoViewModel,
     onTopProcessTap: (DeviceInfoViewModel.TopProcessVo) -> Unit,
 ) {
-    val cpuState by DeviceInfoViewModel.cpuInfoState.collectAsStateWithLifecycle()
-    val topProcessSupport by DeviceInfoViewModel.topProcessSupportState.collectAsStateWithLifecycle()
-    val enableProcessInfo by DeviceInfoViewModel.enabledProcessInfo.collectAsStateWithLifecycle()
+    val cpuState by viewModel.cpuInfoState.collectAsStateWithLifecycle()
+    val topProcessSupport by viewModel.topProcessSupportState.collectAsStateWithLifecycle()
+    val enableProcessInfo by viewModel.enabledProcessInfo.collectAsStateWithLifecycle()
     val enableProcessInfoState = topProcessSupport && enableProcessInfo
     val chartState = rememberChartState()
 
@@ -318,11 +322,11 @@ private fun CpuInfoContent(
         }
     }
 
-    DisposableEffect(listener) {
-        DeviceInfoViewModel.addCpuInfoUpdateListener(listener)
+    DisposableEffect(viewModel, listener) {
+        viewModel.addCpuInfoUpdateListener(listener)
 
         onDispose {
-            DeviceInfoViewModel.removeCpuInfoUpdateListener(listener)
+            viewModel.removeCpuInfoUpdateListener(listener)
         }
     }
 
@@ -353,6 +357,7 @@ private fun CpuInfoContent(
         ) {
             // 独立订阅进程列表，CPU 采样重组时尽量跳过该子树
             TopProcessPanel(
+                viewModel = viewModel,
                 visible = enableProcessInfoState,
                 onTopProcessTap = onTopProcessTap,
             )
@@ -395,12 +400,13 @@ private fun CpuInfoContent(
                 .padding(vertical = 8.dp)
         )
 
-        CpuCoreContent()
+        CpuCoreContent(viewModel)
     }
 }
 
 @Composable
 private fun RowScope.TopProcessPanel(
+    viewModel: DeviceInfoViewModel,
     visible: Boolean,
     onTopProcessTap: (DeviceInfoViewModel.TopProcessVo) -> Unit,
 ) {
@@ -408,7 +414,7 @@ private fun RowScope.TopProcessPanel(
         visible = visible,
         modifier = Modifier.weight(1f)
     ) {
-        val topProcessVo by DeviceInfoViewModel.topProcessState.collectAsStateWithLifecycle()
+        val topProcessVo by viewModel.topProcessState.collectAsStateWithLifecycle()
         Row {
             Box(
                 modifier = Modifier.fillMaxSize()
@@ -491,8 +497,8 @@ private fun TopProcessItem(
 }
 
 @Composable
-private fun CpuCoreContent() {
-    val cpuState by DeviceInfoViewModel.cpuInfoState.collectAsStateWithLifecycle()
+private fun CpuCoreContent(viewModel: DeviceInfoViewModel) {
+    val cpuState by viewModel.cpuInfoState.collectAsStateWithLifecycle()
     val cpuStates = cpuState?.cpuStates.orEmpty()
     val columns = (cpuStates.size / 2).coerceAtLeast(1)
 
@@ -576,8 +582,8 @@ private fun FlowRowScope.CpuCoreItem(core: DeviceInfoViewModel.CoreInfoModel) {
 }
 
 @Composable
-private fun MemoryInfoContent() {
-    val memoryState by DeviceInfoViewModel.memoryInfoState.collectAsStateWithLifecycle()
+private fun MemoryInfoContent(viewModel: DeviceInfoViewModel) {
+    val memoryState by viewModel.memoryInfoState.collectAsStateWithLifecycle()
 
     // 高频采样下不做进度动画，避免 Debug 下动画帧叠加卡顿
     val load = memoryState?.totalUsed ?: 0f
@@ -767,17 +773,17 @@ private fun MemoryTable(
 }
 
 @Composable
-private fun GpuInfoContent() {
+private fun GpuInfoContent(viewModel: DeviceInfoViewModel) {
     val density = LocalDensity.current
     val translateY = remember {
         with(density) {
             (-1.5f).dp.toPx()
         }
     }
-    val gpuInfoModel by DeviceInfoViewModel.gpuInfoState.collectAsStateWithLifecycle()
+    val gpuInfoModel by viewModel.gpuInfoState.collectAsStateWithLifecycle()
     val load = gpuInfoModel?.load
     val loadColor by animatedColorAsUsed(load ?: 0f)
-    val gpuSupportedState by DeviceInfoViewModel.gpuSupported.collectAsStateWithLifecycle()
+    val gpuSupportedState by viewModel.gpuSupported.collectAsStateWithLifecycle()
 
     CategoryCard(
         title = stringResource(Res.string.text_gpu_state)
@@ -883,9 +889,9 @@ private fun GpuInfoContent() {
 }
 
 @Composable
-private fun MoreInfoContent() {
-    val moreInfoModel by DeviceInfoViewModel.moreInfoState.collectAsStateWithLifecycle()
-    val enabledCards by DeviceInfoViewModel.enabledCards.collectAsStateWithLifecycle()
+private fun MoreInfoContent(viewModel: DeviceInfoViewModel) {
+    val moreInfoModel by viewModel.moreInfoState.collectAsStateWithLifecycle()
+    val enabledCards by viewModel.enabledCards.collectAsStateWithLifecycle()
     val showBattery = "battery" in enabledCards
     val showStorage = "storage" in enabledCards
 

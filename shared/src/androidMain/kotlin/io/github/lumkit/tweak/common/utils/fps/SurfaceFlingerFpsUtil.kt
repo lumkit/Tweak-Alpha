@@ -1,7 +1,7 @@
 package io.github.lumkit.tweak.common.utils.fps
 
 import io.github.lumkit.tweak.common.shell.ReusableShells
-import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.SamplingSettingsStore
 import io.github.lumkit.tweak.server.fps.SurfaceFlingerFrameSampler
 import io.github.lumkit.tweak.server.ipc.TweakServerConnection
 import kotlinx.coroutines.Dispatchers
@@ -21,7 +21,7 @@ actual object SurfaceFlingerFpsUtil {
     }
 
     actual suspend fun getCurrentFps(): Float = withContext(Dispatchers.IO) {
-        val source = GlobalViewModel.sfLatencySourceState.value
+        val source = SamplingSettingsStore.sfLatencySource.value
         val remote = TweakServerConnection.service
         if (remote != null) {
             val fps = runCatching { remote.currentFps(source) }.getOrNull()
