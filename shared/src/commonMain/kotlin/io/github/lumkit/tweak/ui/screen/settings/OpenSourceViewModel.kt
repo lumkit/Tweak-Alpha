@@ -43,43 +43,49 @@ class OpenSourceViewModel : BaseViewModel() {
             LicenseBean(
                 title = "AndroidX Lifecycle",
                 author = "AndroidX",
-                tip = "Lifecycle-aware components perform actions in response to a change in the lifecycle status of another component, such as activities and fragments. Version 2.11.0-rc01",
+                tip = "Lifecycle-aware components perform actions in response to a change in the lifecycle status of another component, such as activities and fragments. Version 2.11.0",
                 url = "https://github.com/androidx/androidx/tree/androidx-main/lifecycle",
             ),
             LicenseBean(
                 title = "AndroidX Room",
                 author = "AndroidX",
-                tip = "The Room persistence library provides an abstraction layer over SQLite to allow for more robust database access while harnessing the full power of SQLite. Version 2.8.4",
+                tip = "The Room persistence library provides an abstraction layer over SQLite to allow for more robust database access while harnessing the full power of SQLite. Version 2.8.5",
                 url = "https://github.com/androidx/androidx/tree/androidx-main/room",
             ),
             LicenseBean(
                 title = "AndroidX SQLite Bundled",
                 author = "AndroidX",
-                tip = "AndroidX SQLite APIs with bundled SQLite support for Room and related persistence components. Version 2.7.0",
+                tip = "AndroidX SQLite APIs with bundled SQLite support for Room and related persistence components. Version 2.7.1",
                 url = "https://github.com/androidx/androidx/tree/androidx-main/sqlite",
             ),
             LicenseBean(
                 title = "Backdrop",
                 author = "kyant0",
-                tip = "Compose Multiplatform Liquid Glass effects. Version 2.0.0",
+                tip = "Compose Multiplatform Liquid Glass effects. Version 2.0.1",
                 url = "https://github.com/Kyant0/AndroidLiquidGlass",
             ),
             LicenseBean(
                 title = "Coil 3",
                 author = "Coil Contributors",
-                tip = "An image loading library for Android and Compose Multiplatform. Version 3.5.0",
+                tip = "An image loading library for Android and Compose Multiplatform. Version 3.6.3",
                 url = "https://github.com/coil-kt/coil",
             ),
             LicenseBean(
                 title = "Compose Multiplatform",
                 author = "JetBrains",
-                tip = "A declarative framework for sharing UI code across multiple platforms with Kotlin. Version 1.11.1",
+                tip = "A declarative framework for sharing UI code across multiple platforms with Kotlin. Version 1.12.1",
                 url = "https://github.com/JetBrains/compose-multiplatform",
+            ),
+            LicenseBean(
+                title = "JetBrains Annotations",
+                author = "JetBrains",
+                tip = "Annotations for JVM-based languages. Version 26.1.0",
+                url = "https://github.com/JetBrains/java-annotations",
             ),
             LicenseBean(
                 title = "Kotlin",
                 author = "JetBrains",
-                tip = "The Kotlin Programming Language. Version 2.4.0",
+                tip = "The Kotlin Programming Language. Version 2.4.20",
                 url = "https://github.com/JetBrains/kotlin",
             ),
             LicenseBean(
@@ -89,9 +95,15 @@ class OpenSourceViewModel : BaseViewModel() {
                 url = "https://github.com/Kotlin/kotlinx.serialization",
             ),
             LicenseBean(
+                title = "Ktor",
+                author = "JetBrains",
+                tip = "Framework for quickly creating connected applications in Kotlin with minimal effort. Version 3.6.0",
+                url = "https://github.com/ktorio/ktor",
+            ),
+            LicenseBean(
                 title = "kyant Shapes",
                 author = "kyant0",
-                tip = "iOS-like shapes for Compose Multiplatform. Version 1.2.0",
+                tip = "iOS-like shapes for Compose Multiplatform. Version 1.2.1",
                 url = "https://github.com/Kyant0/Shapes",
             ),
             LicenseBean(
@@ -103,13 +115,13 @@ class OpenSourceViewModel : BaseViewModel() {
             LicenseBean(
                 title = "Miuix KMP",
                 author = "YuKongA",
-                tip = "A UI library for Compose Multiplatform. Version 0.9.3",
+                tip = "A UI library for Compose Multiplatform. Version 0.9.4",
                 url = "https://github.com/compose-miuix-ui/miuix",
             ),
             LicenseBean(
                 title = "Navigation3",
                 author = "AndroidX",
-                tip = "A new navigation library designed to work with Compose. Version 1.1.1",
+                tip = "A new navigation library designed to work with Compose. Version 1.1.2",
                 url = "https://developer.android.com/guide/navigation/navigation-3",
             ),
             LicenseBean(
