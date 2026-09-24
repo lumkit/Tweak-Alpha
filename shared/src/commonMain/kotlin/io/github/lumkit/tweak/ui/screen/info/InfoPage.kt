@@ -45,6 +45,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -56,6 +59,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.shapes.Rectangle
@@ -73,10 +77,12 @@ import io.github.lumkit.tweak.common.utils.isAdvancedBackdropEffectSupported
 import io.github.lumkit.tweak.common.utils.rememberLayerBackdropColor
 import io.github.lumkit.tweak.common.utils.rememberRequestOverlayPermission
 import io.github.lumkit.tweak.model.GlobalViewModel
+import io.github.lumkit.tweak.model.RuntimeMode
 import io.github.lumkit.tweak.navigation.LocalNavigator
 import io.github.lumkit.tweak.navigation.Screen
 import io.github.lumkit.tweak.overlay.OverlayMonitor
 import io.github.lumkit.tweak.ui.screen.fpsRecord.showRecordOverlay
+import io.github.lumkit.tweak.ui.screen.settings.SettingsViewModel
 import io.github.lumkit.tweak.ui.theme.NavigationBarHeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -146,14 +152,15 @@ import tweak_alpha.shared.generated.resources.text_reboot_to_bl
 import tweak_alpha.shared.generated.resources.text_reboot_to_edl
 import tweak_alpha.shared.generated.resources.text_reboot_to_rec
 import tweak_alpha.shared.generated.resources.text_shutdown
+import tweak_alpha.shared.generated.resources.text_soft_reboot
 import tweak_alpha.shared.generated.resources.text_storage
 import tweak_alpha.shared.generated.resources.text_storage_flash_type
 import tweak_alpha.shared.generated.resources.text_storage_free
 import tweak_alpha.shared.generated.resources.text_storage_total
-import tweak_alpha.shared.generated.resources.text_swap
 import tweak_alpha.shared.generated.resources.text_total_memory
 import tweak_alpha.shared.generated.resources.text_total_memory_used
 import tweak_alpha.shared.generated.resources.text_used_load
+import tweak_alpha.shared.generated.resources.text_virtual_memory
 
 private enum class InfoPageSection(val key: String) {
     Cpu("cpu"),
@@ -262,14 +269,17 @@ fun InfoPage() {
                         val longPressHub = remember(sectionKey) { InfoItemLongPressHub() }
                         val reorderSlopPx = with(LocalDensity.current) { 28.dp.toPx() }
                         val dragDetector = remember(reorderSlopPx, longPressHub) {
-                            LongPressThenSlopDragDetector(reorderSlopPx) {
-                                longPressHub.emitShow()
+                            LongPressThenSlopDragDetector(reorderSlopPx) { localPosition ->
+                                longPressHub.emitShow(localPosition)
                             }
                         }
                         CompositionLocalProvider(LocalInfoItemLongPress provides longPressHub) {
                             Box(
                                 modifier = Modifier
                                     .graphicsLayer { alpha = dragAlpha }
+                                    .onGloballyPositioned { coordinates ->
+                                        longPressHub.originInRoot = coordinates.positionInRoot()
+                                    }
                                     .draggableHandle(
                                         dragGestureDetector = dragDetector,
                                         onDragStarted = {
@@ -624,8 +634,8 @@ private fun MemoryInfoContent() {
     val swapLoadColor by animatedColorAsUsed(swapLoad)
     val swapLabel = memoryState?.zramCompAlgorithm
         ?.takeIf { it.isNotBlank() }
-        ?.let { "${stringResource(Res.string.text_swap)} ($it)" }
-        ?: stringResource(Res.string.text_swap)
+        ?.let { "${stringResource(Res.string.text_virtual_memory)} ($it)" }
+        ?: stringResource(Res.string.text_virtual_memory)
 
     CategoryCard(
         title = stringResource(Res.string.text_memory_state)
@@ -844,7 +854,6 @@ private fun ValueRichTooltipBox(
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     lines.forEach { (label, value) ->
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text(
@@ -1015,11 +1024,18 @@ private fun FlowRowScope.BatteryContent(
 ) {
     val load = batteryModel?.capacity ?: 0f
     val loadColor by animatedColorAsBattery(load)
+    val longPressHub = LocalInfoItemLongPress.current
+    DisposableEffect(longPressHub) {
+        onDispose { longPressHub.suppressBounds = null }
+    }
 
     CategoryCard(
         title = stringResource(Res.string.text_battery),
         modifier = Modifier.fillMaxWidth()
             .weight(1f)
+            .onGloballyPositioned { coordinates ->
+                longPressHub.suppressBounds = coordinates.boundsInRoot()
+            }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1179,12 +1195,15 @@ private fun FlowRowScope.StorageContent(
 
 data class RebootAction(
     val text: StringResource,
+    val enabled: Boolean = true,
     val onTap: () -> Unit
 )
 
 @Composable
 private fun RowScope.Actions() {
     val scope = rememberCoroutineScope { Dispatchers.IO }
+    val settingsViewModel: SettingsViewModel = viewModel { SettingsViewModel() }
+    val runtimeMode by settingsViewModel.runtimeMode.collectAsStateWithLifecycle()
 
     // 监听器悬浮窗
     Box {
@@ -1269,7 +1288,8 @@ private fun RowScope.Actions() {
     // 高级重启
     Box {
         var popState by remember { mutableStateOf(false) }
-        val actions = remember {
+
+        val actions = remember(runtimeMode) {
             listOf(
                 RebootAction(
                     text = Res.string.text_shutdown,
@@ -1284,6 +1304,17 @@ private fun RowScope.Actions() {
                     onTap = {
                         scope.launch {
                             ReusableShells.execSync("/system/bin/svc power reboot || /system/bin/reboot || /system/bin/setprop sys.powerctl reboot")
+                        }
+                    }
+                ),
+                RebootAction(
+                    text = Res.string.text_soft_reboot,
+                    enabled = runtimeMode == RuntimeMode.Root,
+                    onTap = {
+                        scope.launch {
+                            ReusableShells.execSync(
+                                "if [ -x /data/adb/ksud ]; then /data/adb/ksud soft-reboot; else setprop ctl.restart zygote; fi",
+                            )
                         }
                     }
                 ),
@@ -1305,6 +1336,7 @@ private fun RowScope.Actions() {
                 ),
                 RebootAction(
                     text = Res.string.text_reboot_to_edl,
+                    enabled = runtimeMode == RuntimeMode.Root,
                     onTap = {
                         scope.launch {
                             ReusableShells.execSync("/system/bin/reboot edl || /system/bin/setprop sys.powerctl reboot,edl")
@@ -1337,6 +1369,7 @@ private fun RowScope.Actions() {
                         optionSize = actions.size,
                         isSelected = false,
                         index = index,
+                        enabled = action.enabled,
                         onSelectedIndexChange = {
                             action.onTap()
                             popState = false

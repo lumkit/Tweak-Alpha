@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.TweakScaffold" parent="Theme.TweakScaffold.Base">
+        <item name="android:windowSplashScreenBackground">@color/window_background</item>
+    </style>
+</resources>

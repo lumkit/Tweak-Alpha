@@ -6,16 +6,22 @@ import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.positionChange
 import sh.calvin.reorderable.DragGestureDetector
 
 internal class InfoItemLongPressHub {
+    var originInRoot: Offset = Offset.Zero
     var show: (() -> Unit)? = null
     var dismiss: (() -> Unit)? = null
+    /** 落在这块区域内的长按不弹出 Tooltip。 */
+    var suppressBounds: Rect? = null
 
-    fun emitShow() {
+    fun emitShow(localPosition: Offset) {
+        val positionInRoot = originInRoot + localPosition
+        if (suppressBounds?.contains(positionInRoot) == true) return
         show?.invoke()
     }
 
@@ -31,7 +37,7 @@ internal val LocalInfoItemLongPress = staticCompositionLocalOf { InfoItemLongPre
  */
 internal class LongPressThenSlopDragDetector(
     private val slopPx: Float,
-    private val onLongPress: () -> Unit,
+    private val onLongPress: (Offset) -> Unit,
 ) : DragGestureDetector {
     override suspend fun PointerInputScope.detect(
         onDragStart: (Offset) -> Unit,
@@ -42,7 +48,7 @@ internal class LongPressThenSlopDragDetector(
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             val pressed = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
-            onLongPress()
+            onLongPress(pressed.position)
 
             var total = Offset.Zero
             var startChange: PointerInputChange? = null
