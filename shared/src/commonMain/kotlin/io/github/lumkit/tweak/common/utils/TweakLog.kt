@@ -1,8 +1,8 @@
 package io.github.lumkit.tweak.common.utils
 
 /**
- * 日志工具类。
- * 仅在 Debug 模式下输出日志，Release 模式下所有调用为空操作。
+ * 日志工具。
+ * [d] 与 [i] 只在 Debug 构建输出；[w] 与 [e] 在 Release 中仍然输出。
  */
 expect object TweakLog {
     fun d(message: String, tag: String = "Tweak_Log")

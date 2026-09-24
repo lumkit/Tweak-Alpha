@@ -3,6 +3,7 @@ package io.github.lumkit.tweak.common.shell
 import android.content.pm.PackageManager
 import io.github.lumkit.tweak.common.utils.TweakDataStore
 import io.github.lumkit.tweak.common.utils.logD
+import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.model.GlobalViewModel
 import io.github.lumkit.tweak.model.RuntimeMode
 import kotlinx.coroutines.flow.filterNotNull
@@ -52,7 +53,7 @@ actual object ShellExecutor {
                         }
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    logE("read PATH failed", e, "ShellExecutor")
                     "/sbin:/system/sbin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin"
                 }
             }

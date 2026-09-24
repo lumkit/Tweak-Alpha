@@ -28,38 +28,40 @@
 ## 📋 系统要求
 
 - **最低 Android 版本**: Android 7.0 (API 24)
-- **目标 Android 版本**: Android 15 (API 37)
-- **可选**: ROOT 权限（解锁全部功能）
+- **目标 SDK**: 37
+- **可选**: ROOT 或 Shizuku（解锁特权功能）
 
 ## 🏗️ 技术架构
 
 ### 核心技术栈
 
 - **Kotlin Multiplatform** - 跨平台代码共享
-- **Compose Multiplatform 1.11.1** - 声明式 UI
-- **Kotlin 2.4.0** - 编程语言
-- **Android Gradle Plugin 9.2.1** - 构建工具
+- **Compose Multiplatform 1.12.1** - 声明式 UI
+- **Kotlin 2.4.20** - 编程语言
+- **Android Gradle Plugin 9.4.1** - 构建工具
 
 ### 主要依赖
 
 | 库 | 版本 | 用途 |
 |---|---|---|
 | [libsu](https://github.com/topjohnwu/libsu) | 6.0.0 | ROOT 权限管理 |
-| [MiuiX](https://github.com/miuix-kotlin-multiplatform/miuix) | 0.9.2 | UI 组件库 |
-| [Coil](https://coil-kt.github.io/coil/) | 3.5.0 | 图片加载 |
-| [Backdrop](https://github.com/Kyant0/Backdrop) | 2.0.0 | 玻璃效果 |
+| [MiuiX](https://github.com/compose-miuix-ui/miuix) | 0.9.4 | UI 组件库 |
+| [Coil](https://coil-kt.github.io/coil/) | 3.6.3 | 图片加载 |
+| [Backdrop](https://github.com/Kyant0/AndroidLiquidGlass) | 2.0.1 | 玻璃效果（源码在 `backdrop/`） |
+| [Shizuku API](https://github.com/RikkaApps/Shizuku-API) | 13.1.5 | ADB / Shell 特权 |
 | DataStore | 1.2.1 | 数据持久化 |
-| Navigation3 | 1.1.1 | 导航框架 |
+| Navigation3 | 1.1.2 | 导航框架 |
 
 ### 项目模块
 
 ```
 Tweak-Alpha/
-├── androidApp/              # Android 应用主模块
+├── androidApp/              # Android 应用入口
 ├── shared/                  # 共享业务逻辑（KMP）
-├── androidSharedNative/     # 原生 C++ 模块（JNI/AIDL）
-├── backdrop/                # 玻璃效果库
-└── glass/                   # 玻璃效果示例
+├── androidSharedNative/     # 特权文件服务与 native starter
+├── adlib/                   # ADB / Fastboot 传输
+├── backdrop/                # 玻璃效果
+└── build-logic/             # Gradle 约定插件
 ```
 
 ## 🚀 快速开始
@@ -67,7 +69,7 @@ Tweak-Alpha/
 ### 克隆项目
 
 ```bash
-git clone https://github.com/yourusername/Tweak-Alpha.git
+git clone https://github.com/lumkit/Tweak-Alpha.git
 cd Tweak-Alpha
 ```
 
@@ -126,8 +128,8 @@ cd Tweak-Alpha
 
 ## 🔗 相关链接
 
-- [问题反馈](https://github.com/yourusername/Tweak-Alpha/issues)
-- [更新日志](https://github.com/yourusername/Tweak-Alpha/releases)
+- [问题反馈](https://github.com/lumkit/Tweak-Alpha/issues)
+- [更新日志](https://github.com/lumkit/Tweak-Alpha/releases)
 
 ## ⚠️ 免责声明
 

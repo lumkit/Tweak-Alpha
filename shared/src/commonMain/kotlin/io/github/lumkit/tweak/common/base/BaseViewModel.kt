@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import io.github.lumkit.tweak.common.utils.convert
+import io.github.lumkit.tweak.common.utils.logE
 import io.github.lumkit.tweak.common.utils.logI
 import io.ktor.util.collections.ConcurrentMap
 import kotlinx.coroutines.Dispatchers
@@ -78,7 +79,7 @@ abstract class BaseViewModel : ViewModel() {
         try {
             block()
         } catch (e: Throwable) {
-            e.printStackTrace()
+            logE("launch failed", e, "BaseViewModel")
             error(e)
         } finally {
             complete()
@@ -119,7 +120,7 @@ abstract class BaseViewModel : ViewModel() {
             try {
                 block(scope)
             } catch (e: Exception) {
-                e.printStackTrace()
+                logE("suspendLaunch failed", e, "BaseViewModel")
                 failed(scope, e.convert())
             } finally {
                 complete()

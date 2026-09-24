@@ -87,25 +87,25 @@ class ReusableShell(
             reader?.close()
             reader = null
         } catch (e: Exception) {
-            e.printStackTrace()
+            logE("close shell reader failed", e, TAG)
         }
         try {
             writer?.close()
             writer = null
         } catch (e: Exception) {
-            e.printStackTrace()
+            logE("close shell writer failed", e, TAG)
         }
         try {
             process?.destroy()
             process = null
         } catch (e: Exception) {
-            e.printStackTrace()
+            logE("destroy shell process failed", e, TAG)
         }
         try {
             listenerPool.clear()
             coroutineScope.cancel()
         } catch (e: Exception) {
-            e.printStackTrace()
+            logE("cancel shell scope failed", e, TAG)
         }
         currentIsIdle = true
     }
@@ -184,7 +184,7 @@ class ReusableShell(
                                             it.value.invoke(text)
                                         }
                                     } catch (e: Exception) {
-                                        e.printStackTrace()
+                                        logE("shell listener failed", e, TAG)
                                     }
                                 }
                                 shellOutputCache.append(text).append("\n")
@@ -203,7 +203,6 @@ class ReusableShell(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
             logE(e.stackTraceToString(), e, TAG)
             "error"
         } finally {

@@ -144,7 +144,7 @@ object CpuCodenameUtils {
             }
             hardware
         } catch (e: Exception) {
-            e.printStackTrace()
+            logE("fallback hardware lookup failed", e, "CpuCodename")
             BOARD
         }
     }

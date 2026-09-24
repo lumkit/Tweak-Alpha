@@ -62,7 +62,7 @@ import tweak_alpha.shared.generated.resources.ic_sharp
 import tweak_alpha.shared.generated.resources.ic_shizuku_logo
 import tweak_alpha.shared.generated.resources.text_checking_runtime
 import tweak_alpha.shared.generated.resources.text_restart
-import tweak_alpha.shared.generated.resources.text_root_permisstion_denied
+import tweak_alpha.shared.generated.resources.text_root_permission_denied
 import tweak_alpha.shared.generated.resources.text_select_runtime_mode
 import tweak_alpha.shared.generated.resources.text_shizuku_permission_denied
 import tweak_alpha.shared.generated.resources.text_user_agreement_confirm
@@ -115,7 +115,7 @@ internal fun SplashScreen(
                         navigator.navigate(Screen.Main, true)
                     } else {
                         val result = snackbarHostState.showSnackbar(
-                            getString(Res.string.text_root_permisstion_denied),
+                            getString(Res.string.text_root_permission_denied),
                             actionLabel = getString(Res.string.text_restart),
                         )
                         when (result) {
