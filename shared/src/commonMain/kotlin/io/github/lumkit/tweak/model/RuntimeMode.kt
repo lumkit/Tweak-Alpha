@@ -52,3 +52,7 @@ fun RuntimeMode.asNativeFileBackend(): NativeFileBackend = when (this) {
     RuntimeMode.Root -> NativeFileBackend.ROOT
     RuntimeMode.Shizuku -> NativeFileBackend.SHIZUKU
 }
+
+fun selectNativeFileBackend(mode: RuntimeMode?): NativeFileBackend {
+    return (mode ?: RuntimeMode.Unknow).asNativeFileBackend()
+}
